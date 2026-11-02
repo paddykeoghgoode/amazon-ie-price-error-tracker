@@ -13,9 +13,13 @@ function fmtTime(iso) {
   try {
     return new Date(iso).toLocaleString("en-IE", {
       timeZone: DUBLIN,
-      dateStyle: "medium",
-      timeStyle: "short",
-    }) + " IST";
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZoneName: "short",
+    });
   } catch {
     return iso;
   }
@@ -116,6 +120,49 @@ function render(data) {
     window.open(issueUrl, "_blank", "noopener");
   };
 }
+
+function renderDeals(deals) {
+  if (!deals || !deals.generated_at) return;
+  const summary = document.getElementById("deals-summary");
+  summary.textContent =
+    `Last crawl ${fmtTime(deals.generated_at)} · ${Number(deals.items_seen || 0).toLocaleString("en-IE")} bestsellers ` +
+    `across ${deals.categories_crawled || 0} lists · ${Number(deals.items_with_history || 0).toLocaleString("en-IE")} with enough history to judge` +
+    (deals.blocked ? " · Amazon blocked part of this crawl" : "");
+
+  const alerts = deals.alerts || [];
+  const list = document.getElementById("deals-alerts");
+  list.innerHTML = "";
+  list.hidden = !alerts.length;
+  for (const a of alerts) {
+    const li = document.createElement("li");
+    li.innerHTML = `
+      <div><a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">${escapeHtml(a.product_title || a.asin)}</a></div>
+      <div class="price">${fmtEuro(a.price_eur)}</div>
+      <div>${escapeHtml(a.reason || "")}</div>
+      <div class="time">${fmtTime(a.created_at)} · ${a.notified_telegram ? "Telegram sent" : "not sent"}</div>`;
+    list.appendChild(li);
+  }
+
+  const drops = deals.drops || [];
+  const table = document.getElementById("deals-table");
+  const body = document.getElementById("deals-body");
+  body.innerHTML = "";
+  table.hidden = !drops.length;
+  for (const d of drops) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><a href="${escapeHtml(d.url)}" target="_blank" rel="noopener">${escapeHtml(d.title || d.asin)}</a><div class="hint">${escapeHtml(d.category || "")}</div></td>
+      <td class="price">${fmtEuro(d.price_eur)}</td>
+      <td class="was">${fmtEuro(d.median_eur)}</td>
+      <td>${escapeHtml(String(d.drop_percent))}%</td>`;
+    body.appendChild(tr);
+  }
+}
+
+fetch(`deals.json?t=${Date.now()}`, { cache: "no-store" })
+  .then((res) => (res.ok ? res.json() : null))
+  .then(renderDeals)
+  .catch(() => {});
 
 loadData()
   .then(render)

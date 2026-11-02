@@ -233,6 +233,23 @@ def price_history(product_id: int, limit: int = 30) -> list[dict]:
         return [dict(r) for r in rows]
 
 
+def prune_price_checks(keep_per_product: int = 20) -> None:
+    with _connect() as conn:
+        conn.execute(
+            """
+            DELETE FROM price_checks WHERE id IN (
+                SELECT id FROM (
+                    SELECT id, ROW_NUMBER() OVER (
+                        PARTITION BY product_id ORDER BY checked_at DESC, id DESC
+                    ) AS rn
+                    FROM price_checks
+                ) WHERE rn > ?
+            )
+            """,
+            (keep_per_product,),
+        )
+
+
 def median_historical_price(product_id: int, limit: int = 20) -> float | None:
     with _connect() as conn:
         rows = conn.execute(

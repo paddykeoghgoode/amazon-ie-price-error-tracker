@@ -125,7 +125,7 @@ def _fmt_dublin(iso: str | None) -> str:
         dt = datetime.fromisoformat(iso)
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(DUBLIN_TZ).strftime("%d %b %Y, %H:%M IST")
+        return dt.astimezone(DUBLIN_TZ).strftime("%d %b %Y, %H:%M %Z")
     except ValueError:
         return iso
 
