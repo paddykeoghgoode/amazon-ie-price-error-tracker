@@ -1,4 +1,4 @@
-"""CeX quote cache, HTTP throttling and verified Amazon price alerts."""
+"""CeX quote cache, HTTP throttling and unverified Amazon research alerts."""
 import asyncio
 import tempfile
 import unittest
@@ -18,7 +18,7 @@ from app.services.bestsellers import CrawlConfig, CrawlResult
 from app.services.catalogue import make_section_catalogue, apply_batch_results
 from app.services.cex_arbitrage import enrich_with_cex
 from app.services.cex_cache import cache_valid, cache_price, quote_entry, status_entry
-from app.services.monitor import detect_verified_price
+from app.services.monitor import detect_price_lead
 from app.services.price_history import observe_price_reference
 
 NOW = datetime(2026, 11, 2, 20, tzinfo=timezone.utc)
@@ -30,7 +30,7 @@ PRICE = CexPrices(
 ITEM = {
     "asin": "B000000001", "title": TITLE, "price_eur": 100.0,
     "url": "https://www.amazon.ie/dp/B000000001",
-    "seller_verified": True, "seller_name": "Amazon", "seller_type": "amazon_retail",
+    # No marketplace seller evidence: price/CeX leads must still work.
 }
 
 def config(**kwargs):
@@ -210,7 +210,7 @@ class TestCexCache(unittest.TestCase):
         self.assertEqual(row["cex_quote_cache"]["status"], "matched")
 
 
-class TestVerifiedAlerts(unittest.TestCase):
+class TestObservedPriceAlerts(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.original = settings.database_path
@@ -221,7 +221,7 @@ class TestVerifiedAlerts(unittest.TestCase):
         settings.database_path = self.original
         self.temp.cleanup()
 
-    def test_deep_bestseller_drop_issues_one_alert_after_verification(self):
+    def test_deep_bestseller_drop_issues_unverified_lead(self):
         product_id = db.add_product("B000000001", ITEM["url"], TITLE)
         for price in (200.0, 200.0, 200.0):
             observe_price_reference(product_id, price)
@@ -232,19 +232,20 @@ class TestVerifiedAlerts(unittest.TestCase):
         snap = ProductSnapshot(
             asin="B000000001", url=ITEM["url"], title=TITLE,
             price_eur=20.0, list_price_eur=None, currency="EUR",
-            availability="In stock", seller_name="Amazon", seller_status="amazon",
+            availability="In stock", seller_name=None, seller_status="unknown",
         )
-        alert = detect_verified_price(product_id, snap, known_title=TITLE)
+        alert = detect_price_lead(product_id, snap, known_title=TITLE)
         self.assertIsNotNone(alert)
+        self.assertIn("NOT verified", alert.message)
         self.assertEqual(len(db.price_history(product_id, limit=100)), history_count)
-        retry = detect_verified_price(product_id, snap, known_title=TITLE)
+        retry = detect_price_lead(product_id, snap, known_title=TITLE)
         self.assertIsNotNone(retry)
         self.assertEqual(retry.alert_id, alert.alert_id, "Retry an unsent alert instead of creating duplicate")
         self.assertEqual(len(db.recent_alerts()), 1)
         db.mark_alert_notified(alert.alert_id, telegram=True)
-        self.assertIsNone(detect_verified_price(product_id, snap, known_title=TITLE))
+        self.assertIsNone(detect_price_lead(product_id, snap, known_title=TITLE))
 
-    def test_unknown_seller_is_not_alertable(self):
+    def test_unknown_seller_can_become_research_lead(self):
         product_id = db.add_product("B000000001", ITEM["url"], TITLE)
         db.save_price_baseline(
             product_id, 200, confirmed_at=NOW.isoformat(), last_seen_at=NOW.isoformat(),
@@ -254,7 +255,9 @@ class TestVerifiedAlerts(unittest.TestCase):
             price_eur=20.0, list_price_eur=None, currency="EUR",
             availability=None, seller_name=None, seller_status="unknown",
         )
-        self.assertIsNone(detect_verified_price(product_id, snap, known_title=TITLE))
+        alert = detect_price_lead(product_id, snap, known_title=TITLE)
+        self.assertIsNotNone(alert)
+        self.assertIn("Seller, condition and checkout price NOT verified", alert.message)
 
 
 if __name__ == "__main__":
