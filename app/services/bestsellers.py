@@ -11,6 +11,7 @@ import httpx
 from app import database as db
 from app.scraper.amazon_ie import AMAZON_IE_BASE, ProductSnapshot
 from app.scraper.bestsellers import BestsellerItem, normalize_category_path, parse_bestseller_page
+from app.services.drop_tiers import drop_tier
 from app.services.monitor import DetectedAlert, notify_alert, record_and_detect, send_notification
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,13 @@ class CrawlConfig:
     history_per_product: int = 20
     report_drop_percent: float = 30.0
     daily_summary_hour: int | None = 9
+    deep_drop_tiers: list[float] = field(default_factory=lambda: [40.0, 50.0, 66.0])
+    cex_enabled: bool = True
+    cex_max_lookups: int = 40
+    cex_request_delay_seconds: float = 0.35
+    cex_min_cash_profit_eur: float = 15.0
+    cex_min_cash_profit_percent: float = 10.0
+    cex_max_alerts_per_run: int = 5
 
 
 @dataclass
@@ -58,6 +66,8 @@ class ProcessResult:
     with_history: int = 0
     alerts: list[DetectedAlert] = field(default_factory=list)
     drops: list[dict] = field(default_factory=list)
+    cex_lookups: list[dict] = field(default_factory=list)
+    cex_flips: list[dict] = field(default_factory=list)
 
 
 def load_config(path: Path) -> CrawlConfig:
@@ -83,6 +93,19 @@ def load_config(path: Path) -> CrawlConfig:
         history_per_product=int(raw.get("history_per_product", defaults.history_per_product)),
         report_drop_percent=float(raw.get("report_drop_percent", defaults.report_drop_percent)),
         daily_summary_hour=raw.get("daily_summary_hour", defaults.daily_summary_hour),
+        deep_drop_tiers=[float(x) for x in raw.get("deep_drop_tiers", defaults.deep_drop_tiers)],
+        cex_enabled=bool(raw.get("cex_enabled", defaults.cex_enabled)),
+        cex_max_lookups=int(raw.get("cex_max_lookups", defaults.cex_max_lookups)),
+        cex_request_delay_seconds=float(
+            raw.get("cex_request_delay_seconds", defaults.cex_request_delay_seconds)
+        ),
+        cex_min_cash_profit_eur=float(
+            raw.get("cex_min_cash_profit_eur", defaults.cex_min_cash_profit_eur)
+        ),
+        cex_min_cash_profit_percent=float(
+            raw.get("cex_min_cash_profit_percent", defaults.cex_min_cash_profit_percent)
+        ),
+        cex_max_alerts_per_run=int(raw.get("cex_max_alerts_per_run", defaults.cex_max_alerts_per_run)),
     )
 
 
@@ -193,11 +216,37 @@ def process_crawl(result: CrawlResult, config: CrawlConfig) -> ProcessResult:
                     "price_eur": item.price_eur,
                     "median_eur": round(median, 2),
                     "drop_percent": drop,
+                    "drop_tier": drop_tier(drop, config.deep_drop_tiers),
                 }
             )
     processed.drops.sort(key=lambda d: d["drop_percent"], reverse=True)
     db.prune_price_checks(config.history_per_product)
     return processed
+
+
+async def send_cex_alerts(flips: list[dict], config: CrawlConfig, *, dashboard_url: str) -> int:
+    sent = 0
+    for row in flips[: config.cex_max_alerts_per_run]:
+        title = row.get("title") or row.get("asin") or "Item"
+        amazon = float(row.get("price_eur") or 0)
+        cash = float(row.get("cex_cash_eur") or 0)
+        profit = float(row.get("cex_cash_profit_eur") or 0)
+        retail = float(row.get("cex_retail_eur") or 0)
+        margin = float(row.get("cex_min_profit_eur") or 0)
+        message = (
+            "💰 Possible CeX cash flip\n\n"
+            f"{title}\n"
+            f"Amazon now: €{amazon:.2f} ({row.get('drop_percent'):g}% below its usual Amazon price)\n"
+            f"CeX cash trade-in: €{cash:.2f} (~€{profit:.2f} profit after your €{margin:.0f} margin)\n"
+            f"CeX also sells similar for €{retail:.2f}\n\n"
+            f"{row.get('url')}\n"
+            f"{row.get('cex_url')}\n\n"
+            f"{dashboard_url}"
+        )
+        telegram_ok, whatsapp_ok = await send_notification(message)
+        if telegram_ok or whatsapp_ok:
+            sent += 1
+    return sent
 
 
 async def send_alerts(

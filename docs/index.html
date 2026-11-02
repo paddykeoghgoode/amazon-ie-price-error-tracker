@@ -54,6 +54,32 @@
   </section>
 
   <section class="card">
+    <h2>Deep drops (40% / 50% / 66%)</h2>
+    <p id="deep-summary" class="hint">Big drops vs each item’s recent Amazon price — often worth a look for electronics and games.</p>
+    <div id="deep-sections"></div>
+  </section>
+
+  <section class="card">
+    <h2>CeX cash trade-in</h2>
+    <p id="cex-summary" class="hint">Compares Amazon prices to CeX.ie cash trade-in (title match — always double-check grade and model).</p>
+    <div class="table-wrap">
+      <table id="cex-table" hidden>
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Amazon</th>
+            <th>CeX cash</th>
+            <th>Profit</th>
+            <th>Drop</th>
+          </tr>
+        </thead>
+        <tbody id="cex-body"></tbody>
+      </table>
+    </div>
+    <p id="cex-empty" class="empty">No CeX cash flips met your profit margin this crawl.</p>
+  </section>
+
+  <section class="card">
     <h2>Bestseller scan</h2>
     <p id="deals-summary" class="hint">No bestseller crawl has run yet.</p>
     <ul id="deals-alerts" class="alerts" hidden></ul>

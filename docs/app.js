@@ -121,6 +121,80 @@ function render(data) {
   };
 }
 
+function renderDeepDrops(deals) {
+  const container = document.getElementById("deep-sections");
+  if (!container) return;
+  container.innerHTML = "";
+  const tiers = deals.deep_drop_tiers || [40, 50, 66];
+  const grouped = deals.deep_drops || {};
+  let any = false;
+  for (const tier of tiers) {
+    const rows = grouped[String(tier)] || [];
+    if (!rows.length) continue;
+    any = true;
+    const block = document.createElement("div");
+    block.className = "deep-tier";
+    block.innerHTML = `<h3>≥${tier}% off usual Amazon price</h3>`;
+    const table = document.createElement("table");
+    table.innerHTML = `<thead><tr><th>Product</th><th>Now</th><th>Usual</th><th>Drop</th></tr></thead>`;
+    const body = document.createElement("tbody");
+    for (const d of rows.slice(0, 20)) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><a href="${escapeHtml(d.url)}" target="_blank" rel="noopener">${escapeHtml(d.title || d.asin)}</a></td>
+        <td class="price">${fmtEuro(d.price_eur)}</td>
+        <td class="was">${fmtEuro(d.median_eur)}</td>
+        <td>${escapeHtml(String(d.drop_percent))}%</td>`;
+      body.appendChild(tr);
+    }
+    table.appendChild(body);
+    block.appendChild(table);
+    container.appendChild(block);
+  }
+  const summary = document.getElementById("deep-summary");
+  if (summary && any) {
+    summary.textContent =
+      "Deep drops vs each item’s recent Amazon median — tiers at 40%, 50% and 66%. Electronics and games often still make sense at these levels.";
+  }
+}
+
+function renderCex(deals) {
+  if (!deals || !deals.generated_at) return;
+  const minEur = deals.cex_min_cash_profit_eur ?? 15;
+  const minPct = deals.cex_min_cash_profit_percent ?? 10;
+  const summary = document.getElementById("cex-summary");
+  if (summary) {
+    summary.textContent =
+      `CeX.ie cash trade-in vs Amazon (title match). Needs ≥€${minEur} or ≥${minPct}% profit after you buy on Amazon. Always confirm model and grade in store.`;
+  }
+  const flips = deals.cex_flips || [];
+  const table = document.getElementById("cex-table");
+  const body = document.getElementById("cex-body");
+  const empty = document.getElementById("cex-empty");
+  if (!body) return;
+  body.innerHTML = "";
+  if (!flips.length) {
+    if (table) table.hidden = true;
+    if (empty) empty.hidden = false;
+    return;
+  }
+  if (empty) empty.hidden = true;
+  if (table) table.hidden = false;
+  for (const row of flips) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>
+        <a href="${escapeHtml(row.url)}" target="_blank" rel="noopener">${escapeHtml(row.title || row.asin)}</a>
+        <div class="hint"><a href="${escapeHtml(row.cex_url)}" target="_blank" rel="noopener">CeX match</a></div>
+      </td>
+      <td class="price">${fmtEuro(row.price_eur)}</td>
+      <td class="price">${fmtEuro(row.cex_cash_eur)}</td>
+      <td class="price">€${Number(row.cex_cash_profit_eur).toFixed(2)}</td>
+      <td>${escapeHtml(String(row.drop_percent))}%</td>`;
+    body.appendChild(tr);
+  }
+}
+
 function renderDeals(deals) {
   if (!deals || !deals.generated_at) return;
   const summary = document.getElementById("deals-summary");
@@ -157,6 +231,8 @@ function renderDeals(deals) {
       <td>${escapeHtml(String(d.drop_percent))}%</td>`;
     body.appendChild(tr);
   }
+  renderDeepDrops(deals);
+  renderCex(deals);
 }
 
 fetch(`deals.json?t=${Date.now()}`, { cache: "no-store" })

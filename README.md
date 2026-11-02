@@ -36,8 +36,8 @@ Each run walks Amazon.ie's bestseller lists. It starts with coffee machines, the
 - Bestseller pages don't show a "was" price, so each item is judged against **its own price history**. An item needs 3 crawls before it can be flagged. It is flagged when its price is ≥75% below its recent median (median ≥ €20).
 - Items sold in several variants at different prices (for example "€9.99 – €24.99") are skipped, because their lowest price jumps between variants.
 - One crawl sends at most 15 Telegram alerts, plus a single "…and N more" message. The same item won't alert again within 24 hours unless its price drops further.
-
-Edit [`bestsellers.json`](bestsellers.json) to change categories, depth or `max_items`. Category paths are the part of an Amazon.ie bestseller URL after `amazon.ie`, for example `/gp/bestsellers/home/94816616031` for Coffee Machines.
+- The dashboard also lists **deep drops** at **40%, 50% and 66%** below each item's recent Amazon price (handy for electronics and games even when it's not a full "price error").
+- For those deep drops, the crawler looks up a **CeX.ie** match and estimates **cash trade-in** profit after your margin (`cex_min_cash_profit_eur` / `cex_min_cash_profit_percent` in [`bestsellers.json`](bestsellers.json)). CeX matching is by product title — always confirm model and grade before you buy. Set `"cex_enabled": false` to turn CeX lookups off. Category paths are the part of an Amazon.ie bestseller URL after `amazon.ie`, for example `/gp/bestsellers/home/94816616031` for Coffee Machines.
 
 Run it locally:
 
