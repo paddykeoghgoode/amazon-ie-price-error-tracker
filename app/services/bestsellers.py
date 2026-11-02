@@ -2,6 +2,8 @@ import asyncio
 import json
 import logging
 from collections import deque
+from datetime import datetime, timezone
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -373,11 +375,58 @@ async def send_alerts(
     return min(len(ranked), config.max_alerts_per_run)
 
 
-async def verify_candidates(client: httpx.AsyncClient, candidates: list[dict], *, limit: int) -> tuple[list[dict], dict]:
-    """Confirm exact ASIN's Amazon-owned offer before publishing or contacting CeX."""
-    passed = []
-    stats = {"attempted": 0, "amazon_verified": 0, "rejected_or_unknown": 0}
-    seen = set()
+def verification_rejection_reason(snap: ProductSnapshot, expected: float) -> str | None:
+    """Report *why* a deal cannot be trusted, without weakening seller checks."""
+    if expected <= 0:
+        return "invalid_bestseller_price"
+    if snap.price_eur is None or snap.price_eur <= 0:
+        return "product_page_price_missing"
+    if abs(snap.price_eur - expected) > 0.02:
+        # The scanned list and selected buy box disagree, so neither is safe to buy.
+        return "price_changed_or_variant"
+    if snap.condition == "used" or re.search(
+        r"\b(?:used|renewed|refurbished|pre-owned)\b", snap.title or "", re.I
+    ):
+        return "used_or_refurbished"
+    if snap.availability and re.search(
+        r"\b(?:out of stock|currently unavailable|temporarily unavailable)\b",
+        snap.availability, re.I,
+    ):
+        return "unavailable"
+    if snap.seller_status == "unknown":
+        return "seller_not_detected"
+    if snap.seller_status == "third_party" and snap.fulfilment_status != "amazon":
+        return "third_party_fulfilment_not_confirmed"
+    if not is_eligible_amazon_offer(snap):
+        return "seller_not_eligible"
+    return None
+
+
+async def verify_candidates(
+    client: httpx.AsyncClient, candidates: list[dict], *, limit: int
+) -> tuple[list[dict], dict]:
+    """Verify shortlisted offers and expose rejection reasons to Actions and Pages.
+
+    A bestsellers price alone cannot establish who sells or fulfils the item.
+    Unknown prices, sellers or delivery arrangements always fail closed.
+    """
+    passed: list[dict] = []
+    stats: dict = {
+        "attempted": 0,
+        "amazon_verified": 0,
+        "rejected_or_unknown": 0,
+        "rejection_reasons": {},
+        "sample_failures": [],
+    }
+    seen: set[str] = set()
+
+    def reject(asin: str, reason: str) -> None:
+        stats["rejected_or_unknown"] += 1
+        reasons = stats["rejection_reasons"]
+        reasons[reason] = reasons.get(reason, 0) + 1
+        if len(stats["sample_failures"]) < 5:
+            stats["sample_failures"].append({"asin": asin, "reason": reason})
+
     for candidate in candidates:
         asin = candidate.get("asin")
         if not asin or asin in seen or stats["attempted"] >= limit:
@@ -387,11 +436,27 @@ async def verify_candidates(client: httpx.AsyncClient, candidates: list[dict], *
         try:
             snap = await fetch_product(client, asin)
             expected = float(candidate.get("price_eur") or 0)
-            if not is_eligible_amazon_offer(snap) or not expected or abs(float(snap.price_eur) - expected) > 0.02:
-                stats["rejected_or_unknown"] += 1
+            reason = verification_rejection_reason(snap, expected)
+            if reason:
+                reject(asin, reason)
                 continue
-            passed.append({**candidate, "seller_name": snap.seller_name, "seller_type": eligible_offer_type(snap), "fulfilment_status": snap.fulfilment_status, "barcode": snap.barcode, "model_number": snap.model_number, "seller_verified": True, "verified_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()})
+            passed.append({
+                **candidate,
+                "seller_name": snap.seller_name,
+                "seller_type": eligible_offer_type(snap),
+                "fulfilment_status": snap.fulfilment_status,
+                "barcode": snap.barcode,
+                "model_number": snap.model_number,
+                "seller_verified": True,
+                "verified_at": datetime.now(timezone.utc).isoformat(),
+            })
             stats["amazon_verified"] += 1
-        except (httpx.HTTPError, ValueError, TypeError):
-            stats["rejected_or_unknown"] += 1
+        except httpx.HTTPStatusError as exc:
+            reject(asin, f"amazon_http_{exc.response.status_code}")
+        except httpx.TimeoutException:
+            reject(asin, "amazon_timeout")
+        except httpx.HTTPError:
+            reject(asin, "amazon_network_error")
+        except (ValueError, TypeError):
+            reject(asin, "product_page_parse_error")
     return passed, stats

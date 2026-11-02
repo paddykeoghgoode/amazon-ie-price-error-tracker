@@ -241,6 +241,12 @@ function renderCex(deals) {
 
 function appendCexRow(body, row, showDrop) {
   const tr = document.createElement("tr");
+  const sellerEvidence = row.seller_verified
+    ? `Verified: ${row.seller_name || "seller named"} (${row.seller_type || "offer"})`
+    : "Seller NOT verified — historical lead only";
+  const matchEvidence = row.match_confidence
+    ? ` · CeX: ${row.match_confidence.replaceAll("_", " ")}`
+    : "";
   const dropCell = showDrop && row.drop_percent != null
     ? `<td>${escapeHtml(String(row.drop_percent))}%</td>`
     : "";
@@ -248,6 +254,7 @@ function appendCexRow(body, row, showDrop) {
       <td>
         <a href="${escapeHtml(row.url)}" target="_blank" rel="noopener">${escapeHtml(row.title || row.asin)}</a>
         <div class="hint"><a href="${escapeHtml(row.cex_url)}" target="_blank" rel="noopener">CeX listing</a></div>
+        <div class="hint">${escapeHtml(sellerEvidence + matchEvidence)}</div>
       </td>
       <td class="price">${fmtEuro(row.price_eur)}</td>
       <td class="price">${fmtEuro(row.cex_cash_eur)}</td>
@@ -320,6 +327,16 @@ function renderSectionProgress(deals) {
   if (empty) empty.hidden = !!rows.length;
   for (const section of rows) {
     const verified = section.verification_stats || {};
+    const wasMeasured = Object.prototype.hasOwnProperty.call(verified, "attempted");
+    const verificationLabel = wasMeasured
+      ? `${Number(verified.amazon_verified || 0)} / ${Number(verified.attempted || 0)}`
+      : "Not measured";
+    const reasons = Object.entries(verified.rejection_reasons || {})
+      .sort((a, b) => Number(b[1]) - Number(a[1]))
+      .slice(0, 2)
+      .map(([reason, count]) => `${reason.replaceAll("_", " ")}: ${count}`)
+      .join(" · ");
+    const verificationHint = reasons ? `<div class="hint">${escapeHtml(reasons)}</div>` : "";
     const cex = section.cex_stats || {};
     const tr = document.createElement("tr");
     const status = section.scan_status || (section.blocked ? "blocked" : "completed");
@@ -329,7 +346,7 @@ function renderSectionProgress(deals) {
       <td>${fmtTime(section.generated_at)}</td>
       <td>${escapeHtml(status)}</td>
       <td>${Number(section.items_seen || 0).toLocaleString("en-IE")}</td>
-      <td>${Number(verified.amazon_verified || 0)}</td>
+      <td>${verificationLabel}${verificationHint}</td>
       <td>${found} (${Number(section.new_alerts || 0)} errors, ${Number(cex.cash_flips || 0) + Number(cex.arbitrage || 0)} CeX)</td>`;
     body.appendChild(tr);
   }
