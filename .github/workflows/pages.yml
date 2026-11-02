@@ -2,50 +2,56 @@ name: Scan and publish tracker
 
 on:
   schedule:
-    # GitHub cron is often delayed a few minutes; this is as close as Pages can get to "immediate".
-    - cron: "*/20 * * * *"
+    # Off the top of the hour, when GitHub's scheduler is least delayed.
+    - cron: "5,35 * * * *"
   workflow_dispatch:
   push:
-    branches:
-      - main
-    paths-ignore:
-      - "TRACKER.md"
-      - "docs/data.json"
+    branches: [main]
   issues:
     types: [opened, edited, labeled, unlabeled, closed, reopened]
 
 permissions:
-  contents: write
+  contents: read
   issues: read
+  actions: read
   pages: write
   id-token: write
 
+# One run at a time; a run that starts mid-crawl waits instead of racing it.
 concurrency:
-  group: pages-tracker
+  group: tracker
   cancel-in-progress: false
 
-jobs:
-  scan:
-    runs-on: ubuntu-latest
-    outputs:
-      pages_ready: ${{ steps.configure-pages.outcome }}
-    steps:
-      - uses: actions/checkout@v4
+env:
+  PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
 
-      - uses: actions/setup-python@v5
+jobs:
+  watchlist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+          cache: pip
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - run: pip install -r requirements.txt
 
-      - name: Restore SQLite cache
-        uses: actions/cache@v4
+      - name: Restore watchlist history
+        uses: actions/cache@v6
         with:
           path: data/tracker.db
           key: tracker-db-v1-${{ github.run_id }}
           restore-keys: |
             tracker-db-v1-
+
+      - name: Fetch the published snapshot
+        run: |
+          mkdir -p site
+          curl -fsSL "$PAGES_URL/data.json?t=$(date +%s)" -o site/previous-data.json \
+            || cp docs/data.json site/previous-data.json
 
       - name: Scan watchlist
         env:
@@ -60,25 +66,83 @@ jobs:
         run: |
           python -m scripts.scan \
             --watchlist watchlist.json \
-            --previous docs/data.json \
-            --output docs/data.json \
-            --markdown TRACKER.md
+            --previous site/previous-data.json \
+            --output site/data.json
 
-      - name: Commit tracker snapshot
+      - uses: actions/upload-artifact@v7
+        with:
+          name: watchlist-data
+          path: site/data.json
+          retention-days: 1
+
+  bestsellers:
+    # A full crawl takes ~16 minutes. Scheduled crawls only run on public repos, where
+    # Actions minutes are free; manual runs always crawl.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'schedule' && !github.event.repository.private)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Restore bestseller price history
+        uses: actions/cache@v6
+        with:
+          path: data/bestsellers.db
+          key: bestsellers-db-v1-${{ github.run_id }}
+          restore-keys: |
+            bestsellers-db-v1-
+
+      - name: Crawl bestseller lists
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_WHATSAPP_FROM: ${{ secrets.TWILIO_WHATSAPP_FROM }}
+          TWILIO_WHATSAPP_TO: ${{ secrets.TWILIO_WHATSAPP_TO }}
+        run: python -m scripts.crawl_bestsellers --config bestsellers.json --output site/deals.json
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bestsellers-data
+          path: site/deals.json
+          retention-days: 1
+
+  publish:
+    needs: [watchlist, bestsellers]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Collect this run's data
+        uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          pattern: "*-data"
+          merge-multiple: true
+          path: docs
+
+      - name: Keep the published copy of anything this run didn't produce
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add TRACKER.md docs/data.json
-          if git diff --cached --quiet; then
-            echo "No tracker snapshot changes"
-            exit 0
-          fi
-          git commit -m "Update tracker snapshot [skip ci]"
-          for attempt in 1 2 3; do
-            git pull --rebase origin "${GITHUB_REF_NAME}" && git push && exit 0
-            sleep $((attempt * 5))
-          done
-          exit 1
+          [ "${{ needs.watchlist.result }}" = success ] \
+            || curl -fsSL "$PAGES_URL/data.json?t=$(date +%s)" -o docs/data.json || true
+          [ "${{ needs.bestsellers.result }}" = success ] \
+            || curl -fsSL "$PAGES_URL/deals.json?t=$(date +%s)" -o docs/deals.json || true
+          ls -l docs
 
       - name: Check whether GitHub Pages is enabled
         id: pages-check
@@ -88,27 +152,17 @@ jobs:
           if gh api "repos/${{ github.repository }}/pages" >/dev/null 2>&1; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::GitHub Pages is not enabled; skipping deploy. Track via TRACKER.md."
+            echo "::notice::GitHub Pages is not enabled; skipping deploy."
           fi
 
-      - id: configure-pages
-        if: steps.pages-check.outputs.enabled == 'true'
-        uses: actions/configure-pages@v5
+      - if: steps.pages-check.outputs.enabled == 'true'
+        uses: actions/configure-pages@v6
 
-      - id: upload-pages
-        if: steps.configure-pages.outcome == 'success'
-        uses: actions/upload-pages-artifact@v3
+      - if: steps.pages-check.outputs.enabled == 'true'
+        uses: actions/upload-pages-artifact@v5
         with:
           path: docs
 
-  deploy:
-    needs: scan
-    if: needs.scan.outputs.pages_ready == 'success'
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        if: steps.pages-check.outputs.enabled == 'true'
+        uses: actions/deploy-pages@v5

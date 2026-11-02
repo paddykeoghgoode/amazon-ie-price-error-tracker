@@ -6,6 +6,7 @@
   "request_delay_seconds": 1.5,
   "max_alerts_per_run": 15,
   "alert_cooldown_minutes": 1440,
+  "daily_summary_hour": 9,
   "categories": [
     { "name": "Coffee machines", "path": "/gp/bestsellers/home/94816616031", "depth": 1 },
     { "name": "All departments", "path": "/gp/bestsellers", "depth": 2 }

@@ -40,6 +40,7 @@ class CrawlConfig:
     alert_cooldown_minutes: int = 1440
     history_per_product: int = 20
     report_drop_percent: float = 30.0
+    daily_summary_hour: int | None = 9
 
 
 @dataclass
@@ -81,6 +82,7 @@ def load_config(path: Path) -> CrawlConfig:
         alert_cooldown_minutes=int(raw.get("alert_cooldown_minutes", defaults.alert_cooldown_minutes)),
         history_per_product=int(raw.get("history_per_product", defaults.history_per_product)),
         report_drop_percent=float(raw.get("report_drop_percent", defaults.report_drop_percent)),
+        daily_summary_hour=raw.get("daily_summary_hour", defaults.daily_summary_hour),
     )
 
 

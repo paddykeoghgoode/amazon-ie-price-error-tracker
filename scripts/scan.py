@@ -124,7 +124,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--watchlist", type=Path, default=Path("watchlist.json"))
     parser.add_argument("--previous", type=Path, default=None)
     parser.add_argument("--output", type=Path, default=Path("docs/data.json"))
-    parser.add_argument("--markdown", type=Path, default=Path("TRACKER.md"))
+    parser.add_argument("--markdown", type=Path, default=None, help="Also write a Markdown report here")
     parser.add_argument("--skip-fetch", action="store_true", help="Export current DB without hitting Amazon")
     return parser.parse_args()
 
@@ -156,8 +156,9 @@ def main() -> None:
 
     payload = export_snapshot(github_repo=repo)
     write_snapshot(args.output, payload)
-    args.markdown.write_text(render_tracker_markdown(payload), encoding="utf-8")
-    logger.info("Wrote snapshot to %s and %s", args.output, args.markdown)
+    if args.markdown:
+        args.markdown.write_text(render_tracker_markdown(payload), encoding="utf-8")
+    logger.info("Wrote snapshot to %s", args.output)
 
 
 if __name__ == "__main__":

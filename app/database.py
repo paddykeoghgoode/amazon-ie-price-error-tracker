@@ -53,8 +53,34 @@ def init_db() -> None:
                 ON price_checks(product_id, checked_at DESC);
             CREATE INDEX IF NOT EXISTS idx_alerts_product
                 ON alerts(product_id, created_at DESC);
+
+            CREATE TABLE IF NOT EXISTS meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
             """
         )
+
+
+def get_meta(key: str) -> str | None:
+    with _connect() as conn:
+        row = conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+        return row["value"] if row else None
+
+
+def set_meta(key: str, value: str) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO meta (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, value),
+        )
+
+
+def alerts_since(since_iso: str) -> int:
+    with _connect() as conn:
+        row = conn.execute("SELECT COUNT(*) FROM alerts WHERE created_at >= ?", (since_iso,)).fetchone()
+        return int(row[0])
 
 
 @contextmanager
