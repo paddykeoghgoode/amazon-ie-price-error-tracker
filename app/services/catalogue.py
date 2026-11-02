@@ -154,7 +154,11 @@ def apply_batch_results(
     cex_enabled: bool,
     checked_at: str | None = None,
 ) -> dict:
-    """Attach verification and CeX progress to the full listing catalogue."""
+    """Keep CeX research for ALL priced ASINs; distinguish unsafe leads.
+
+    A title-matched CeX quote for a seller-unverified Amazon listing is never
+    an actionable buy alert. It is still useful as a provisional research lead.
+    """
     stamp = checked_at or _utc_now()
     rows = {row["asin"]: row for row in section.get("items") or []}
     eligible = {row["asin"]: row for row in verified}
@@ -163,32 +167,32 @@ def apply_batch_results(
         asin = item["asin"]
         row = rows[asin]
         row["last_checked_at"] = stamp
+        row["cex_checked_at"] = stamp if cex_enabled else None
         verified_item = eligible.get(asin)
         if verified_item:
             row["verification_status"] = "verified"
             row["seller_name"] = verified_item.get("seller_name")
             row["seller_type"] = verified_item.get("seller_type")
             row["fulfilment_status"] = verified_item.get("fulfilment_status")
-            row["cex_checked_at"] = stamp if cex_enabled else None
-            matched = matches.get(asin)
-            if matched:
-                row["cex_status"] = "matched"
-                row["cex_box_name"] = matched.get("cex_title")
-                row["cex_url"] = matched.get("cex_url")
-                row["cex_cash_eur"] = matched.get("cex_cash_eur")
-                row["cex_net_profit_eur"] = matched.get("cex_cash_profit_eur")
-                row["cex_max_buy_eur"] = matched.get("cex_max_buy_eur")
-                row["match_confidence"] = matched.get("match_confidence")
-            else:
-                row["cex_status"] = "no_confirmed_match" if cex_enabled else "disabled"
-                for key in _CEX_FIELDS:
-                    if key != "cex_checked_at":
-                        row.pop(key, None)
         else:
             row["verification_status"] = outcomes.get(asin, "not_verified")
-            row["cex_status"] = "not_eligible"
-            for key in (*_SELLER_FIELDS, *_CEX_FIELDS):
+            for key in _SELLER_FIELDS:
                 row.pop(key, None)
+
+        matched = matches.get(asin)
+        if cex_enabled and matched:
+            row["cex_status"] = "matched" if verified_item else "matched_unverified"
+            row["cex_box_name"] = matched.get("cex_title")
+            row["cex_url"] = matched.get("cex_url")
+            row["cex_cash_eur"] = matched.get("cex_cash_eur")
+            row["cex_net_profit_eur"] = matched.get("cex_cash_profit_eur")
+            row["cex_max_buy_eur"] = matched.get("cex_max_buy_eur")
+            row["match_confidence"] = matched.get("match_confidence")
+        else:
+            row["cex_status"] = "no_confirmed_match" if cex_enabled else "disabled"
+            for key in _CEX_FIELDS:
+                if key != "cex_checked_at":
+                    row.pop(key, None)
     return section
 
 
@@ -206,7 +210,8 @@ def catalogue_progress(section: dict, *, checked_this_run: int = 0) -> dict:
         "remaining": len(priced) - len(checked),
         "verified": sum(row.get("verification_status") == "verified" for row in checked),
         "cex_attempted": sum(bool(row.get("cex_checked_at")) for row in checked),
-        "cex_matched": sum(row.get("cex_status") == "matched" for row in checked),
+        "cex_matched": sum(row.get("cex_status") in ("matched", "matched_unverified") for row in checked),
+        "cex_eligible_matched": sum(row.get("cex_status") == "matched" for row in checked),
         "unpriced": len(active) - len(priced),
         "checked_this_run": checked_this_run,
     }
