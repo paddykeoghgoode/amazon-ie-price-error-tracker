@@ -6,8 +6,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        Paste an Amazon.ie product URL or 10-character ASIN.
-        The next tracker scan (or a manual **Actions → Scan and publish tracker → Run workflow**) will pick it up.
+        Paste an Amazon.ie product URL, amzn.eu short link, or 10-character ASIN.
+        Submit this issue once. The tracker resolves supported short links, checks the listing on the next watchlist scan, and shows the result on the Watchlist tab.
+        GitHub issues are the submission method because GitHub Pages cannot write directly to the repository.
   - type: input
     id: url
     attributes:
