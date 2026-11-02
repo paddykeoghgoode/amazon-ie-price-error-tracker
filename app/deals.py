@@ -72,6 +72,18 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
     sections[section_id] = {key: incoming[key] for key in _SECTION_STORE_KEYS if key in incoming}
     if incoming.get("section_name"):
         sections[section_id]["section_name"] = incoming["section_name"]
+    # Keep the first sighting time for the same ASIN and listing price while
+    # a section is rescanned; a changed price is a new finding.
+    old_section = ((previous or {}).get("sections") or {}).get(section_id) or {}
+    for kind in ("drops", "cex_flips", "cex_arbitrage"):
+        previous_findings = {
+            (row.get("asin"), row.get("price_eur")): row.get("found_at")
+            for row in old_section.get(kind) or []
+        }
+        for row in sections[section_id].get(kind) or []:
+            original = previous_findings.get((row.get("asin"), row.get("price_eur")))
+            if original:
+                row["found_at"] = original
 
     drops: list[dict] = []
     cex_flips: list[dict] = []
