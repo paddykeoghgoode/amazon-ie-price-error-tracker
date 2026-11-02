@@ -105,13 +105,19 @@ async def send_notification(message: str) -> tuple[bool, bool]:
             await send_telegram_message(message)
             telegram_ok = True
         except Exception as exc:
-            logger.exception("Telegram notify failed: %s", exc)
+            # Telegram's API token is embedded in the request URL. An httpx
+            # exception message/traceback can expose it in Actions logs.
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            logger.error("Telegram notify failed (%s, HTTP status=%s); credentials were not logged",
+                         type(exc).__name__, status)
     if settings.whatsapp_enabled:
         try:
             await send_whatsapp_message(message)
             whatsapp_ok = True
         except Exception as exc:
-            logger.exception("WhatsApp notify failed: %s", exc)
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            logger.error("WhatsApp notify failed (%s, HTTP status=%s)",
+                         type(exc).__name__, status)
     if not settings.telegram_enabled and not settings.whatsapp_enabled:
         logger.warning(
             "Price error detected but no notifier configured — set Telegram or Twilio WhatsApp env vars"
