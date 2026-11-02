@@ -1,5 +1,5 @@
 {
-  "_comment": "Each scheduled section crawls bestseller pages, publishes ALL discovered ASINs to catalogue.json/csv, and progressively checks 120 previously unchecked or oldest offers per block. Every verified offer gets a CeX search; no 25/50-product lifetime limit. Requests are paced to avoid timeouts.",
+  "_comment": "Rotating Amazon sections continue discovering thousands of prices. CeX quote cache survives via catalogue.json (72h positive, 7d no-match, 6h retry on error); up to 40 new CeX lookups per section scan and no requests after CeX 429. Only quote-verified offers <=12h old can trigger buying alerts.",
   "max_items": 12000,
   "max_requests": 800,
   "pages_per_category": 2,
@@ -193,5 +193,11 @@
     "/gp/bestsellers/gift-cards"
   ],
   "catalogue_checks_per_run": 120,
-  "catalogue_time_budget_seconds": 480
+  "catalogue_time_budget_seconds": 480,
+  "cex_live_lookups_per_run": 40,
+  "cex_quote_ttl_hours": 72,
+  "cex_no_match_ttl_hours": 168,
+  "cex_error_retry_hours": 6,
+  "cex_alert_quote_max_age_hours": 12,
+  "cex_request_delay_seconds": 0.75
 }
