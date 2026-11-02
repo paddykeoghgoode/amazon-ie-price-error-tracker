@@ -83,10 +83,14 @@ def make_section_catalogue(
         if (prior.get("title") or "") == (item.title or ""):
             if isinstance(prior.get("cex_quote_cache"), dict):
                 row["cex_quote_cache"] = prior["cex_quote_cache"]
+            # Duplicate notifications remain suppressed even if the observed
+            # Amazon price temporarily fluctuates; a deeper cut can still alert.
+            if isinstance(prior.get("last_cex_alert"), dict):
+                row["last_cex_alert"] = prior["last_cex_alert"]
         if same_price:
             for key in (
                 "verification_status", "last_checked_at", "cex_status",
-                "last_cex_alert", *_SELLER_FIELDS, *_CEX_FIELDS,
+                *_SELLER_FIELDS, *_CEX_FIELDS,
             ):
                 if key in prior:
                     row[key] = prior[key]
@@ -194,6 +198,10 @@ def apply_batch_results(
                 row.pop(key, None)
 
         matched = matches.get(asin)
+        if cex_enabled and matched and row.get("cex_checked_at") is None:
+            # Legacy clients may supply a direct CeX match without a quote
+            # cache. Do not silently regress their counted matches.
+            row["cex_checked_at"] = matched.get("cex_quote_checked_at") or stamp
         if cex_enabled and matched:
             if not verified_item:
                 row["cex_status"] = "matched_unverified"
