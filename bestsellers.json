@@ -12,6 +12,8 @@
   "cex_max_lookups": 40,
   "cex_min_cash_profit_eur": 15,
   "cex_min_cash_profit_percent": 10,
+  "cex_scan_any_price": true,
+  "cex_any_price_max_lookups": 50,
   "categories": [
     { "name": "Coffee machines", "path": "/gp/bestsellers/home/94816616031", "depth": 1 },
     { "name": "All departments", "path": "/gp/bestsellers", "depth": 2 }

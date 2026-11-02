@@ -19,7 +19,7 @@ from app.services.bestsellers import (
     send_alerts,
     send_cex_alerts,
 )
-from app.services.cex_arbitrage import enrich_with_cex
+from app.services.cex_arbitrage import enrich_with_cex, select_any_price_candidates
 from app.services.health import send_health_messages
 from app.services.monitor import BROWSER_HEADERS
 from app.snapshot import write_snapshot
@@ -71,10 +71,27 @@ async def run(args: argparse.Namespace) -> None:
     ]
     deep_candidates.sort(key=lambda d: d.get("drop_percent") or 0, reverse=True)
     async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=30.0) as client:
-        lookups, flips = await enrich_with_cex(deep_candidates, config, client=client)
-    processed.cex_lookups = lookups
+        lookups, flips = await enrich_with_cex(
+            deep_candidates, config, client=client, max_lookups=config.cex_max_lookups
+        )
+        seen = {row["asin"] for row in lookups}
+        any_candidates = select_any_price_candidates(result, config, skip_asins=seen)
+        arb_lookups, arb_flips = await enrich_with_cex(
+            any_candidates,
+            config,
+            client=client,
+            max_lookups=config.cex_any_price_max_lookups,
+        )
+    processed.cex_lookups = lookups + arb_lookups
     processed.cex_flips = flips
-    logger.info("CeX: %s lookups, %s cash flips over margin", len(lookups), len(flips))
+    processed.cex_arbitrage = arb_flips
+    logger.info(
+        "CeX: %s deep-drop lookups (%s flips), %s any-price lookups (%s arbitrage)",
+        len(lookups),
+        len(flips),
+        len(arb_lookups),
+        len(arb_flips),
+    )
 
     repo = os.environ.get("GITHUB_REPOSITORY") or "paddykeoghgoode/amazon-ie-price-error-tracker"
     owner, _, name = repo.partition("/")
@@ -84,8 +101,19 @@ async def run(args: argparse.Namespace) -> None:
             sent = await send_alerts(processed.alerts, config, details_url=dashboard_url)
             logger.info("Sent %s alert message(s)", sent)
         if processed.cex_flips:
-            cex_sent = await send_cex_alerts(processed.cex_flips, config, dashboard_url=dashboard_url)
-            logger.info("Sent %s CeX flip message(s)", cex_sent)
+            cex_sent = await send_cex_alerts(
+                processed.cex_flips, config, dashboard_url=dashboard_url, deep_drop=True
+            )
+            logger.info("Sent %s CeX deep-drop flip message(s)", cex_sent)
+        if processed.cex_arbitrage:
+            arb_sent = await send_cex_alerts(
+                processed.cex_arbitrage,
+                config,
+                dashboard_url=dashboard_url,
+                deep_drop=False,
+                max_alerts=config.cex_any_price_max_alerts_per_run,
+            )
+            logger.info("Sent %s CeX any-price arbitrage message(s)", arb_sent)
         health = await send_health_messages(result, processed, config, dashboard_url=dashboard_url)
         logger.info("Sent %s status message(s)", len(health))
 
