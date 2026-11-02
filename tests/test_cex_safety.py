@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 from app.scraper import cex_ie
 from app.scraper.cex_ie import CexPrices, titles_match_for_trade_in
 from app.services.bestsellers import CrawlConfig
-from app.services.cex_arbitrage import enrich_with_cex
+from app.services.cex_arbitrage import build_cex_row, enrich_with_cex
 
 
 class TestCexSkuMatching(unittest.TestCase):
@@ -79,6 +79,15 @@ class TestCexSkuMatching(unittest.TestCase):
 
 
 class TestCexQuoteValidation(unittest.TestCase):
+    def test_margin_uses_costs_and_cash_haircut(self):
+        item = {"asin": "B000000001", "title": "Sony PS5", "price_eur": 100.0}
+        prices = CexPrices("box", "Sony PS5", None, 125.0, 150.0, 180.0, "https://ie.webuy.com")
+        result = build_cex_row(item, prices, min_profit_eur=5, min_profit_percent=10,
+                               extra_cost_eur=5, payout_haircut_percent=10)
+        self.assertEqual(result["cex_expected_cash_eur"], 112.5)
+        self.assertEqual(result["cex_cash_profit_eur"], 7.5)
+        self.assertFalse(result["cex_cash_flip"])
+
     def test_rejects_quote_when_detail_is_for_different_sku(self):
         candidate = {
             "asin": "B000000001",
