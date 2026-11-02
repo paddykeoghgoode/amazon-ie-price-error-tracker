@@ -31,6 +31,9 @@ _SECTION_STORE_KEYS = (
     "cex_min_cash_profit_eur",
     "cex_min_cash_profit_percent",
     "cex_enabled",
+    "verification_stats",
+    "new_alerts",
+    "scan_status",
     "price_baselines",
 )
 
@@ -82,6 +85,7 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
     requests = 0
     errors = 0
     blocked = False
+    verify_stats = {"attempted": 0, "amazon_verified": 0, "rejected_or_unknown": 0}
     stats = {"deep_candidates": 0, "any_price_candidates": 0, "lookups": 0, "cash_flips": 0, "arbitrage": 0}
 
     for snap in sections.values():
@@ -97,6 +101,8 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
         requests += int(snap.get("requests") or 0)
         errors += int(snap.get("errors") or 0)
         blocked = blocked or bool(snap.get("blocked"))
+        for key in verify_stats:
+            verify_stats[key] += int((snap.get('verification_stats') or {}).get(key) or 0)
         st = snap.get("cex_stats") or {}
         for key in stats:
             stats[key] += int(st.get(key) or 0)
@@ -147,6 +153,7 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
         "cex_near_margin": cex_near,
         "cex_lookups": cex_lookups,
         "cex_stats": stats,
+        "verification_stats": verify_stats,
         "price_baselines": {asin: row for snap in sections.values() for asin, row in (snap.get("price_baselines") or {}).items()},
         "alerts": incoming.get("alerts") or base.get("alerts") or [],
     }
@@ -177,6 +184,8 @@ def export_deals(
         "items_priced": processed.priced,
         "items_with_history": processed.with_history,
         "new_alerts": len(processed.alerts),
+        "verification_stats": processed.verification_stats,
+        "scan_status": "blocked" if result.blocked else ("partial" if result.errors else "completed"),
         "drops": processed.drops[:max_drops],
         "alerts": db.recent_alerts(limit=50),
         "deep_drop_tiers": [int(t) for t in tiers],
