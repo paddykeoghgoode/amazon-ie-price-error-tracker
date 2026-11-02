@@ -10,7 +10,7 @@
   "deep_drop_tiers": [40, 50, 66],
   "cex_enabled": true,
   "cex_max_lookups": 40,
-  "cex_min_cash_profit_eur": 15,
+  "cex_min_cash_profit_eur": 5,
   "cex_min_cash_profit_percent": 10,
   "cex_scan_any_price": true,
   "cex_any_price_max_lookups": 50,

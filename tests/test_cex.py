@@ -17,8 +17,9 @@ class TestDropTier(unittest.TestCase):
 
 class TestCexProfit(unittest.TestCase):
     def test_required_profit(self):
-        self.assertEqual(required_cash_profit(100, min_eur=15, min_percent=10), 15)
-        self.assertEqual(required_cash_profit(200, min_eur=15, min_percent=10), 20)
+        self.assertEqual(required_cash_profit(100, min_eur=5, min_percent=10), 10)
+        self.assertEqual(required_cash_profit(40, min_eur=5, min_percent=10), 5)
+        self.assertEqual(required_cash_profit(200, min_eur=5, min_percent=10), 20)
 
     def test_build_row_flags_flip(self):
         item = {

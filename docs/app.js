@@ -160,7 +160,7 @@ function renderDeepDrops(deals) {
 
 function renderCex(deals) {
   if (!deals || !deals.generated_at) return;
-  const minEur = deals.cex_min_cash_profit_eur ?? 15;
+  const minEur = deals.cex_min_cash_profit_eur ?? 5;
   const minPct = deals.cex_min_cash_profit_percent ?? 10;
   const summary = document.getElementById("cex-summary");
   if (summary) {
