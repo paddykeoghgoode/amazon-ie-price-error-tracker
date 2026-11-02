@@ -1,5 +1,11 @@
 name: Deploy tracker site to GitHub Pages
 description: Upload the docs/ folder and deploy via GitHub Pages
+inputs:
+  artifact_name:
+    description: >
+      Unique name for the Pages artifact in this workflow run. Must differ between
+      parallel deploy jobs (watchlist vs bestsellers) so deploy-pages does not fail.
+    required: true
 outputs:
   page_url:
     description: URL of the deployed GitHub Pages site
@@ -28,8 +34,11 @@ runs:
       uses: actions/upload-pages-artifact@v5
       with:
         path: docs
+        name: ${{ inputs.artifact_name }}
 
     - name: Deploy to GitHub Pages
       id: deployment
       if: steps.pages-check.outputs.enabled == 'true'
       uses: actions/deploy-pages@v5
+      with:
+        artifact_name: ${{ inputs.artifact_name }}
