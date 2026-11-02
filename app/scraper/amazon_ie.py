@@ -26,19 +26,29 @@ class ProductSnapshot:
     availability: str | None
     seller_name: str | None = None
     seller_status: str = "unknown"
+    fulfilment_status: str = "unknown"
     condition: str = "unknown"
 
 
-# Whitelist exact retail entities only. "Fulfilled by Amazon" does NOT imply
-# sold by Amazon. Unknown/ambiguous buy boxes must never become deal alerts.
+# Accept Amazon retail and explicitly Amazon-fulfilled marketplace offers.
+# "Prime" and "Delivery Managed by Amazon" alone are not evidence of FBA.
+# Missing seller or dispatch evidence must never produce a marketplace alert.
 _AMAZON_RETAIL_NAMES = frozenset({
     "amazon", "amazon eu s.à r.l.", "amazon eu s.a.r.l.",
     "amazon eu sarl", "amazon eu s.à.r.l.", "amazon eu s.a.r.l",
 })
 _SOLD_BY_RE = re.compile(
     r"\bsold\s+by\s*:?\s*(.{1,100}?)(?=\s*(?:returns\b|dispatches\s+from\b|"
-    r"ships\s+from\b|payment\b|customer\s+service\b|secure\s+transaction\b|$))",
+    r"dispatched\s+from\b|ships\s+from\b|fulfilled\s+by\b|"
+    r"payment\b|customer\s+service\b|secure\s+transaction\b|$))",
     re.I | re.S,
+)
+
+
+_AMAZON_FULFILMENT_RE = re.compile(
+    r"\b(?:ships|shipped|dispatches|dispatched)\s+from\s*:?\s*amazon\b"
+    r"|\bfulfilled\s+by\s*:?\s*amazon\b",
+    re.I,
 )
 
 
@@ -46,27 +56,37 @@ def _clean_seller(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip(" ,:;.-\u00a0")
 
 
-def _seller_from_buybox(soup: BeautifulSoup) -> str | None:
-    # A seller attached to the CURRENT offer, never general marketplace/other-offer text.
+def _seller_from_box(box: BeautifulSoup) -> str | None:
+    # Label/value rows are preferred over free-text extraction if present.
+    for row in box.select("tr, .tabular-buybox-container, .a-row"):
+        label = row.select_one(".tabular-buybox-label")
+        if label and label.get_text(" ", strip=True).lower().rstrip(":") == "sold by":
+            name = row.select_one(".tabular-buybox-text")
+            if name:
+                seller = _clean_seller(name.get_text(" ", strip=True))
+                if seller:
+                    return seller
+    match = _SOLD_BY_RE.search(box.get_text(" ", strip=True))
+    return _clean_seller(match.group(1)) if match else None
+
+
+def _offer_from_buybox(soup: BeautifulSoup) -> tuple[str | None, str]:
+    # Seller and delivery must be proved within the SAME current-offer box.
+    # A "Fulfilled by Amazon" claim elsewhere on the product page is insufficient.
     for selector in ("#tabular-buybox", "#shipsFromSoldBy_feature_div",
                      "#merchant-info", "#merchantInfoFeature_feature_div"):
-        box = soup.select_one(selector)
-        if box is None:
-            continue
-        text = box.get_text(" ", strip=True)
-        match = _SOLD_BY_RE.search(text)
-        if match:
-            seller = _clean_seller(match.group(1))
-            if seller:
-                return seller
-        # Amazon sometimes renders label and value in separate table rows.
-        for row in box.select("tr, .tabular-buybox-container, .a-row"):
-            label = row.select_one(".tabular-buybox-label")
-            if label and label.get_text(" ", strip=True).lower().rstrip(":") == "sold by":
-                name = row.select_one(".tabular-buybox-text")
-                if name:
-                    return _clean_seller(name.get_text(" ", strip=True))
-    return None
+        for box in soup.select(selector):
+            seller = _seller_from_box(box)
+            if not seller:
+                continue
+            delivered_by_amazon = bool(_AMAZON_FULFILMENT_RE.search(box.get_text(" ", strip=True)))
+            return seller, "amazon" if delivered_by_amazon else "unknown"
+    return None, "unknown"
+
+
+def _seller_from_buybox(soup: BeautifulSoup) -> str | None:
+    """Backward-compatible seller parser for the selected buy-box offer."""
+    return _offer_from_buybox(soup)[0]
 
 
 def _seller_status(seller_name: str | None) -> str:
@@ -77,20 +97,42 @@ def _seller_status(seller_name: str | None) -> str:
     return "amazon" if normalized in accepted else "third_party"
 
 
-def is_amazon_direct_offer(snapshot: ProductSnapshot) -> bool:
-    """Fail closed: only a confirmed Amazon retail buy box for a NEW item."""
-    if snapshot.seller_status != "amazon" or snapshot.price_eur is None:
-        return False
+def eligible_offer_type(snapshot: ProductSnapshot) -> str | None:
+    """Return a verified *current-offer* type, otherwise fail closed.
+
+    Amazon retail may lack a separate shipping field. For marketplace sellers,
+    explicit Amazon dispatch/fulfilment evidence is mandatory.
+    """
+    if snapshot.price_eur is None or snapshot.price_eur <= 0:
+        return None
     if snapshot.condition == "used":
-        return False
+        return None
     if re.search(r"\b(renewed|refurbished|pre-owned|used)\b", snapshot.title or "", re.I):
-        return False
+        return None
     if snapshot.availability and re.search(
         r"\b(out of stock|currently unavailable|temporarily unavailable)\b",
         snapshot.availability, re.I,
     ):
-        return False
-    return True
+        return None
+    if snapshot.seller_status == "amazon":
+        return "amazon_retail"
+    if (
+        snapshot.seller_status == "third_party"
+        and snapshot.seller_name
+        and snapshot.fulfilment_status == "amazon"
+    ):
+        return "marketplace_fba"
+    return None
+
+
+def is_amazon_direct_offer(snapshot: ProductSnapshot) -> bool:
+    """True only for confirmed Amazon retail; marketplace FBA is separate."""
+    return eligible_offer_type(snapshot) == "amazon_retail"
+
+
+def is_eligible_amazon_offer(snapshot: ProductSnapshot) -> bool:
+    """Accept Amazon retail OR confirmed third-party fulfilled by Amazon."""
+    return eligible_offer_type(snapshot) is not None
 
 
 ASIN_RE = re.compile(r"/(?:dp|gp/product)/([A-Z0-9]{10})", re.I)
@@ -185,7 +227,7 @@ def parse_product_html(html: str, asin: str, url: str) -> ProductSnapshot:
     avail_el = soup.select_one("#availability") or soup.select_one("#outOfStock")
     availability = avail_el.get_text(" ", strip=True) if avail_el else None
 
-    seller = _seller_from_buybox(soup)
+    seller, fulfilment = _offer_from_buybox(soup)
     condition_text = " ".join(
         elem.get_text(" ", strip=True) for selector in ("#condition", "#condition-value", "#newAccordionRow")
         for elem in soup.select(selector)
@@ -201,6 +243,7 @@ def parse_product_html(html: str, asin: str, url: str) -> ProductSnapshot:
         availability=availability,
         seller_name=seller,
         seller_status=_seller_status(seller),
+        fulfilment_status=fulfilment,
         condition=condition,
     )
 
