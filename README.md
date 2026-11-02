@@ -54,6 +54,14 @@ python -m scripts.crawl_bestsellers --max-items 500 --no-notify
 - For recent big drops, the output also includes up to twelve recent timestamped price observations and the reference confirmation time. Existing old prices not previously collected cannot be recovered.
 - The public dashboard only displays a subset of opportunities; `deals.json` contains the compact baseline checkpoint for the visited sections. This is a resilience measure rather than a long-term complete price-history service.
 
+
+### Profit radar (recommended checks)
+
+- **Product identity:** Amazon detail pages yield a validated EAN/UPC/GTIN and model number when present. CeX details are compared only if they expose explicit identifiers. A conflicting model or barcode is rejected. `match_confidence` is `barcode_verified`, `model_verified`, or `title_only`; missing CeX identity is never described as an exact match.
+- **Maximum buy price:** CeX cash quote is reduced by the configured payout haircut, then delivery and extra costs are subtracted. Each opportunity shows expected net cash profit, ROI, the break-even Amazon item price, and the maximum Amazon item price that still meets the minimum euro margin and ROI. Configure `cex_delivery_eur` (default €0, estimate only) and `cex_min_roi_percent` (default 15%). Shipping and checkout totals must be verified before buying. These figures do not include taxes or unexpected deductions.
+- **Fast hotlist:** `Fast checks for confirmed drops` runs independently at :20 and :50, checking up to 12 previously Amazon-verified price drops of at least 30% from the last 48 hours. It republishes `hotlist.json`, retaining the normal section scan results, and sends a message for a *further* confirmed price cut. Scheduled runs may be delayed. It is not a complete scrape of Amazon every 15 minutes.
+- **Tiered alerts:** CeX matching backed by barcode or model identifiers and ≥€25 net expected profit receives a high-priority notification with seller, verification time, ROI, matching level, and maximum purchase price. Title-only matches remain lower confidence; no automation purchases anything.
+
 ### CeX profitability assumptions
 
 CeX's quoted cash figure is **not guaranteed**: inspection, condition, grading, accessories, quote changes, trade-in limits and stock can alter the outcome. This tracker does **not** place orders or confirm CeX will accept an item.
