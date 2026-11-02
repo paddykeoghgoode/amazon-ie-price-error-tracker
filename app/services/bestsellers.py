@@ -48,6 +48,8 @@ class CrawlConfig:
     cex_request_delay_seconds: float = 0.35
     cex_min_cash_profit_eur: float = 5.0
     cex_min_cash_profit_percent: float = 10.0
+    cex_extra_cost_eur: float = 0.0
+    cex_payout_haircut_percent: float = 0.0
     cex_max_alerts_per_run: int = 5
     cex_scan_any_price: bool = True
     cex_any_price_max_lookups: int = 50
@@ -148,6 +150,8 @@ def load_config(path: Path) -> CrawlConfig:
             raw.get("cex_min_cash_profit_percent", defaults.cex_min_cash_profit_percent)
         ),
         cex_max_alerts_per_run=int(raw.get("cex_max_alerts_per_run", defaults.cex_max_alerts_per_run)),
+        cex_extra_cost_eur=max(0.0, float(raw.get("cex_extra_cost_eur", defaults.cex_extra_cost_eur))),
+        cex_payout_haircut_percent=min(100.0, max(0.0, float(raw.get("cex_payout_haircut_percent", defaults.cex_payout_haircut_percent)))),
         cex_scan_any_price=bool(raw.get("cex_scan_any_price", defaults.cex_scan_any_price)),
         cex_any_price_max_lookups=int(
             raw.get("cex_any_price_max_lookups", defaults.cex_any_price_max_lookups)
@@ -314,7 +318,8 @@ async def send_cex_alerts(
         message = (
             f"{headline}{title}\n"
             f"{price_line}"
-            f"CeX cash trade-in: €{cash:.2f} (~€{profit:.2f} profit after your €{margin:.0f} margin)\n"
+            f"CeX quoted cash: €{cash:.2f} · estimated net profit: €{profit:.2f}\n"
+            f"(after configured costs/haircut; required profit ≥€{margin:.2f})\n"
             f"CeX also sells similar for €{retail:.2f}\n\n"
             f"{row.get('url')}\n"
             f"{row.get('cex_url')}\n\n"
