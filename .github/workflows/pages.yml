@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       crawl_section:
-        description: "Bestseller section (rotate = one section per run, all = full crawl with publish after each section)"
+        description: "all = scan and publish each section in turn; rotate = one section only"
         type: choice
-        default: rotate
+        default: all
         options:
           - rotate
           - all
@@ -239,6 +239,7 @@ jobs:
         run: python -m scripts.scan_summary --input docs/deals.json --summary "$GITHUB_STEP_SUMMARY" --published
 
   bestsellers-all:
+    name: Scan and publish ${{ matrix.section }}
     if: >-
       github.event_name == 'workflow_dispatch' &&
       inputs.crawl_section == 'all'
@@ -269,7 +270,8 @@ jobs:
         uses: actions/cache@v6
         with:
           path: data/bestsellers.db
-          key: bestsellers-db-v1-${{ github.run_id }}
+          # Matrix jobs must write distinct caches or only the first section is saved.
+          key: bestsellers-db-v1-${{ github.run_id }}-${{ matrix.section }}
           restore-keys: |
             bestsellers-db-v1-
 
@@ -295,9 +297,15 @@ jobs:
             --config bestsellers.json \
             --section "${{ matrix.section }}" \
             --merge-previous site/previous-deals.json \
+            --publish-fragment \
             --output site/deals.json \
             $EXTRA
 
+      - name: Section scan summary (before publishing)
+        run: python -m scripts.scan_summary --input site/deals.json --summary "$GITHUB_STEP_SUMMARY"
+
+      # Incoming is one section only; merge with current published data here,
+      # immediately before deploying this block, to preserve other sections.
       - name: Assemble and merge section immediately before publish
         run: |
           curl -fsSL "$PAGES_URL/deals.json?t=$(date +%s)" -o docs/deals.previous.json || echo '{}' > docs/deals.previous.json
