@@ -99,8 +99,8 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
     errors = 0
     blocked = False
     verify_stats = {"attempted": 0, "amazon_verified": 0, "rejected_or_unknown": 0}
-    stats = {"deep_candidates": 0, "any_price_candidates": 0, "attempted": 0, "lookups": 0, "cash_flips": 0, "arbitrage": 0}
-    catalogue_stats = {"discovered": 0, "active": 0, "archived": 0, "priced": 0, "checked": 0, "remaining": 0, "verified": 0, "cex_attempted": 0, "cex_matched": 0, "unpriced": 0, "checked_this_run": 0}
+    stats = {"deep_candidates": 0, "any_price_candidates": 0, "attempted": 0, "provisional_matches": 0, "lookups": 0, "cash_flips": 0, "arbitrage": 0}
+    catalogue_stats = {"discovered": 0, "active": 0, "archived": 0, "priced": 0, "checked": 0, "remaining": 0, "verified": 0, "cex_attempted": 0, "cex_matched": 0, "cex_eligible_matched": 0, "unpriced": 0, "checked_this_run": 0}
 
     for snap in sections.values():
         drops.extend(snap.get("drops") or [])
