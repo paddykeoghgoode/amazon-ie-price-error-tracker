@@ -44,12 +44,40 @@ class TestWorkflowPublishing(unittest.TestCase):
         self.assertTrue(any("deploy-tracker-site" in step.get("uses", "") for step in steps))
         self.assertTrue(any("scan_summary" in step.get("run", "") for step in steps))
 
+    def test_each_publish_retains_complete_listing_catalogue(self):
+        import yaml
+
+        workflow = yaml.safe_load(Path(".github/workflows/pages.yml").read_text(encoding="utf-8"))
+        jobs = workflow["jobs"]
+        normal = jobs["bestsellers"]["steps"]
+        scan = next(step["run"] for step in normal if step.get("name") == "Crawl bestseller section")
+        self.assertIn("--previous-catalogue", scan)
+        self.assertIn("--catalogue-output", scan)
+        self.assertIn("--publish-fragment", scan)
+
+        for key in ("publish-bestsellers", "bestsellers-all"):
+            steps = jobs[key]["steps"]
+            merge = " ".join(step.get("run", "") for step in steps)
+            self.assertIn("scripts.merge_catalogue", merge)
+            self.assertIn("catalogue.csv", merge)
+            self.assertIn("catalogue.json", merge)
+
+        watchlist = " ".join(step.get("run", "") for step in jobs["publish-watchlist"]["steps"])
+        self.assertIn("docs/catalogue.json", watchlist)
+        self.assertIn("docs/catalogue.csv", watchlist)
+
+        full_scan = " ".join(step.get("run", "") for step in jobs["bestsellers-all"]["steps"])
+        self.assertIn("--catalogue-output", full_scan)
+        self.assertIn("--previous-catalogue", full_scan)
+
     def test_fast_checks_exist_and_preserve_normal_outputs(self):
         hotlist = Path(".github/workflows/hotlist.yml").read_text(encoding="utf-8")
         self.assertIn("scripts.scan_hotlist", hotlist)
         self.assertIn("docs/hotlist.json", hotlist)
         self.assertIn("docs/deals.json", hotlist)
         self.assertIn("docs/data.json", hotlist)
+        self.assertIn("docs/catalogue.json", hotlist)
+        self.assertIn("docs/catalogue.csv", hotlist)
 
 
 if __name__ == "__main__":

@@ -32,6 +32,7 @@ _SECTION_STORE_KEYS = (
     "cex_min_cash_profit_percent",
     "cex_enabled",
     "verification_stats",
+    "catalogue_stats",
     "new_alerts",
     "scan_status",
     "price_baselines",
@@ -98,7 +99,8 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
     errors = 0
     blocked = False
     verify_stats = {"attempted": 0, "amazon_verified": 0, "rejected_or_unknown": 0}
-    stats = {"deep_candidates": 0, "any_price_candidates": 0, "lookups": 0, "cash_flips": 0, "arbitrage": 0}
+    stats = {"deep_candidates": 0, "any_price_candidates": 0, "attempted": 0, "provisional_matches": 0, "lookups": 0, "cash_flips": 0, "arbitrage": 0}
+    catalogue_stats = {"discovered": 0, "active": 0, "archived": 0, "priced": 0, "checked": 0, "remaining": 0, "verified": 0, "cex_attempted": 0, "cex_matched": 0, "cex_eligible_matched": 0, "unpriced": 0, "checked_this_run": 0}
 
     for snap in sections.values():
         drops.extend(snap.get("drops") or [])
@@ -115,6 +117,8 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
         blocked = blocked or bool(snap.get("blocked"))
         for key in verify_stats:
             verify_stats[key] += int((snap.get('verification_stats') or {}).get(key) or 0)
+        for key in catalogue_stats:
+            catalogue_stats[key] += int((snap.get('catalogue_stats') or {}).get(key) or 0)
         st = snap.get("cex_stats") or {}
         for key in stats:
             stats[key] += int(st.get(key) or 0)
@@ -171,6 +175,7 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
         "cex_lookups": cex_lookups,
         "cex_stats": stats,
         "verification_stats": verify_stats,
+        "catalogue_stats": catalogue_stats,
         "price_baselines": {asin: row for snap in sections.values() for asin, row in (snap.get("price_baselines") or {}).items()},
         "alerts": incoming.get("alerts") or base.get("alerts") or [],
     }
@@ -202,6 +207,7 @@ def export_deals(
         "items_with_history": processed.with_history,
         "new_alerts": len(processed.alerts),
         "verification_stats": processed.verification_stats,
+        "catalogue_stats": processed.catalogue_stats,
         "scan_status": "blocked" if result.blocked else ("partial" if result.errors else "completed"),
         "drops": [{**row, "found_at": datetime.now(timezone.utc).isoformat()} for row in processed.drops[:max_drops]],
         "alerts": db.recent_alerts(limit=50),

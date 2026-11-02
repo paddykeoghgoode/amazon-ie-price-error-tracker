@@ -71,14 +71,24 @@ def _seller_from_box(box: BeautifulSoup) -> str | None:
                 if seller:
                     return seller
     match = _SOLD_BY_RE.search(box.get_text(" ", strip=True))
-    return _clean_seller(match.group(1)) if match else None
+    if match:
+        return _clean_seller(match.group(1))
+    # Some current Amazon buy boxes expose the merchant only as a profile link.
+    # This is safe only when scoped inside the current buy-box container.
+    seller_link = box.select_one("#sellerProfileTriggerId")
+    if seller_link:
+        seller = _clean_seller(seller_link.get_text(" ", strip=True))
+        if seller:
+            return seller
+    return None
 
 
 def _offer_from_buybox(soup: BeautifulSoup) -> tuple[str | None, str]:
     # Seller and delivery must be proved within the SAME current-offer box.
     # A "Fulfilled by Amazon" claim elsewhere on the product page is insufficient.
     for selector in ("#tabular-buybox", "#shipsFromSoldBy_feature_div",
-                     "#merchant-info", "#merchantInfoFeature_feature_div"):
+                     "#merchant-info", "#merchantInfoFeature_feature_div",
+                     "#desktop_buybox", "#desktop_qualifiedBuyBox"):
         for box in soup.select(selector):
             seller = _seller_from_box(box)
             if not seller:
@@ -207,6 +217,10 @@ def parse_product_html(html: str, asin: str, url: str) -> ProductSnapshot:
         [
             "#corePriceDisplay_desktop_feature_div span.a-offscreen",
             "#corePrice_feature_div span.a-offscreen",
+            "#corePriceDisplay_mobile_feature_div span.a-offscreen",
+            "#apex_desktop .a-price span.a-offscreen",
+            "#price_inside_buybox",
+            "#newBuyBoxPrice",
             "#priceblock_ourprice",
             "#priceblock_dealprice",
             "span.a-price[data-a-color='price'] span.a-offscreen",

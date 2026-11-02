@@ -46,7 +46,9 @@ class CrawlConfig:
     report_drop_percent: float = 30.0
     daily_summary_hour: int | None = 9
     deep_drop_tiers: list[float] = field(default_factory=lambda: [40.0, 50.0, 66.0])
-    verify_max_candidates: int = 35
+    verify_max_candidates: int = 35  # legacy configuration; progressive queue supersedes this
+    catalogue_checks_per_run: int = 120
+    catalogue_time_budget_seconds: int = 480
     cex_enabled: bool = True
     cex_max_lookups: int = 40
     cex_request_delay_seconds: float = 0.35
@@ -120,6 +122,7 @@ class ProcessResult:
     cex_stats: dict = field(default_factory=dict)
     verified_asins: set[str] = field(default_factory=set)
     verification_stats: dict = field(default_factory=dict)
+    catalogue_stats: dict = field(default_factory=dict)
 
 
 def load_config(path: Path) -> CrawlConfig:
@@ -148,6 +151,8 @@ def load_config(path: Path) -> CrawlConfig:
         daily_summary_hour=raw.get("daily_summary_hour", defaults.daily_summary_hour),
         deep_drop_tiers=[float(x) for x in raw.get("deep_drop_tiers", defaults.deep_drop_tiers)],
         verify_max_candidates=max(0, int(raw.get('verify_max_candidates', defaults.verify_max_candidates))),
+        catalogue_checks_per_run=max(1, int(raw.get('catalogue_checks_per_run', defaults.catalogue_checks_per_run))),
+        catalogue_time_budget_seconds=max(60, int(raw.get('catalogue_time_budget_seconds', defaults.catalogue_time_budget_seconds))),
         cex_enabled=bool(raw.get("cex_enabled", defaults.cex_enabled)),
         cex_max_lookups=int(raw.get("cex_max_lookups", defaults.cex_max_lookups)),
         cex_request_delay_seconds=float(
@@ -403,7 +408,9 @@ def verification_rejection_reason(snap: ProductSnapshot, expected: float) -> str
 
 
 async def verify_candidates(
-    client: httpx.AsyncClient, candidates: list[dict], *, limit: int
+    client: httpx.AsyncClient, candidates: list[dict], *, limit: int,
+    on_result: Callable[[str, str], None] | None = None,
+    delay_seconds: float = 0.0,
 ) -> tuple[list[dict], dict]:
     """Verify shortlisted offers and expose rejection reasons to Actions and Pages.
 
@@ -426,6 +433,8 @@ async def verify_candidates(
         reasons[reason] = reasons.get(reason, 0) + 1
         if len(stats["sample_failures"]) < 5:
             stats["sample_failures"].append({"asin": asin, "reason": reason})
+        if on_result:
+            on_result(asin, reason)
 
     for candidate in candidates:
         asin = candidate.get("asin")
@@ -451,6 +460,8 @@ async def verify_candidates(
                 "verified_at": datetime.now(timezone.utc).isoformat(),
             })
             stats["amazon_verified"] += 1
+            if on_result:
+                on_result(asin, "verified")
         except httpx.HTTPStatusError as exc:
             reject(asin, f"amazon_http_{exc.response.status_code}")
         except httpx.TimeoutException:
@@ -459,4 +470,7 @@ async def verify_candidates(
             reject(asin, "amazon_network_error")
         except (ValueError, TypeError):
             reject(asin, "product_page_parse_error")
+        finally:
+            if delay_seconds > 0:
+                await asyncio.sleep(delay_seconds)
     return passed, stats
