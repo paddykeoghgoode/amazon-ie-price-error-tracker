@@ -44,6 +44,8 @@ jobs:
           curl -fsSL "$PAGES_URL/deals.json?t=$(date +%s)" -o docs/deals.json || echo '{}' > docs/deals.json
           curl -fsSL "$PAGES_URL/data.json?t=$(date +%s)" -o docs/data.json || true
           cp site/hotlist.json docs/hotlist.json
+          curl -fsSL "$PAGES_URL/catalogue.json?t=$(date +%s)" -o docs/catalogue.json || echo '{"sections":{}}' > docs/catalogue.json
+          curl -fsSL "$PAGES_URL/catalogue.csv?t=$(date +%s)" -o docs/catalogue.csv || printf 'section,asin,title,url,category,rank,price_eur\n' > docs/catalogue.csv
       - id: deployment
         uses: ./.github/actions/deploy-tracker-site
         with:
