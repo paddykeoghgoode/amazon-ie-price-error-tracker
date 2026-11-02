@@ -332,10 +332,13 @@ async def send_cex_alerts(
     dashboard_url: str,
     deep_drop: bool = True,
     max_alerts: int | None = None,
+    should_send: Callable[[dict], bool] | None = None,
+    on_sent: Callable[[dict], None] | None = None,
 ) -> int:
     cap = max_alerts if max_alerts is not None else config.cex_max_alerts_per_run
     sent = 0
-    for row in flips[:cap]:
+    eligible = [row for row in flips if should_send is None or should_send(row)]
+    for row in eligible[:cap]:
         title = row.get("title") or row.get("asin") or "Item"
         amazon = float(row.get("price_eur") or 0)
         cash = float(row.get("cex_cash_eur") or 0)
@@ -372,6 +375,8 @@ async def send_cex_alerts(
         telegram_ok, whatsapp_ok = await send_notification(message)
         if telegram_ok or whatsapp_ok:
             sent += 1
+            if on_sent is not None:
+                on_sent(row)
     return sent
 
 
