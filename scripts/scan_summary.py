@@ -12,22 +12,34 @@ def report(data: dict, published: bool = False) -> str:
         "",
         f"Scan timestamp (UTC): **{data.get('last_section_at') or data.get('generated_at') or 'unknown'}**",
         "",
-        "| Section | Last scan (UTC) | Status | Items | Amazon-verified offers | Price errors | CeX sale flips | CeX regular flips |",
+        "| Section | Last scan (UTC) | Status | Items | Verified / attempted | Price errors | CeX sale flips | CeX regular flips |",
         "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |",
     ]
     for sid, section in sections.items():
         stats = section.get("cex_stats") or {}
         verified = section.get("verification_stats") or {}
+        checked = (
+            f"{int(verified.get('amazon_verified') or 0)}/{int(verified.get('attempted') or 0)}"
+            if "attempted" in verified else "not measured"
+        )
         lines.append(
             f"| {section.get('section_name') or sid} "
             f"| {section.get('generated_at') or 'unknown'} "
             f"| {section.get('scan_status') or ('blocked' if section.get('blocked') else 'completed')} "
             f"| {int(section.get('items_seen') or 0)} "
-            f"| {int(verified.get('amazon_verified') or 0)} "
+            f"| {checked} "
             f"| {int(section.get('new_alerts') or 0)} "
             f"| {int(stats.get('cash_flips') or 0)} "
             f"| {int(stats.get('arbitrage') or 0)} |"
         )
+    for sid, section in sections.items():
+        reasons = (section.get("verification_stats") or {}).get("rejection_reasons") or {}
+        if reasons:
+            breakdown = ", ".join(
+                f"{reason.replace('_', ' ')}: {count}"
+                for reason, count in sorted(reasons.items(), key=lambda item: -int(item[1]))
+            )
+            lines.append(f"\n**{section.get('section_name') or sid} rejection reasons:** {breakdown}")
     return "\n".join(lines) + "\n"
 
 
