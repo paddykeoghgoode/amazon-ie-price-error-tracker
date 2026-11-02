@@ -83,7 +83,7 @@ async def check_product(client: httpx.AsyncClient, product: dict) -> None:
         )
 
 
-async def run_monitor_loop(stop_event: asyncio.Event | None = None) -> None:
+async def run_once() -> None:
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -92,14 +92,18 @@ async def run_monitor_loop(stop_event: asyncio.Event | None = None) -> None:
         "Accept-Language": "en-IE,en;q=0.9",
     }
     async with httpx.AsyncClient(headers=headers, timeout=30.0) as client:
-        while True:
-            products = db.list_products(enabled_only=True)
-            for product in products:
-                await check_product(client, product)
-                await asyncio.sleep(settings.request_delay_seconds)
-            if stop_event and stop_event.is_set():
-                break
-            await asyncio.sleep(settings.poll_interval_seconds)
+        products = db.list_products(enabled_only=True)
+        for product in products:
+            await check_product(client, product)
+            await asyncio.sleep(settings.request_delay_seconds)
+
+
+async def run_monitor_loop(stop_event: asyncio.Event | None = None) -> None:
+    while True:
+        await run_once()
+        if stop_event and stop_event.is_set():
+            break
+        await asyncio.sleep(settings.poll_interval_seconds)
 
 
 def add_watch_url(url_or_asin: str) -> dict:

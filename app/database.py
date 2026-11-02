@@ -115,6 +115,7 @@ def record_price_check(
     list_price_eur: float | None,
     currency: str | None,
     raw_note: str | None = None,
+    checked_at: str | None = None,
 ) -> None:
     with _connect() as conn:
         conn.execute(
@@ -123,7 +124,7 @@ def record_price_check(
                 (product_id, price_eur, list_price_eur, currency, checked_at, raw_note)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (product_id, price_eur, list_price_eur, currency, _utc_now(), raw_note),
+            (product_id, price_eur, list_price_eur, currency, checked_at or _utc_now(), raw_note),
         )
 
 
@@ -138,6 +139,7 @@ def create_alert(
     list_price_eur: float | None,
     discount_percent: float | None,
     reason: str,
+    created_at: str | None = None,
 ) -> int:
     with _connect() as conn:
         cur = conn.execute(
@@ -147,7 +149,14 @@ def create_alert(
             VALUES (?, ?, ?, ?, ?, ?)
             RETURNING id
             """,
-            (product_id, price_eur, list_price_eur, discount_percent, reason, _utc_now()),
+            (
+                product_id,
+                price_eur,
+                list_price_eur,
+                discount_percent,
+                reason,
+                created_at or _utc_now(),
+            ),
         )
         return int(cur.fetchone()[0])
 
@@ -193,6 +202,35 @@ def last_alert_for_product(product_id: int) -> dict | None:
             (product_id,),
         ).fetchone()
         return dict(row) if row else None
+
+
+def latest_price_check(product_id: int) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT * FROM price_checks
+            WHERE product_id = ?
+            ORDER BY checked_at DESC
+            LIMIT 1
+            """,
+            (product_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def price_history(product_id: int, limit: int = 30) -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT price_eur, list_price_eur, currency, checked_at, raw_note
+            FROM price_checks
+            WHERE product_id = ?
+            ORDER BY checked_at DESC
+            LIMIT ?
+            """,
+            (product_id, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 def median_historical_price(product_id: int, limit: int = 20) -> float | None:

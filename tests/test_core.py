@@ -1,8 +1,23 @@
+import tempfile
 import unittest
+from pathlib import Path
 
+from app.config import settings
 from app import database as db
 from app.detector.price_error import evaluate_price
 from app.scraper.amazon_ie import extract_asin, parse_product_html
+
+
+class TempDbTestCase(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self._old_db = settings.database_path
+        settings.database_path = Path(self._tmp.name) / "tracker.db"
+        db.init_db()
+
+    def tearDown(self):
+        settings.database_path = self._old_db
+        self._tmp.cleanup()
 
 
 class TestAsin(unittest.TestCase):
@@ -33,14 +48,10 @@ class TestParseHtml(unittest.TestCase):
         self.assertEqual(snap.list_price_eur, 129.99)
 
 
-class TestDetector(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        db.init_db()
-
+class TestDetector(TempDbTestCase):
     def test_flags_large_list_discount(self):
-        # product_id unused for list-only check when no history
-        verdict = evaluate_price(product_id=99999, price_eur=19.99, list_price_eur=199.99)
+        pid = db.add_product("B0TEST1234", "https://www.amazon.ie/dp/B0TEST1234")
+        verdict = evaluate_price(product_id=pid, price_eur=19.99, list_price_eur=199.99)
         self.assertTrue(verdict.is_error)
         self.assertIn("off list price", verdict.reason)
 

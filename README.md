@@ -1,68 +1,72 @@
 # Amazon.ie Price Error Tracker
 
-Watch Amazon.ie product URLs and get **immediate Telegram** (or optional Twilio WhatsApp) messages when a listing looks like a pricing mistake.
+Track Amazon.ie listings on a **GitHub Pages dashboard**. GitHub Actions scans your watch list about every 20 minutes, updates the page, and can send a **Telegram message as soon as a scan finds a likely price error**.
 
-## How it works
+**Live tracker:** [https://paddykeoghgoode.github.io/amazon-ie-price-error-tracker/](https://paddykeoghgoode.github.io/amazon-ie-price-error-tracker/)
 
-1. You add product URLs (or ASINs) via the web dashboard or API.
-2. A background monitor polls Amazon.ie on a configurable interval.
-3. When the current price is far below the struck-through “was” price (default **≥75% off** and was price **≥€20**), or far below recent history for that SKU, an alert is stored and notifications are sent right away.
-4. Duplicate alerts for the same price are suppressed for **30 minutes** (configurable).
+## Use the GitHub page
 
-## Quick start
+1. Merge this repo to `main` (GitHub only runs the Pages workflow on the default branch).
+2. Repo **Settings → Pages → Source: GitHub Actions** (the first workflow run usually creates this).
+3. Add GitHub Actions **secrets** (Settings → Secrets and variables → Actions):
+   - `TELEGRAM_BOT_TOKEN`
+   - `TELEGRAM_CHAT_ID`
+4. Add products:
+   - From the Pages site (opens a `watch` issue), or
+   - Put URLs/ASINs in [`watchlist.json`](watchlist.json)
+5. Wait for the scheduled scan, or run **Actions → Scan and publish tracker → Run workflow**.
+
+The dashboard URL is:
+
+`https://<you>.github.io/amazon-ie-price-error-tracker/`
+
+Times on the page are shown in **Ireland (Europe/Dublin)**.
+
+### Telegram
+
+1. [@BotFather](https://t.me/BotFather) → `/newbot` → copy the token into `TELEGRAM_BOT_TOKEN`.
+2. Message your bot once, then put your chat id in `TELEGRAM_CHAT_ID` (e.g. via [@userinfobot](https://t.me/userinfobot)).
+
+Optional WhatsApp: set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`, `TWILIO_WHATSAPP_TO` as secrets too.
+
+A “price error” is a **≥75% drop** from the struck-through list price (was ≥ €20), or the same drop vs recent history for that ASIN. Duplicate alerts for the same price are suppressed for 30 minutes.
+
+GitHub’s scheduler is not second-by-second; ~20 minutes is as close as Pages hosting can get. For a tighter loop, run the local server below.
+
+## Local server (optional)
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-# Edit .env — at minimum set Telegram variables (see below)
+# set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8080
 ```
 
-Open **http://localhost:8080**, paste an Amazon.ie product link, and click **Watch**.
+Open http://localhost:8080 — this polls every 45 seconds instead of waiting on Actions.
 
-## Telegram setup (recommended)
+One-shot scan (same path GitHub Actions uses):
 
-1. In Telegram, chat with [@BotFather](https://t.me/BotFather) → `/newbot` → copy the **bot token**.
-2. Start a chat with your bot (send any message).
-3. Get your **chat id** (e.g. message [@userinfobot](https://t.me/userinfobot) or call `getUpdates` on the bot API).
-4. Put these in `.env`:
-
-```env
-TELEGRAM_BOT_TOKEN=123456:ABC...
-TELEGRAM_CHAT_ID=123456789
+```bash
+python -m scripts.scan --watchlist watchlist.json --output docs/data.json
 ```
-
-Restart the app. The dashboard status line should show **Telegram: ready**.
-
-## WhatsApp (optional, via Twilio)
-
-Fill in `TWILIO_*` variables in `.env.example`. Twilio’s WhatsApp sandbox is the easiest way to test.
 
 ## Configuration
 
-| Variable | Default | Meaning |
-|----------|---------|---------|
-| `POLL_INTERVAL_SECONDS` | 45 | Seconds between full watch-list scans |
-| `REQUEST_DELAY_SECONDS` | 2 | Pause between product requests |
+| Variable / secret | Default | Meaning |
+|-------------------|---------|---------|
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | empty | Instant Telegram alerts |
+| `POLL_INTERVAL_SECONDS` | 45 | Local server only |
+| `REQUEST_DELAY_SECONDS` | 2 | Pause between Amazon requests |
 | `MIN_DISCOUNT_PERCENT` | 75 | Minimum discount to treat as a price error |
 | `MIN_LIST_PRICE_EUR` | 20 | Ignore tiny “was” prices |
 | `MAX_ALERT_PRICE_EUR` | 500 | Ignore alerts above this price |
 | `COOLDOWN_MINUTES` | 30 | Don’t re-notify the same price |
 
-## API
-
-- `GET /api/health` — notifier status
-- `GET /api/products` — watch list
-- `POST /api/products` — `{ "url": "https://www.amazon.ie/dp/..." }`
-- `GET /api/alerts` — recent detections
-
 ## Notes
 
-- Amazon may rate-limit or block automated requests; keep `REQUEST_DELAY_SECONDS` reasonable and only watch products you care about.
-- This tool flags **likely** misprices using heuristics; always verify on Amazon before buying.
-- Price history is stored in SQLite at `data/tracker.db`.
+- The Pages site and `watch` issues are **public** if the repo is public.
+- Amazon may throttle GitHub-hosted scrapes; keep the watch list small.
+- Alerts are heuristic — verify on Amazon before buying.
 
 ## Tests
 

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Amazon.ie price error tracker</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <p class="eyebrow">Amazon.ie · GitHub Pages</p>
+    <h1>Price error tracker</h1>
+    <p class="tagline">Watched listings, latest prices, and suspected misprices. Telegram fires when a scan finds a likely error.</p>
+    <div id="status" class="status warn">Loading latest scan…</div>
+  </header>
+
+  <section class="card">
+    <h2>Add a product</h2>
+    <form id="add-form">
+      <input id="product-url" type="text" placeholder="https://www.amazon.ie/dp/B0… or ASIN" required />
+      <button type="submit">Track on GitHub</button>
+    </form>
+    <p class="hint">
+      This opens a <code>watch</code> issue. The next scan (every ~20 minutes, or run it now from
+      <a id="actions-link" href="https://github.com/paddykeoghgoode/amazon-ie-price-error-tracker/actions/workflows/pages.yml">Actions</a>)
+      updates this page and can text you on Telegram.
+    </p>
+  </section>
+
+  <section class="card">
+    <h2>Watched products</h2>
+    <div id="products-empty" class="empty">Nothing on the watch list yet. Add an Amazon.ie URL above.</div>
+    <div class="table-wrap">
+      <table id="products-table" hidden>
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Now</th>
+            <th>Was</th>
+            <th>Status</th>
+            <th>Checked</th>
+          </tr>
+        </thead>
+        <tbody id="products-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Price-error alerts</h2>
+    <div id="alerts-empty" class="empty">No suspected errors yet. They show up here as soon as a scan flags one.</div>
+    <ul id="alerts-list" class="alerts" hidden></ul>
+  </section>
+
+  <footer>
+    <a id="repo-link" href="https://github.com/paddykeoghgoode/amazon-ie-price-error-tracker">Source on GitHub</a>
+    · Times shown in Ireland (Europe/Dublin)
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
