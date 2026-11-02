@@ -8,7 +8,6 @@ on:
   push:
     branches:
       - main
-      - cursor/scaffold-price-error-tracker-61ca
     paths-ignore:
       - "TRACKER.md"
       - "docs/data.json"
@@ -77,11 +76,21 @@ jobs:
             git push
           fi
 
+      - name: Check whether GitHub Pages is enabled
+        id: pages-check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh api "repos/${{ github.repository }}/pages" >/dev/null 2>&1; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::GitHub Pages is not enabled; skipping deploy. Track via TRACKER.md."
+          fi
+
       - id: configure-pages
-        continue-on-error: true
+        if: steps.pages-check.outputs.enabled == 'true'
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - id: upload-pages
         if: steps.configure-pages.outcome == 'success'
