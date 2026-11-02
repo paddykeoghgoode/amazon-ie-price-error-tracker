@@ -12,8 +12,8 @@ def report(data: dict, published: bool = False) -> str:
         "",
         f"Scan timestamp (UTC): **{data.get('last_section_at') or data.get('generated_at') or 'unknown'}**",
         "",
-        "| Section | Last scan (UTC) | Status | Items | Seller check | Catalogue checked / priced | CeX attempted | CeX matched | Price errors | CeX sale flips | CeX regular flips |",
-        "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Section | Last scan (UTC) | Status | Items | Seller check | Catalogue checked / priced | CeX attempted | CeX matched | Amazon drops | Price errors | CeX sale flips | CeX regular flips |",
+        "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for sid, section in sections.items():
         stats = section.get("cex_stats") or {}
@@ -32,6 +32,7 @@ def report(data: dict, published: bool = False) -> str:
             f"| {progress} "
             f"| {int(cat.get('cex_attempted') or 0)} "
             f"| {int(cat.get('cex_matched') or 0)} "
+            f"| {len(section.get('general_drops') or section.get('drops') or [])} "
             f"| {int(section.get('new_alerts') or 0)} "
             f"| {int(stats.get('cash_flips') or 0)} "
             f"| {int(stats.get('arbitrage') or 0)} |"

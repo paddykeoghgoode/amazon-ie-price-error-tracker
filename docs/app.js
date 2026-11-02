@@ -185,6 +185,11 @@ function renderGeneralDropsPage() {
   }
   table.hidden = !selected.length;
   empty.hidden = Boolean(selected.length);
+  if (!selected.length) {
+    empty.textContent = generalDropRows.length
+      ? "No Amazon price drops match those filters. Try another percentage, section or search."
+      : "No observed discounts with established history yet. The next section scans will populate this view.";
+  }
   const legacy = generalDropCoverage.updated < generalDropCoverage.total;
   const migration = legacy
     ? ` · ${generalDropCoverage.total - generalDropCoverage.updated} section(s) still publishing older ≥30% results`
@@ -551,7 +556,8 @@ function renderSectionProgress(deals) {
       <td>Disabled</td>
       <td>${progress}${pending}</td>
       <td>${Number(cex.live_lookups || 0)} live / ${Number(cex.cache_hits || 0)} cached</td>
-      <td>${finds} (${Number(section.new_alerts || 0)} price leads, ${Number(cex.cash_flips || 0) + Number(cex.arbitrage || 0)} CeX)</td>`;
+      <td>${Number((section.general_drops || section.drops || []).length)} <span class="hint">${section.general_drops ? "≥10%" : "legacy ≥30%"}</span></td>
+      <td>${finds} (${Number(section.new_alerts || 0)} error leads, ${Number(cex.cash_flips || 0) + Number(cex.arbitrage || 0)} CeX)</td>`;
     body.appendChild(tr);
   }
 }

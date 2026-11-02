@@ -33,6 +33,14 @@ Besides price-error alerts, the bot sends:
 
 The Amazon seller check is **disabled**. Bestseller prices are treated as **observations**, and all CeX comparisons and price-drop notifications are **research leads**, not confirmed retail offers or guaranteed profit. A seller cannot be inferred from Prime eligibility. Before any purchase, manually check the final seller, dispatch method, item condition, exact colour/model, availability and delivered checkout total; independently confirm CeX will buy that exact item/grade for the quoted **cash** amount. No buying is automated. This removes the old zero-verified-products blocker without inventing seller confidence.
 
+## New dashboard tabs and general Amazon price drops
+
+The GitHub Pages dashboard now has five views: **Overview**, **Amazon Drops**, **CeX Opportunities**, **All Listings** and **Watchlist**. Tabs support arrow keys and bookmarks such as [#amazon-drops](https://paddykeoghgoode.github.io/amazon-ie-price-error-tracker/#amazon-drops).
+
+The **Amazon Drops** tab is independent of CeX matches and the strict price-error alert threshold. It reports **all current observed discounts of at least 10%** from the item's stable Amazon price history, including **historical reference (€), current observed price (€), euro saving, percentage reduction, first found time, last section scan and category**. Filter by minimum reduction (10–75%), section or product name, and sort by percentage, savings or recency; results are paginated without the previous top-50 cap. Change `general_drop_percent` in `bestsellers.json` if you want to collect a different minimum percentage. Once collected, use the on-page minimum to narrow the results.
+
+The reference requires **three earlier consistent observations** and does not drift downward during repeated 10–25% discounts. The first runs after deployment may still show older ≥30% rows in sections that have not been rescanned by the new code; each new block replaces those with the broader ≥10% results. **All prices are observed bestseller-card prices, not verified checkout offers or manufacturer RRPs.**
+
 ## Bestseller scan (thousands of items, no manual adding)
 
 

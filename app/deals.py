@@ -50,6 +50,19 @@ def _dedupe_by_asin(rows: list[dict]) -> list[dict]:
     return list(out.values())
 
 
+def _latest_scanned_by_asin(rows: list[dict]) -> list[dict]:
+    """Use the newest *section observation* when an ASIN appears more than once."""
+    latest: dict[str, dict] = {}
+    for row in rows:
+        asin = str(row.get("asin") or "")
+        if not asin:
+            continue
+        previous = latest.get(asin)
+        if previous is None or str(row.get("last_scanned_at") or "") >= str(previous.get("last_scanned_at") or ""):
+            latest[asin] = row
+    return list(latest.values())
+
+
 def _merge_deep_drops(sections: dict[str, dict]) -> dict[str, list[dict]]:
     tiers: set[int] = set()
     for snap in sections.values():
@@ -171,7 +184,7 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
     # Preserve the *full* set of current observed reductions per section.
     # The browser paginates/filter these without an arbitrary top-50 cap.
     general_drops = sorted(
-        _dedupe_by_asin(general_drops),
+        _latest_scanned_by_asin(general_drops),
         key=lambda r: (r.get("drop_percent") or 0, r.get("savings_eur") or 0),
         reverse=True,
     )
@@ -262,7 +275,11 @@ def export_deals(
         "drops": [{**row, "found_at": datetime.now(timezone.utc).isoformat()} for row in processed.drops[:max_drops]],
         "general_drop_percent": config.general_drop_percent if config else 10.0,
         "general_drops": [
-            {**row, "found_at": datetime.now(timezone.utc).isoformat()}
+            {
+                **row,
+                "found_at": datetime.now(timezone.utc).isoformat(),
+                "last_scanned_at": datetime.now(timezone.utc).isoformat(),
+            }
             for row in processed.general_drops
         ],
         "alerts": db.recent_alerts(limit=50),
