@@ -44,6 +44,7 @@ class CrawlConfig:
     history_per_product: int = 20
     baseline_max_age_days: int = 30
     report_drop_percent: float = 30.0
+    general_drop_percent: float = 10.0
     daily_summary_hour: int | None = 9
     deep_drop_tiers: list[float] = field(default_factory=lambda: [40.0, 50.0, 66.0])
     verify_max_candidates: int = 35  # legacy configuration; progressive queue supersedes this
@@ -121,6 +122,7 @@ class ProcessResult:
     with_history: int = 0
     alerts: list[DetectedAlert] = field(default_factory=list)
     drops: list[dict] = field(default_factory=list)
+    general_drops: list[dict] = field(default_factory=list)
     cex_lookups: list[dict] = field(default_factory=list)
     cex_flips: list[dict] = field(default_factory=list)
     cex_arbitrage: list[dict] = field(default_factory=list)
@@ -153,6 +155,9 @@ def load_config(path: Path) -> CrawlConfig:
         history_per_product=int(raw.get("history_per_product", defaults.history_per_product)),
         baseline_max_age_days=max(1, int(raw.get("baseline_max_age_days", defaults.baseline_max_age_days))),
         report_drop_percent=float(raw.get("report_drop_percent", defaults.report_drop_percent)),
+        general_drop_percent=max(0.0, min(100.0, float(
+            raw.get("general_drop_percent", defaults.general_drop_percent)
+        ))),
         daily_summary_hour=raw.get("daily_summary_hour", defaults.daily_summary_hour),
         deep_drop_tiers=[float(x) for x in raw.get("deep_drop_tiers", defaults.deep_drop_tiers)],
         verify_max_candidates=max(0, int(raw.get('verify_max_candidates', defaults.verify_max_candidates))),
@@ -299,6 +304,22 @@ def process_crawl(result: CrawlResult, config: CrawlConfig, *, allow_alerts: boo
         reference_eur = float(anchor["reference_eur"])
         processed.with_history += 1
         drop = round((1 - item.price_eur / reference_eur) * 100, 1) if reference_eur > 0 else 0.0
+        # General Amazon reductions are independent of CeX matching and the
+        # much stricter price-error/Telegram alert threshold.
+        saving = round(reference_eur - item.price_eur, 2)
+        if saving > 0 and drop >= config.general_drop_percent:
+            processed.general_drops.append({
+                "asin": asin,
+                "title": item.title,
+                "url": item.url,
+                "category": category,
+                "rank": item.rank,
+                "price_eur": round(item.price_eur, 2),
+                "reference_eur": round(reference_eur, 2),
+                "savings_eur": saving,
+                "drop_percent": drop,
+                "reference_confirmed_at": anchor["confirmed_at"],
+            })
         if drop >= config.report_drop_percent:
             processed.drops.append(
                 {
@@ -320,6 +341,7 @@ def process_crawl(result: CrawlResult, config: CrawlConfig, *, allow_alerts: boo
                     "drop_tier": drop_tier(drop, config.deep_drop_tiers),
                 }
             )
+    processed.general_drops.sort(key=lambda d: (d["drop_percent"], d["savings_eur"]), reverse=True)
     processed.drops.sort(key=lambda d: d["drop_percent"], reverse=True)
     db.prune_price_checks(config.history_per_product)
     return processed

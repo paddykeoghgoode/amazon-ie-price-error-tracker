@@ -199,5 +199,6 @@
   "cex_no_match_ttl_hours": 168,
   "cex_error_retry_hours": 6,
   "cex_alert_quote_max_age_hours": 12,
-  "cex_request_delay_seconds": 0.75
+  "cex_request_delay_seconds": 0.75,
+  "general_drop_percent": 10
 }
