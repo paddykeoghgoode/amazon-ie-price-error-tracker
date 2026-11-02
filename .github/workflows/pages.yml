@@ -2,12 +2,11 @@ name: Scan and publish tracker
 
 on:
   schedule:
-    # Off the top of the hour, when GitHub's scheduler is least delayed.
     - cron: "5,35 * * * *"
   workflow_dispatch:
     inputs:
       crawl_section:
-        description: "Bestseller section (rotate = one section per run, all = full ~20 min crawl)"
+        description: "Bestseller section (rotate = one section per run, all = full crawl with publish after each section)"
         type: choice
         default: rotate
         options:
@@ -29,7 +28,6 @@ permissions:
   pages: write
   id-token: write
 
-# One run at a time; a run that starts mid-crawl waits instead of racing it.
 concurrency:
   group: tracker
   cancel-in-progress: false
@@ -81,17 +79,51 @@ jobs:
             --previous site/previous-data.json \
             --output site/data.json
 
+      - name: Stage watchlist artifact
+        run: cp site/data.json watchlist-data.json
+
       - uses: actions/upload-artifact@v7
         with:
           name: watchlist-data
-          path: site/data.json
+          path: watchlist-data.json
           retention-days: 1
 
+  publish-watchlist:
+    needs: watchlist
+    if: ${{ needs.watchlist.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: github-pages-deploy
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: watchlist-data
+          path: incoming
+
+      - name: Assemble site after watchlist scan
+        run: |
+          mkdir -p docs
+          cp incoming/watchlist-data.json docs/data.json
+          curl -fsSL "$PAGES_URL/deals.json?t=$(date +%s)" -o docs/deals.json || true
+          test -s docs/deals.json || echo '{}' > docs/deals.json
+          ls -la docs
+
+      - id: deployment
+        uses: ./.github/actions/deploy-tracker-site
+
   bestsellers:
-    # A full crawl takes ~20 minutes. It runs on push (e.g. after a merge), manual runs,
-    # and issue updates. Scheduled crawls only run on public repos (free Actions minutes).
     if: >-
-      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'workflow_dispatch' &&
+        inputs.crawl_section != 'all'
+      ) ||
       github.event_name == 'push' ||
       github.event_name == 'issues' ||
       (github.event_name == 'schedule' && !github.event.repository.private)
@@ -139,66 +171,117 @@ jobs:
           TWILIO_WHATSAPP_TO: ${{ secrets.TWILIO_WHATSAPP_TO }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
         run: |
-          SECTION="${{ steps.crawl-section.outputs.id }}"
           python -m scripts.crawl_bestsellers \
             --config bestsellers.json \
-            --section "$SECTION" \
+            --section "${{ steps.crawl-section.outputs.id }}" \
             --run-number "${{ github.run_number }}" \
             --merge-previous site/previous-deals.json \
             --output site/deals.json
 
+      - name: Stage bestsellers artifact
+        run: cp site/deals.json bestsellers-data.json
+
       - uses: actions/upload-artifact@v7
         with:
           name: bestsellers-data
-          path: site/deals.json
+          path: bestsellers-data.json
           retention-days: 1
 
-  publish:
-    needs: [watchlist, bestsellers]
-    if: ${{ !cancelled() }}
+  publish-bestsellers:
+    needs: bestsellers
+    if: ${{ needs.bestsellers.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    concurrency:
+      group: github-pages-deploy
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
 
-      - name: Collect this run's data
-        uses: actions/download-artifact@v8
-        continue-on-error: true
+      - uses: actions/download-artifact@v8
         with:
-          pattern: "*-data"
-          merge-multiple: true
-          path: docs
+          name: bestsellers-data
+          path: incoming
 
-      - name: Keep the published copy of anything this run didn't produce
+      - name: Assemble site after bestseller scan
         run: |
-          [ "${{ needs.watchlist.result }}" = success ] \
-            || curl -fsSL "$PAGES_URL/data.json?t=$(date +%s)" -o docs/data.json || true
-          [ "${{ needs.bestsellers.result }}" = success ] \
-            || curl -fsSL "$PAGES_URL/deals.json?t=$(date +%s)" -o docs/deals.json || true
-          ls -l docs
-
-      - name: Check whether GitHub Pages is enabled
-        id: pages-check
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if gh api "repos/${{ github.repository }}/pages" >/dev/null 2>&1; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::GitHub Pages is not enabled; skipping deploy."
-          fi
-
-      - if: steps.pages-check.outputs.enabled == 'true'
-        uses: actions/configure-pages@v6
-
-      - if: steps.pages-check.outputs.enabled == 'true'
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: docs
+          mkdir -p docs
+          cp incoming/bestsellers-data.json docs/deals.json
+          curl -fsSL "$PAGES_URL/data.json?t=$(date +%s)" -o docs/data.json.new \
+            && mv docs/data.json.new docs/data.json || true
+          ls -la docs
 
       - id: deployment
-        if: steps.pages-check.outputs.enabled == 'true'
-        uses: actions/deploy-pages@v5
+        uses: ./.github/actions/deploy-tracker-site
+
+  bestsellers-all:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      inputs.crawl_section == 'all'
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        section: [gaming, home, lifestyle, general]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: github-pages-deploy
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Restore bestseller price history
+        uses: actions/cache@v6
+        with:
+          path: data/bestsellers.db
+          key: bestsellers-db-v1-${{ github.run_id }}
+          restore-keys: |
+            bestsellers-db-v1-
+
+      - name: Fetch published deals for merge
+        run: |
+          mkdir -p site
+          curl -fsSL "$PAGES_URL/deals.json?t=$(date +%s)" -o site/previous-deals.json || echo '{}' > site/previous-deals.json
+
+      - name: Crawl section and notify
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_WHATSAPP_FROM: ${{ secrets.TWILIO_WHATSAPP_FROM }}
+          TWILIO_WHATSAPP_TO: ${{ secrets.TWILIO_WHATSAPP_TO }}
+        run: |
+          EXTRA=""
+          if [ "${{ matrix.section }}" != "general" ]; then
+            EXTRA="--skip-health"
+          fi
+          python -m scripts.crawl_bestsellers \
+            --config bestsellers.json \
+            --section "${{ matrix.section }}" \
+            --merge-previous site/previous-deals.json \
+            --output site/deals.json \
+            $EXTRA
+
+      - name: Assemble site after section scan
+        run: |
+          cp site/deals.json docs/deals.json
+          curl -fsSL "$PAGES_URL/data.json?t=$(date +%s)" -o docs/data.json || true
+          ls -la docs
+
+      - id: deployment
+        uses: ./.github/actions/deploy-tracker-site
