@@ -109,6 +109,7 @@ class ProcessResult:
     cex_lookups: list[dict] = field(default_factory=list)
     cex_flips: list[dict] = field(default_factory=list)
     cex_arbitrage: list[dict] = field(default_factory=list)
+    cex_stats: dict = field(default_factory=dict)
 
 
 def load_config(path: Path) -> CrawlConfig:

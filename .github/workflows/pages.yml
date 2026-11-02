@@ -76,10 +76,12 @@ jobs:
           retention-days: 1
 
   bestsellers:
-    # A full crawl takes ~16 minutes. Scheduled crawls only run on public repos, where
-    # Actions minutes are free; manual runs always crawl.
+    # A full crawl takes ~20 minutes. It runs on push (e.g. after a merge), manual runs,
+    # and issue updates. Scheduled crawls only run on public repos (free Actions minutes).
     if: >-
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' ||
+      github.event_name == 'issues' ||
       (github.event_name == 'schedule' && !github.event.repository.private)
     runs-on: ubuntu-latest
     timeout-minutes: 45

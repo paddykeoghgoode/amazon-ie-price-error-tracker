@@ -42,6 +42,16 @@ def export_deals(
         "cex_lookups": processed.cex_lookups[:30],
         "cex_flips": processed.cex_flips[:20],
         "cex_arbitrage": processed.cex_arbitrage[:30],
+        "cex_near_margin": sorted(
+            [
+                row
+                for row in processed.cex_lookups
+                if not row.get("cex_cash_flip") and (row.get("cex_cash_profit_eur") or 0) > 0
+            ],
+            key=lambda r: r.get("cex_cash_profit_eur") or 0,
+            reverse=True,
+        )[:15],
+        "cex_stats": processed.cex_stats,
     }
     return payload
 

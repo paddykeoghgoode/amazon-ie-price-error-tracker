@@ -85,6 +85,13 @@ async def run(args: argparse.Namespace) -> None:
     processed.cex_lookups = lookups + arb_lookups
     processed.cex_flips = flips
     processed.cex_arbitrage = arb_flips
+    processed.cex_stats = {
+        "deep_candidates": len(deep_candidates),
+        "any_price_candidates": len(any_candidates),
+        "lookups": len(processed.cex_lookups),
+        "cash_flips": len(flips),
+        "arbitrage": len(arb_flips),
+    }
     logger.info(
         "CeX: %s deep-drop lookups (%s flips), %s any-price lookups (%s arbitrage)",
         len(lookups),
