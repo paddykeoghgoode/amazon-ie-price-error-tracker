@@ -192,5 +192,6 @@
   "exclude": [
     "/gp/bestsellers/gift-cards"
   ],
-  "catalogue_checks_per_run": 120
+  "catalogue_checks_per_run": 120,
+  "catalogue_time_budget_seconds": 480
 }
