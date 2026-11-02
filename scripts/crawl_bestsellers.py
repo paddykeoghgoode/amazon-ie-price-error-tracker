@@ -66,6 +66,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--markdown", type=Path, default=None, help="Also write a Markdown report here")
     parser.add_argument("--max-items", type=int, default=None, help="Override max_items from the config")
     parser.add_argument("--no-notify", action="store_true", help="Detect and report, but send no messages")
+    parser.add_argument("--publish-fragment", action="store_true", help="Write only this section so publishing can merge with the latest Pages snapshot")
     parser.add_argument(
         "--skip-health",
         action="store_true",
@@ -241,7 +242,7 @@ async def run(args: argparse.Namespace) -> None:
         payload = await crawl_section(
             config, section_id=section.id, section_name=section.name, args=args, notify=notify
         )
-        if args.merge_previous and args.merge_previous.exists():
+        if not args.publish_fragment and args.merge_previous and args.merge_previous.exists():
             previous = read_snapshot(args.merge_previous)
             payload = merge_section_deals(previous, payload)
 
