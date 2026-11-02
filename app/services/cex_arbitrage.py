@@ -61,10 +61,15 @@ def build_cex_row(
     *,
     min_profit_eur: float,
     min_profit_percent: float,
+    extra_cost_eur: float = 0.0,
+    payout_haircut_percent: float = 0.0,
 ) -> dict[str, Any]:
     amazon = float(item["price_eur"])
-    net_cash = round(prices.cash_eur - amazon, 2)
-    net_voucher = round(prices.voucher_eur - amazon, 2)
+    if extra_cost_eur < 0 or not 0 <= payout_haircut_percent <= 100:
+        raise ValueError("Costs must be non-negative and payout haircut must be 0-100%")
+    expected_cash = round(prices.cash_eur * (1 - payout_haircut_percent / 100), 2)
+    net_cash = round(expected_cash - amazon - extra_cost_eur, 2)
+    net_voucher = round(prices.voucher_eur - amazon - extra_cost_eur, 2)
     need = required_cash_profit(amazon, min_eur=min_profit_eur, min_percent=min_profit_percent)
     vs_retail = (
         round((1 - amazon / prices.retail_eur) * 100, 1) if prices.retail_eur > 0 else None
@@ -76,6 +81,9 @@ def build_cex_row(
         "cex_category": prices.category_name,
         "cex_url": prices.url,
         "cex_cash_eur": prices.cash_eur,
+        "cex_expected_cash_eur": expected_cash,
+        "cex_extra_cost_eur": round(extra_cost_eur, 2),
+        "cex_payout_haircut_percent": payout_haircut_percent,
         "cex_voucher_eur": prices.voucher_eur,
         "cex_retail_eur": prices.retail_eur,
         "cex_cash_profit_eur": net_cash,
@@ -118,7 +126,7 @@ async def enrich_with_cex(
                 continue
             box_id = str(hit.get("boxId") or "")
             prices = await cex_ie.fetch_box_prices(client, box_id)
-            if not prices:
+            if not prices or not cex_ie.titles_match_for_trade_in(item.get("title"), prices.box_name):
                 await asyncio.sleep(config.cex_request_delay_seconds)
                 continue
             row = build_cex_row(
@@ -126,6 +134,8 @@ async def enrich_with_cex(
                 prices,
                 min_profit_eur=config.cex_min_cash_profit_eur,
                 min_profit_percent=config.cex_min_cash_profit_percent,
+                extra_cost_eur=config.cex_extra_cost_eur,
+                payout_haircut_percent=config.cex_payout_haircut_percent,
             )
             lookups.append(row)
             if row["cex_cash_flip"]:
