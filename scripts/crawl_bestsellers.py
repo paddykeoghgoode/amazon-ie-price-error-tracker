@@ -25,6 +25,7 @@ from app.services.bestsellers import (
     send_alerts,
     send_cex_alerts,
     send_notification,
+    verify_candidates,
 )
 from app.services.cex_arbitrage import enrich_with_cex, select_any_price_candidates
 from app.services.health import send_health_messages
@@ -121,12 +122,21 @@ async def crawl_section(
         d for d in processed.drops if d.get("drop_tier") is not None and (d.get("price_eur") or 0) >= 20
     ]
     deep_candidates.sort(key=lambda d: d.get("drop_percent") or 0, reverse=True)
+    any_candidates = select_any_price_candidates(result, config, skip_asins={d['asin'] for d in deep_candidates})
+    combined = deep_candidates + any_candidates
     async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=30.0) as client:
+        verified, verification_stats = await verify_candidates(client, combined, limit=config.verify_max_candidates)
+        verified_by_asin = {row['asin']: row for row in verified}
+        deep_candidates = [verified_by_asin[d['asin']] for d in deep_candidates if d['asin'] in verified_by_asin]
+        any_candidates = [verified_by_asin[d['asin']] for d in any_candidates if d['asin'] in verified_by_asin]
+        processed.drops = [verified_by_asin[d['asin']] for d in processed.drops if d['asin'] in verified_by_asin]
+        processed.verified_asins = set(verified_by_asin)
+        processed.verification_stats = verification_stats
+        logger.info('[%s] Amazon seller checks: %s', section_id, verification_stats)
+
         lookups, flips = await enrich_with_cex(
             deep_candidates, config, client=client, max_lookups=config.cex_max_lookups
         )
-        seen = {row["asin"] for row in lookups}
-        any_candidates = select_any_price_candidates(result, config, skip_asins=seen)
         arb_lookups, arb_flips = await enrich_with_cex(
             any_candidates,
             config,
@@ -215,6 +225,7 @@ async def run(args: argparse.Namespace) -> None:
             previous = read_snapshot(args.merge_previous)
             payload = merge_section_deals(previous, payload)
 
+    # Actions publishing re-merges the raw section against the freshest site state.
     write_snapshot(args.output, payload)
     if args.markdown:
         args.markdown.write_text(render_deals_markdown(payload), encoding="utf-8")
