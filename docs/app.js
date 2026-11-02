@@ -304,6 +304,47 @@ function render(data) {
     }
   }
 
+  // The site itself is static. This table makes the GitHub issue -> ASIN ->
+  // watchlist workflow visible without requiring anyone to inspect Actions logs.
+  const requests = (data.watch_submissions || []).slice().sort(
+    (a, b) => Number(b.issue_number || 0) - Number(a.issue_number || 0)
+  );
+  const requestsTable = document.getElementById("watch-requests-table");
+  const requestsBody = document.getElementById("watch-requests-body");
+  const requestsEmpty = document.getElementById("watch-requests-empty");
+  if (requestsTable && requestsBody && requestsEmpty) {
+    requestsBody.innerHTML = "";
+    requestsTable.hidden = !requests.length;
+    requestsEmpty.hidden = Boolean(requests.length);
+    const labels = {
+      tracking: ["Tracking", "ok"],
+      fetch_error: ["Amazon fetch failed — tracking continues", "fetch"],
+      price_unavailable: ["Added — price unavailable", "fetch"],
+      pending_scan: ["Accepted — awaiting scan", "fetch"],
+      link_unresolved: ["Link not resolved — edit issue", "error"],
+    };
+    for (const request of requests) {
+      const tr = document.createElement("tr");
+      const number = Number(request.issue_number || 0);
+      const safeNumber = Number.isSafeInteger(number) && number > 0 ? number : null;
+      const issueLink = safeNumber
+        ? `<a href="https://github.com/${encodeURI(repo)}/issues/${safeNumber}" target="_blank" rel="noopener">Issue #${safeNumber}</a>`
+        : "GitHub request";
+      const asin = String(request.asin || "");
+      const productLink = /^[A-Z0-9]{10}$/i.test(asin)
+        ? `<a href="https://www.amazon.ie/dp/${escapeHtml(asin)}" target="_blank" rel="noopener">${escapeHtml(asin)}</a>`
+        : "Awaiting valid Amazon URL/ASIN";
+      const [label, variant] = labels[request.status] || ["Awaiting scan", "fetch"];
+      tr.innerHTML = `
+        <td>${issueLink}</td>
+        <td>${productLink}</td>
+        <td><span class="badge ${variant}">${escapeHtml(label)}</span>
+          ${request.status === "link_unresolved" ? '<div class="hint">Add a full Amazon.ie product link to the existing issue.</div>' : ""}</td>
+        <td>${fmtTime(request.checked_at)}</td>`;
+      requestsBody.appendChild(tr);
+    }
+  }
+
   const alerts = data.alerts || [];
   const list = document.getElementById("alerts-list");
   const alertsEmpty = document.getElementById("alerts-empty");
@@ -330,8 +371,24 @@ function render(data) {
   const form = document.getElementById("add-form");
   form.onsubmit = (event) => {
     event.preventDefault();
-    const url = document.getElementById("product-url").value.trim();
+    const input = document.getElementById("product-url");
+    const url = input.value.trim();
     if (!url) return;
+    const looksLikeAsin = /^[A-Z0-9]{10}$/i.test(url);
+    if (!looksLikeAsin) {
+      let parsed;
+      try { parsed = new URL(url); } catch { /* Invalid link */ }
+      const host = parsed?.hostname.toLowerCase();
+      const trusted = host === "amzn.eu" || host === "www.amzn.eu" ||
+        host === "amzn.to" || host === "www.amzn.to" ||
+        /^((www|m|smile)\.)?amazon\.(ie|co\.uk|com|de|fr|es|it|nl|be|pl|se)$/.test(host || "");
+      if (!parsed || parsed.protocol !== "https:" || !trusted) {
+        input.setCustomValidity("Enter an HTTPS Amazon product link, amzn.eu short link or 10-character ASIN.");
+        input.reportValidity();
+        return;
+      }
+    }
+    input.setCustomValidity("");
     const issueUrl =
       `https://github.com/${repo}/issues/new` +
       `?labels=watch&title=${encodeURIComponent("Watch: " + url)}&body=${encodeURIComponent(url)}`;

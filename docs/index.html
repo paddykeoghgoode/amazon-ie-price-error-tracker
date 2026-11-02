@@ -231,16 +231,27 @@
     </div>
     <div role="tabpanel" id="panel-watchlist" aria-labelledby="tab-watchlist" hidden>
   <section class="card">
-    <h2>Add a product</h2>
+    <h2>Add a product to your watchlist</h2>
     <form id="add-form">
-      <input id="product-url" type="text" placeholder="https://www.amazon.ie/dp/B0… or ASIN" required />
-      <button type="submit">Track on GitHub</button>
+      <input id="product-url" type="text" placeholder="Amazon.ie link, amzn.eu short link or ASIN" aria-label="Product URL or ASIN" required />
+      <button type="submit">Add via GitHub</button>
     </form>
     <p class="hint">
-      This opens a <code>watch</code> issue. The next scan (every 30 minutes, or run it now from
-      <a id="actions-link" href="https://github.com/paddykeoghgoode/amazon-ie-price-error-tracker/actions/workflows/pages.yml">Actions</a>)
-      updates this page and can text you on Telegram.
+      GitHub will open a prefilled issue. <strong>Tap Create Issue once</strong> to submit it; the tracker then resolves the product and scans it automatically.
+      This is needed because GitHub Pages cannot store new watchlist entries directly. Check the request status below or run the
+      <a id="actions-link" href="https://github.com/paddykeoghgoode/amazon-ie-price-error-tracker/actions/workflows/pages.yml">watchlist workflow</a> manually.
     </p>
+  </section>
+  <section class="card">
+    <h2>Watchlist requests</h2>
+    <p class="hint">Open GitHub issues are processed automatically. If a short link cannot be resolved, edit the same issue with the full Amazon.ie URL or ASIN; you don't need to create a second issue.</p>
+    <p id="watch-requests-empty" class="empty">No watchlist requests have been processed yet.</p>
+    <div class="table-wrap">
+      <table id="watch-requests-table" hidden>
+        <thead><tr><th>Request</th><th>Product</th><th>Processing status</th><th>Last checked</th></tr></thead>
+        <tbody id="watch-requests-body"></tbody>
+      </table>
+    </div>
   </section>
   <section class="card">
     <h2>Watched products</h2>

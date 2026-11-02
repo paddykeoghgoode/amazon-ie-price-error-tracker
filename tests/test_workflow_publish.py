@@ -70,6 +70,19 @@ class TestWorkflowPublishing(unittest.TestCase):
         self.assertIn("--catalogue-output", full_scan)
         self.assertIn("--previous-catalogue", full_scan)
 
+    def test_watch_issue_events_do_not_start_entire_bestseller_crawl(self):
+        import yaml
+        workflow = yaml.safe_load(Path(".github/workflows/pages.yml").read_text(encoding="utf-8"))
+        jobs = workflow["jobs"]
+        self.assertIn("issues", workflow["permissions"])
+        self.assertEqual(workflow["permissions"]["issues"], "write")
+        bestseller_cond = jobs["bestsellers"]["if"]
+        self.assertNotIn("github.event_name == 'issues'", bestseller_cond)
+        self.assertIn("issues", workflow.get("on", workflow.get(True, {})))
+        watch_cmd = " ".join(step.get("run", "") for step in jobs["watchlist"]["steps"])
+        self.assertIn("python -m scripts.scan", watch_cmd)
+        self.assertIn("GITHUB_TOKEN", str(jobs["watchlist"]["steps"]))
+
     def test_fast_checks_exist_and_preserve_normal_outputs(self):
         hotlist = Path(".github/workflows/hotlist.yml").read_text(encoding="utf-8")
         self.assertIn("scripts.scan_hotlist", hotlist)

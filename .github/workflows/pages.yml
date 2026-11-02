@@ -23,7 +23,7 @@ on:
 
 permissions:
   contents: read
-  issues: read
+  issues: write
   actions: read
   pages: write
   id-token: write
@@ -130,7 +130,6 @@ jobs:
         inputs.crawl_section != 'all'
       ) ||
       github.event_name == 'push' ||
-      github.event_name == 'issues' ||
       (github.event_name == 'schedule' && !github.event.repository.private)
     runs-on: ubuntu-latest
     timeout-minutes: 25

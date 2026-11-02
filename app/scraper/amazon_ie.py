@@ -149,7 +149,7 @@ def is_eligible_amazon_offer(snapshot: ProductSnapshot) -> bool:
     return eligible_offer_type(snapshot) is not None
 
 
-ASIN_RE = re.compile(r"/(?:dp|gp/product)/([A-Z0-9]{10})", re.I)
+ASIN_RE = re.compile(r"/(?:dp|gp/product|gp/aw/d)/([A-Z0-9]{10})(?=[/?#]|$)", re.I)
 ASIN_QUERY_RE = re.compile(r"[?&]asin=([A-Z0-9]{10})", re.I)
 
 
