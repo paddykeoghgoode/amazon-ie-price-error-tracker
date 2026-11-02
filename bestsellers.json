@@ -7,6 +7,11 @@
   "max_alerts_per_run": 15,
   "alert_cooldown_minutes": 1440,
   "daily_summary_hour": 9,
+  "deep_drop_tiers": [40, 50, 66],
+  "cex_enabled": true,
+  "cex_max_lookups": 40,
+  "cex_min_cash_profit_eur": 15,
+  "cex_min_cash_profit_percent": 10,
   "categories": [
     { "name": "Coffee machines", "path": "/gp/bestsellers/home/94816616031", "depth": 1 },
     { "name": "All departments", "path": "/gp/bestsellers", "depth": 2 }

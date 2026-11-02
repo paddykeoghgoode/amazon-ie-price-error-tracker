@@ -5,14 +5,21 @@ from typing import Any
 
 from app import database as db
 from app.config import settings
-from app.services.bestsellers import CrawlResult, ProcessResult
+from app.services.bestsellers import CrawlConfig, CrawlResult, ProcessResult
+from app.services.drop_tiers import tiered_deep_drops
 from app.snapshot import _fmt_dublin, _fmt_euro
 
 
 def export_deals(
-    result: CrawlResult, processed: ProcessResult, *, github_repo: str, max_drops: int = 50
+    result: CrawlResult,
+    processed: ProcessResult,
+    *,
+    github_repo: str,
+    config: CrawlConfig | None = None,
+    max_drops: int = 50,
 ) -> dict[str, Any]:
-    return {
+    tiers = (config.deep_drop_tiers if config else [40.0, 50.0, 66.0])
+    payload: dict[str, Any] = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "github_repo": github_repo,
         "telegram_configured": settings.telegram_enabled,
@@ -27,7 +34,15 @@ def export_deals(
         "new_alerts": len(processed.alerts),
         "drops": processed.drops[:max_drops],
         "alerts": db.recent_alerts(limit=50),
+        "deep_drop_tiers": [int(t) for t in tiers],
+        "deep_drops": tiered_deep_drops(processed.drops, tiers),
+        "cex_enabled": bool(config.cex_enabled if config else True),
+        "cex_min_cash_profit_eur": config.cex_min_cash_profit_eur if config else 15.0,
+        "cex_min_cash_profit_percent": config.cex_min_cash_profit_percent if config else 10.0,
+        "cex_lookups": processed.cex_lookups[:30],
+        "cex_flips": processed.cex_flips[:20],
     }
+    return payload
 
 
 def render_deals_markdown(payload: dict[str, Any]) -> str:
@@ -75,10 +90,54 @@ def render_deals_markdown(payload: dict[str, Any]) -> str:
         for d in drops:
             title = (d.get("title") or d.get("asin") or "").replace("|", "/")
             rank = f"#{d['rank']} in " if d.get("rank") else ""
+            tier_note = f" ({d.get('drop_tier')}% tier)" if d.get("drop_tier") else ""
             lines.append(
                 f"| [{title}]({d.get('url')}) | {_fmt_euro(d.get('price_eur'))} | "
-                f"{_fmt_euro(d.get('median_eur'))} | {d.get('drop_percent'):g}% | "
+                f"{_fmt_euro(d.get('median_eur'))} | {d.get('drop_percent'):g}%{tier_note} | "
                 f"{rank}{(d.get('category') or '').replace('|', '/')} |"
+            )
+
+    lines.extend(["", "## Deep drops (40% / 50% / 66% vs usual Amazon price)", ""])
+    deep = payload.get("deep_drops") or {}
+    any_deep = False
+    for tier in payload.get("deep_drop_tiers") or [40, 50, 66]:
+        key = str(int(tier))
+        rows = deep.get(key) or []
+        if not rows:
+            continue
+        any_deep = True
+        lines.append(f"### ≥{key}% off usual price")
+        lines.append("")
+        for d in rows[:15]:
+            title = (d.get("title") or d.get("asin") or "").replace("|", "/")
+            lines.append(
+                f"- [{title}]({d.get('url')}) — **{_fmt_euro(d.get('price_eur'))}** "
+                f"(was ~{_fmt_euro(d.get('median_eur'))}, **{d.get('drop_percent'):g}%** off)"
+            )
+        lines.append("")
+    if not any_deep:
+        lines.append("_Nothing at 40%+ below its recent Amazon median this crawl._")
+        lines.append("")
+
+    lines.extend(["", "## CeX cash trade-in (after your profit margin)", ""])
+    flips = payload.get("cex_flips") or []
+    min_eur = payload.get("cex_min_cash_profit_eur", 15)
+    min_pct = payload.get("cex_min_cash_profit_percent", 10)
+    lines.append(
+        f"CeX match is approximate (search by title). A flip needs at least **€{min_eur:g}** "
+        f"or **{min_pct:g}%** profit after buying on Amazon, using CeX **cash** trade-in."
+    )
+    lines.append("")
+    if not flips:
+        lines.append("_No cash flips met your margin this crawl._")
+    else:
+        for row in flips[:15]:
+            title = (row.get("title") or row.get("asin") or "").replace("|", "/")
+            lines.append(
+                f"- [{title}]({row.get('url')}) — buy **{_fmt_euro(row.get('price_eur'))}**, "
+                f"CeX cash **{_fmt_euro(row.get('cex_cash_eur'))}** "
+                f"(~**€{row.get('cex_cash_profit_eur'):g}** profit) · "
+                f"[CeX listing]({row.get('cex_url')}) · {row.get('drop_percent'):g}% off usual Amazon price"
             )
     lines.extend(
         [

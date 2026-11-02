@@ -42,6 +42,9 @@ header h1 { margin: 0 0 0.35rem; font-size: 1.85rem; }
 .status.warn { border-left: 4px solid var(--accent); }
 .status.alert { border-left: 4px solid var(--danger); }
 
+.deep-tier { margin-bottom: 1.25rem; }
+.deep-tier h3 { font-size: 1rem; margin: 0 0 0.5rem; color: var(--accent); }
+
 .card {
   background: var(--card);
   border-radius: 12px;
