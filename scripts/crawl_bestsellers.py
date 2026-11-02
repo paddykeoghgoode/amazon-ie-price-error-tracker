@@ -156,6 +156,14 @@ async def crawl_section(
             if alert:
                 processed.alerts.append(alert)
         logger.info('[%s] Amazon seller checks: %s', section_id, verification_stats)
+        if verification_stats["attempted"] >= 10 and not verification_stats["amazon_verified"]:
+            logger.warning(
+                "[%s] No verified offers from %s checks. Rejection reasons: %s; "
+                "sample ASINs (no page content): %s",
+                section_id, verification_stats["attempted"],
+                verification_stats.get("rejection_reasons"),
+                verification_stats.get("sample_failures"),
+            )
 
         lookups, flips = await enrich_with_cex(
             deep_candidates, config, client=client, max_lookups=config.cex_max_lookups
