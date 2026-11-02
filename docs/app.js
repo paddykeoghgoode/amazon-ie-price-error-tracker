@@ -241,6 +241,12 @@ function renderCex(deals) {
 
 function appendCexRow(body, row, showDrop) {
   const tr = document.createElement("tr");
+  const sellerEvidence = row.seller_verified
+    ? `Verified: ${row.seller_name || "seller named"} (${row.seller_type || "offer"})`
+    : "Seller NOT verified — historical lead only";
+  const matchEvidence = row.match_confidence
+    ? ` · CeX: ${row.match_confidence.replaceAll("_", " ")}`
+    : "";
   const dropCell = showDrop && row.drop_percent != null
     ? `<td>${escapeHtml(String(row.drop_percent))}%</td>`
     : "";
@@ -248,6 +254,7 @@ function appendCexRow(body, row, showDrop) {
       <td>
         <a href="${escapeHtml(row.url)}" target="_blank" rel="noopener">${escapeHtml(row.title || row.asin)}</a>
         <div class="hint"><a href="${escapeHtml(row.cex_url)}" target="_blank" rel="noopener">CeX listing</a></div>
+        <div class="hint">${escapeHtml(sellerEvidence + matchEvidence)}</div>
       </td>
       <td class="price">${fmtEuro(row.price_eur)}</td>
       <td class="price">${fmtEuro(row.cex_cash_eur)}</td>
