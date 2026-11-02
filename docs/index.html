@@ -30,6 +30,11 @@
       <button type="button" id="catalogue-load">Browse listings</button>
       <input id="catalogue-search" type="search" placeholder="Search title, ASIN, category…" aria-label="Search listings" style="flex:1;min-width:220px"/>
       <select id="catalogue-section-filter" aria-label="Filter section"><option value="">All sections</option></select>
+      <select id="catalogue-activity-filter" aria-label="Filter current listings">
+        <option value="active">Currently listed</option>
+        <option value="all">Current and recently archived</option>
+        <option value="archived">Recently archived</option>
+      </select>
       <select id="catalogue-status-filter" aria-label="Filter status">
         <option value="">All verification statuses</option>
         <option value="pending">Awaiting check</option>
