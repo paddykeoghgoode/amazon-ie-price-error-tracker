@@ -171,9 +171,9 @@ class TestDetection(unittest.TestCase):
         self.run_crawl()
 
         crash = self.run_crawl({"B0ROOT0001": "€9.99"})
-        self.assertEqual([a.asin for a in crash.alerts], ["B0ROOT0001"])
+        self.assertEqual(crash.alerts, [], "Bestseller-only prices must never alert without seller verification")
         self.assertEqual(crash.drops[0]["asin"], "B0ROOT0001")
-        self.assertIn("€9.99", crash.alerts[0].message)
+        self.assertGreaterEqual(crash.drops[0]["drop_percent"], 75)
 
         again = self.run_crawl({"B0ROOT0001": "€9.99"})
         self.assertEqual(again.alerts, [], "same price within the cooldown must not re-alert")
