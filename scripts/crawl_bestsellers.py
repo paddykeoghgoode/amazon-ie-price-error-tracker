@@ -156,7 +156,8 @@ async def crawl_section(
     ]
     outcomes: dict[str, str] = {}
     verified: list[dict] = []
-    lookups: list[dict] = []
+    lookups: list[dict] = []  # eligible seller matches only, safe for deal alerts
+    research_lookups: list[dict] = []  # all CeX matches, including seller-unverified
     flips: list[dict] = []
     checked_batch: list[dict] = []
     verification_stats = {
@@ -179,15 +180,28 @@ async def crawl_section(
                 delay_seconds=config.request_delay_seconds,
                 on_result=lambda asin, status: outcomes.__setitem__(asin, status),
             )
-            # Do not silently discard products on CeX title mismatch; those
-            # attempts are still accounted for in the public catalogue.
-            part_lookups, part_flips = await enrich_with_cex(
-                part_verified, config, client=client, max_lookups=len(part_verified)
+            # Search CeX for EVERY priced listing in the group, even when
+            # Amazon's seller cannot be determined. Unverified results are
+            # kept only as provisional catalogue research, never buy alerts.
+            verified_group = {row["asin"]: row for row in part_verified}
+            research_candidates = [
+                verified_group.get(row["asin"], row) for row in group
+            ]
+            all_matches, all_flips = await enrich_with_cex(
+                research_candidates, config, client=client,
+                max_lookups=len(research_candidates),
             )
+            verified_matches = [
+                row for row in all_matches if row["asin"] in verified_group
+            ]
+            verified_flips = [
+                row for row in all_flips if row["asin"] in verified_group
+            ]
             checked_batch.extend(group)
             verified.extend(part_verified)
-            lookups.extend(part_lookups)
-            flips.extend(part_flips)
+            research_lookups.extend(all_matches)
+            lookups.extend(verified_matches)
+            flips.extend(verified_flips)
             for key in ("attempted", "amazon_verified", "rejected_or_unknown"):
                 verification_stats[key] += int(part_stats.get(key) or 0)
             for reason, count in (part_stats.get("rejection_reasons") or {}).items():
@@ -232,7 +246,7 @@ async def crawl_section(
         checked_batch,
         verified,
         outcomes,
-        lookups,
+        research_lookups,
         cex_enabled=config.cex_enabled,
     )
     section_catalogue["checked_this_run"] = len(checked_batch)
@@ -253,15 +267,16 @@ async def crawl_section(
     processed.cex_stats = {
         "deep_candidates": sum((row.get("drop_percent") or 0) >= 30 for row in verified),
         "any_price_candidates": sum((row.get("drop_percent") or 0) < 30 for row in verified),
-        "attempted": len(verified),
+        "attempted": len(checked_batch) if config.cex_enabled else 0,
+        "provisional_matches": len(research_lookups) - len(lookups),
         "lookups": len(processed.cex_lookups),
         "cash_flips": len(processed.cex_flips),
         "arbitrage": len(processed.cex_arbitrage),
     }
     logger.info(
-        "[%s] Catalogue: %s; CeX attempted for ALL %s verified offers; %s matches; %s profitable",
-        section_id, processed.catalogue_stats, len(verified),
-        len(lookups), len(flips),
+        "[%s] Catalogue: %s; CeX attempted for %s checked listings; %s eligible matches; %s provisional matches; %s profitable verified matches",
+        section_id, processed.catalogue_stats, len(checked_batch),
+        len(lookups), len(research_lookups) - len(lookups), len(flips),
     )
 
     repo = os.environ.get("GITHUB_REPOSITORY") or "paddykeoghgoode/amazon-ie-price-error-tracker"
