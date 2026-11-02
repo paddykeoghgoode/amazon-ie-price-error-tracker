@@ -29,6 +29,16 @@ Besides price-error alerts, the bot sends:
 - a **warning** if Amazon blocks the crawl or it finds suspiciously few items (at most every 12 hours), and a message when it recovers;
 - a **daily summary** after 09:00 Ireland time, so silence never means "broken". Change or disable it with `daily_summary_hour` in [`bestsellers.json`](bestsellers.json) (`null` turns it off).
 
+## Add products to the Watchlist from GitHub Pages
+
+The site is hosted on **static GitHub Pages**, so it cannot safely save products directly into the repository from a browser. Open the **Watchlist** tab, paste an Amazon.ie URL, Amazon **amzn.eu** short link, or 10-character ASIN, and select **Add via GitHub**. GitHub opens a prefilled issue; tap **Create Issue** once. That's the complete submission step.
+
+The issue event now runs **only the watchlist job**, rather than needlessly launching a full bestseller crawl. The job resolves trusted HTTPS Amazon short-link redirects to an ASIN, deduplicates the product, checks its price, publishes **Watchlist requests** on the dashboard and comments on newly opened/edited issues to confirm success or explain an invalid link. Issue titles starting with `Watch:` are accepted even when the GitHub mobile app does not add the `watch` label.
+
+Shortlink resolution is cached by issue content across subsequent scans. If Amazon refuses the redirect, edit the **existing issue** with the full Amazon product URL (for example `https://www.amazon.ie/dp/B0CX1234AB`) or its ASIN; the scanner retries. The Watchlist requests table distinguishes **Tracking**, **Fetch failed**, **Price unavailable** and **Link not resolved**. A product can be registered even if Amazon temporarily blocks its price page, in which case its status shows the failure.
+
+For repository maintainers, `watchlist.json` also accepts Amazon URLs or short links. The watchlist is checked by the existing scheduled workflow; no access token is stored in GitHub Pages or sent to Amazon. All offers remain unverified leads and require a manual checkout check.
+
 ## Seller verification temporarily disabled
 
 The Amazon seller check is **disabled**. Bestseller prices are treated as **observations**, and all CeX comparisons and price-drop notifications are **research leads**, not confirmed retail offers or guaranteed profit. A seller cannot be inferred from Prime eligibility. Before any purchase, manually check the final seller, dispatch method, item condition, exact colour/model, availability and delivered checkout total; independently confirm CeX will buy that exact item/grade for the quoted **cash** amount. No buying is automated. This removes the old zero-verified-products blocker without inventing seller confidence.
