@@ -461,6 +461,7 @@ async def verify_candidates(
                 continue
             passed.append({
                 **candidate,
+                "verified_title": snap.title,
                 "seller_name": snap.seller_name,
                 "seller_type": eligible_offer_type(snap),
                 "fulfilment_status": snap.fulfilment_status,
