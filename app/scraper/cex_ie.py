@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from app.scraper.product_identity import catalog_barcodes, normalise_model
 import re
 from dataclasses import dataclass
 
@@ -142,6 +143,8 @@ class CexPrices:
     voucher_eur: float
     retail_eur: float
     url: str
+    barcodes: tuple[str, ...] = ()
+    model_number: str | None = None
 
 
 def product_url(box_id: str) -> str:
@@ -295,6 +298,7 @@ async def search_boxes(client: httpx.AsyncClient, query: str, *, hits_per_page: 
             "sellPrice",
             "cashBuyPrice",
             "boxWebBuyAllowed",
+            "ean", "upc", "gtin", "barcode", "barcodes", "modelNumber",
         ],
         "numericFilters": ["boxVisibilityOnWeb=1"],
     }
@@ -344,4 +348,6 @@ async def fetch_box_prices(client: httpx.AsyncClient, box_id: str) -> CexPrices 
         voucher_eur=voucher,
         retail_eur=retail,
         url=product_url(str(box.get("boxId") or box_id)),
+        barcodes=catalog_barcodes(box),
+        model_number=normalise_model(box.get('modelNumber') or box.get('manufacturerPartNumber')),
     )

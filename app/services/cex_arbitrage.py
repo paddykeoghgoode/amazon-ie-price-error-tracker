@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 
 from app.scraper import cex_ie
+from app.scraper.product_identity import normalise_barcode, normalise_model
 from app.scraper.bestsellers import BestsellerItem
 from app.services.bestsellers import CrawlConfig, CrawlResult
 
@@ -61,6 +62,8 @@ def build_cex_row(
     *,
     min_profit_eur: float,
     min_profit_percent: float,
+    delivery_eur: float = 0.0,
+    min_roi_percent: float = 0.0,
     extra_cost_eur: float = 0.0,
     payout_haircut_percent: float = 0.0,
 ) -> dict[str, Any]:
@@ -68,8 +71,9 @@ def build_cex_row(
     if extra_cost_eur < 0 or not 0 <= payout_haircut_percent <= 100:
         raise ValueError("Costs must be non-negative and payout haircut must be 0-100%")
     expected_cash = round(prices.cash_eur * (1 - payout_haircut_percent / 100), 2)
-    net_cash = round(expected_cash - amazon - extra_cost_eur, 2)
-    net_voucher = round(prices.voucher_eur - amazon - extra_cost_eur, 2)
+    total_buy = amazon + delivery_eur
+    net_cash = round(expected_cash - total_buy - extra_cost_eur, 2)
+    net_voucher = round(prices.voucher_eur - total_buy - extra_cost_eur, 2)
     need = required_cash_profit(amazon, min_eur=min_profit_eur, min_percent=min_profit_percent)
     vs_retail = (
         round((1 - amazon / prices.retail_eur) * 100, 1) if prices.retail_eur > 0 else None
@@ -81,6 +85,11 @@ def build_cex_row(
         "cex_category": prices.category_name,
         "cex_url": prices.url,
         "cex_cash_eur": prices.cash_eur,
+        "amazon_total_eur": round(total_buy, 2),
+        "delivery_eur": round(delivery_eur, 2),
+        "cex_break_even_buy_eur": round(max(0, expected_cash - delivery_eur - extra_cost_eur), 2),
+        "cex_max_buy_eur": round(max(0, min(expected_cash - delivery_eur - extra_cost_eur - min_profit_eur, (expected_cash - extra_cost_eur)/(1 + max(min_profit_percent, min_roi_percent)/100) - delivery_eur)), 2),
+        "cex_net_roi_percent": round(net_cash / total_buy * 100, 1) if total_buy > 0 else None,
         "cex_expected_cash_eur": expected_cash,
         "cex_extra_cost_eur": round(extra_cost_eur, 2),
         "cex_payout_haircut_percent": payout_haircut_percent,
@@ -90,7 +99,7 @@ def build_cex_row(
         "cex_voucher_profit_eur": net_voucher,
         "cex_cash_profit_percent": round(net_cash / amazon * 100, 1) if amazon > 0 else None,
         "cex_min_profit_eur": round(need, 2),
-        "cex_cash_flip": net_cash >= need,
+        "cex_cash_flip": net_cash >= need and (net_cash / total_buy * 100 >= min_roi_percent if total_buy > 0 else False),
         "vs_cex_retail_percent": vs_retail,
     }
 
@@ -129,14 +138,27 @@ async def enrich_with_cex(
             if not prices or not cex_ie.titles_match_for_trade_in(item.get("title"), prices.box_name):
                 await asyncio.sleep(config.cex_request_delay_seconds)
                 continue
+            amazon_barcode = normalise_barcode(item.get('barcode'))
+            amazon_model = normalise_model(item.get('model_number'))
+            if amazon_barcode and prices.barcodes and amazon_barcode not in prices.barcodes:
+                continue
+            if amazon_model and prices.model_number and amazon_model != prices.model_number:
+                continue
+            identity = ('barcode_verified' if amazon_barcode and prices.barcodes else
+                        'model_verified' if amazon_model and prices.model_number else 'title_only')
             row = build_cex_row(
                 item,
                 prices,
                 min_profit_eur=config.cex_min_cash_profit_eur,
                 min_profit_percent=config.cex_min_cash_profit_percent,
+                delivery_eur=config.cex_delivery_eur,
+                min_roi_percent=config.cex_min_roi_percent,
                 extra_cost_eur=config.cex_extra_cost_eur,
                 payout_haircut_percent=config.cex_payout_haircut_percent,
             )
+            row['match_confidence'] = identity
+            row['amazon_barcode'] = amazon_barcode
+            row['cex_barcodes'] = list(prices.barcodes)
             lookups.append(row)
             if row["cex_cash_flip"]:
                 flips.append(row)

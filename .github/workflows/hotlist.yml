@@ -1,0 +1,52 @@
+name: Fast checks for confirmed drops
+on:
+  schedule:
+    - cron: "20,50 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: hotlist-check
+  cancel-in-progress: false
+env:
+  PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+jobs:
+  hotlist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    concurrency:
+      group: github-pages-deploy
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Download published scan state
+        run: |
+          mkdir -p site
+          curl -fsSL "$PAGES_URL/deals.json?t=$(date +%s)" -o site/deals.json || echo '{}' > site/deals.json
+          curl -fsSL "$PAGES_URL/hotlist.json?t=$(date +%s)" -o site/previous-hotlist.json || echo '{}' > site/previous-hotlist.json
+      - name: Recheck recent verified drops
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python -m scripts.scan_hotlist --deals site/deals.json --previous site/previous-hotlist.json --output site/hotlist.json
+      - name: Preserve current datasets
+        run: |
+          curl -fsSL "$PAGES_URL/deals.json?t=$(date +%s)" -o docs/deals.json || echo '{}' > docs/deals.json
+          curl -fsSL "$PAGES_URL/data.json?t=$(date +%s)" -o docs/data.json || true
+          cp site/hotlist.json docs/hotlist.json
+      - id: deployment
+        uses: ./.github/actions/deploy-tracker-site
+        with:
+          artifact_name: pages-hotlist-${{ github.run_attempt }}
+      - name: Report scan time and counts
+        run: python -c "import json,os; d=json.load(open('docs/hotlist.json')); open(os.environ['GITHUB_STEP_SUMMARY'],'a').write('Hotlist checked %s, verified %s at %s UTC\\n' % (len(d['products']), d['verified'], d['generated_at']))"
