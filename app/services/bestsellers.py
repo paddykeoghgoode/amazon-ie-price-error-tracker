@@ -334,11 +334,19 @@ async def send_cex_alerts(
         else:
             headline = "💰 CeX cash profit (no Amazon sale needed)\n\n"
             price_line = f"Amazon now: €{amazon:.2f} (regular price — no big drop required)\n"
+        match = row.get("match_confidence") or "title_only"
+        high = match in ("barcode_verified", "model_verified") and profit >= 25 and row.get("seller_verified")
+        if high:
+            headline = "🚨 HIGH PRIORITY verified CeX opportunity\n\n"
         message = (
             f"{headline}{title}\n"
             f"{price_line}"
             f"CeX quoted cash: €{cash:.2f} · estimated net profit: €{profit:.2f}\n"
             f"(after configured costs/haircut; required profit ≥€{margin:.2f})\n"
+            f"Max buy: €{float(row.get('cex_max_buy_eur') or 0):.2f} · break-even: €{float(row.get('cex_break_even_buy_eur') or 0):.2f}\n"
+            f"ROI: {row.get('cex_net_roi_percent')}% · matching: {match}\n"
+            f"Seller: {row.get('seller_name')} ({row.get('seller_type')})\n"
+            f"Confirmed: {row.get('verified_at')} UTC\n"
             f"CeX also sells similar for €{retail:.2f}\n\n"
             f"{row.get('url')}\n"
             f"{row.get('cex_url')}\n\n"
