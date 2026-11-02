@@ -373,8 +373,11 @@ function renderCataloguePage() {
   const query = (document.getElementById("catalogue-search")?.value || "").toLowerCase().trim();
   const section = document.getElementById("catalogue-section-filter")?.value || "";
   const status = document.getElementById("catalogue-status-filter")?.value || "";
+  const activity = document.getElementById("catalogue-activity-filter")?.value || "active";
   const filtered = catalogueRows.filter((row) => {
     if (section && row.section_id !== section) return false;
+    if (activity === "active" && row.active === false) return false;
+    if (activity === "archived" && row.active !== false) return false;
     if (status === "matched" && row.cex_status !== "matched") return false;
     if (status === "verified" && row.verification_status !== "verified") return false;
     if (status === "pending" && row.last_checked_at) return false;
@@ -502,6 +505,7 @@ function renderDeals(deals) {
   if (overview && progress.discovered != null) {
     overview.textContent =
       `Published Amazon listings: ${Number(progress.discovered || 0).toLocaleString("en-IE")} across scanned sections · ` +
+      `${Number(progress.active ?? progress.discovered ?? 0).toLocaleString("en-IE")} currently listed, ` +
       `${Number(progress.checked || 0).toLocaleString("en-IE")} seller-checked, ` +
       `${Number(progress.remaining || 0).toLocaleString("en-IE")} awaiting first check, ` +
       `${Number(progress.cex_attempted || 0).toLocaleString("en-IE")} CeX attempts, ` +
