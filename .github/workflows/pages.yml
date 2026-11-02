@@ -178,10 +178,13 @@ jobs:
             --section "${{ steps.crawl-section.outputs.id }}" \
             --run-number "${{ github.run_number }}" \
             --merge-previous site/previous-deals.json \
+            --publish-fragment \
             --output site/deals.json
 
-      - name: Stage bestsellers artifact
-        run: cp site/deals.json bestsellers-data.json
+      - name: Stage section result and Actions summary
+        run: |
+          cp site/deals.json bestsellers-data.json
+          python -m scripts.scan_summary --input bestsellers-data.json --summary "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -211,7 +214,9 @@ jobs:
       - name: Assemble site after bestseller scan
         run: |
           mkdir -p docs
-          cp incoming/bestsellers-data.json docs/deals.json
+          curl -fsSL "$PAGES_URL/deals.json?t=$(date +%s)" -o docs/deals.previous.json || echo '{}' > docs/deals.previous.json
+          python -m scripts.merge_deals --previous docs/deals.previous.json --incoming incoming/bestsellers-data.json --output docs/deals.json
+          rm docs/deals.previous.json
           curl -fsSL "$PAGES_URL/data.json?t=$(date +%s)" -o docs/data.json.new \
             && mv docs/data.json.new docs/data.json || true
           ls -la docs
@@ -220,6 +225,8 @@ jobs:
         uses: ./.github/actions/deploy-tracker-site
         with:
           artifact_name: pages-bestsellers-${{ github.run_attempt }}
+      - name: Published section summary
+        run: python -m scripts.scan_summary --input docs/deals.json --summary "$GITHUB_STEP_SUMMARY" --published
 
   bestsellers-all:
     if: >-
@@ -281,9 +288,11 @@ jobs:
             --output site/deals.json \
             $EXTRA
 
-      - name: Assemble site after section scan
+      - name: Assemble and merge section immediately before publish
         run: |
-          cp site/deals.json docs/deals.json
+          curl -fsSL "$PAGES_URL/deals.json?t=$(date +%s)" -o docs/deals.previous.json || echo '{}' > docs/deals.previous.json
+          python -m scripts.merge_deals --previous docs/deals.previous.json --incoming site/deals.json --output docs/deals.json
+          rm docs/deals.previous.json
           curl -fsSL "$PAGES_URL/data.json?t=$(date +%s)" -o docs/data.json || true
           ls -la docs
 
@@ -291,3 +300,5 @@ jobs:
         uses: ./.github/actions/deploy-tracker-site
         with:
           artifact_name: pages-all-${{ matrix.section }}-${{ github.run_attempt }}
+      - name: Report completed section
+        run: python -m scripts.scan_summary --input docs/deals.json --summary "$GITHUB_STEP_SUMMARY" --published

@@ -31,6 +31,9 @@ _SECTION_STORE_KEYS = (
     "cex_min_cash_profit_eur",
     "cex_min_cash_profit_percent",
     "cex_enabled",
+    "verification_stats",
+    "new_alerts",
+    "scan_status",
     "price_baselines",
 )
 
@@ -69,6 +72,18 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
     sections[section_id] = {key: incoming[key] for key in _SECTION_STORE_KEYS if key in incoming}
     if incoming.get("section_name"):
         sections[section_id]["section_name"] = incoming["section_name"]
+    # Keep the first sighting time for the same ASIN and listing price while
+    # a section is rescanned; a changed price is a new finding.
+    old_section = ((previous or {}).get("sections") or {}).get(section_id) or {}
+    for kind in ("drops", "cex_flips", "cex_arbitrage"):
+        previous_findings = {
+            (row.get("asin"), row.get("price_eur")): row.get("found_at")
+            for row in old_section.get(kind) or []
+        }
+        for row in sections[section_id].get(kind) or []:
+            original = previous_findings.get((row.get("asin"), row.get("price_eur")))
+            if original:
+                row["found_at"] = original
 
     drops: list[dict] = []
     cex_flips: list[dict] = []
@@ -82,6 +97,7 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
     requests = 0
     errors = 0
     blocked = False
+    verify_stats = {"attempted": 0, "amazon_verified": 0, "rejected_or_unknown": 0}
     stats = {"deep_candidates": 0, "any_price_candidates": 0, "lookups": 0, "cash_flips": 0, "arbitrage": 0}
 
     for snap in sections.values():
@@ -97,10 +113,17 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
         requests += int(snap.get("requests") or 0)
         errors += int(snap.get("errors") or 0)
         blocked = blocked or bool(snap.get("blocked"))
+        for key in verify_stats:
+            verify_stats[key] += int((snap.get('verification_stats') or {}).get(key) or 0)
         st = snap.get("cex_stats") or {}
         for key in stats:
             stats[key] += int(st.get(key) or 0)
 
+    # Preserve when a deal was first detected, not just when the section reran.
+    for collection in (drops, cex_flips, cex_arbitrage):
+        for row in collection:
+            if not row.get("found_at"):
+                row["found_at"] = incoming.get("generated_at")
     drops = sorted(_dedupe_by_asin(drops), key=lambda r: r.get("drop_percent") or 0, reverse=True)
     cex_flips = sorted(
         _dedupe_by_asin(cex_flips), key=lambda r: r.get("cex_cash_profit_eur") or 0, reverse=True
@@ -147,6 +170,7 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
         "cex_near_margin": cex_near,
         "cex_lookups": cex_lookups,
         "cex_stats": stats,
+        "verification_stats": verify_stats,
         "price_baselines": {asin: row for snap in sections.values() for asin, row in (snap.get("price_baselines") or {}).items()},
         "alerts": incoming.get("alerts") or base.get("alerts") or [],
     }
@@ -177,7 +201,9 @@ def export_deals(
         "items_priced": processed.priced,
         "items_with_history": processed.with_history,
         "new_alerts": len(processed.alerts),
-        "drops": processed.drops[:max_drops],
+        "verification_stats": processed.verification_stats,
+        "scan_status": "blocked" if result.blocked else ("partial" if result.errors else "completed"),
+        "drops": [{**row, "found_at": datetime.now(timezone.utc).isoformat()} for row in processed.drops[:max_drops]],
         "alerts": db.recent_alerts(limit=50),
         "deep_drop_tiers": [int(t) for t in tiers],
         "deep_drops": tiered_deep_drops(processed.drops, tiers),
@@ -185,8 +211,8 @@ def export_deals(
         "cex_min_cash_profit_eur": config.cex_min_cash_profit_eur if config else 5.0,
         "cex_min_cash_profit_percent": config.cex_min_cash_profit_percent if config else 10.0,
         "cex_lookups": processed.cex_lookups[:30],
-        "cex_flips": processed.cex_flips[:20],
-        "cex_arbitrage": processed.cex_arbitrage[:30],
+        "cex_flips": [{**row, "found_at": row.get("verified_at")} for row in processed.cex_flips[:20]],
+        "cex_arbitrage": [{**row, "found_at": row.get("verified_at")} for row in processed.cex_arbitrage[:30]],
         "cex_near_margin": sorted(
             [
                 row

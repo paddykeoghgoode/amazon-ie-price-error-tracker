@@ -147,7 +147,7 @@ function renderDeepDrops(deals) {
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td><a href="${escapeHtml(d.url)}" target="_blank" rel="noopener">${escapeHtml(d.title || d.asin)}</a></td>
-        <td class="price">${fmtEuro(d.price_eur)}</td>
+        <td class="price">${fmtEuro(d.price_eur)}<div class="hint">Found ${fmtTime(d.found_at)}</div></td>
         <td class="was">${fmtEuro(d.median_eur)}</td>
         <td>${escapeHtml(String(d.drop_percent))}%</td>`;
       body.appendChild(tr);
@@ -198,7 +198,7 @@ function renderNearMargin(bodyId, tableId, rows) {
         <a href="${escapeHtml(row.url)}" target="_blank" rel="noopener">${escapeHtml(row.title || row.asin)}</a>
         <div class="hint"><a href="${escapeHtml(row.cex_url)}" target="_blank" rel="noopener">CeX listing</a> · need €${Number(row.cex_min_profit_eur).toFixed(0)}</div>
       </td>
-      <td class="price">${fmtEuro(row.price_eur)}</td>
+      <td class="price">${fmtEuro(row.price_eur)}<div class="hint">Found ${fmtTime(row.found_at || row.verified_at)}</div></td>
       <td class="price">${fmtEuro(row.cex_cash_eur)}</td>
       <td class="price">€${Number(row.cex_cash_profit_eur).toFixed(2)}</td>`;
     body.appendChild(tr);
@@ -308,6 +308,33 @@ function sectionFreshness(deals) {
   return "";
 }
 
+function renderSectionProgress(deals) {
+  const sections = deals.sections || {};
+  const table = document.getElementById("section-table");
+  const body = document.getElementById("section-body");
+  const empty = document.getElementById("section-empty");
+  if (!table || !body) return;
+  body.innerHTML = "";
+  const rows = Object.values(sections);
+  table.hidden = !rows.length;
+  if (empty) empty.hidden = !!rows.length;
+  for (const section of rows) {
+    const verified = section.verification_stats || {};
+    const cex = section.cex_stats || {};
+    const tr = document.createElement("tr");
+    const status = section.scan_status || (section.blocked ? "blocked" : "completed");
+    const found = Number(section.new_alerts || 0) + Number(cex.cash_flips || 0) + Number(cex.arbitrage || 0);
+    tr.innerHTML = `
+      <td>${escapeHtml(section.section_name || section.section_id || "Section")}</td>
+      <td>${fmtTime(section.generated_at)}</td>
+      <td>${escapeHtml(status)}</td>
+      <td>${Number(section.items_seen || 0).toLocaleString("en-IE")}</td>
+      <td>${Number(verified.amazon_verified || 0)}</td>
+      <td>${found} (${Number(section.new_alerts || 0)} errors, ${Number(cex.cash_flips || 0) + Number(cex.arbitrage || 0)} CeX)</td>`;
+    body.appendChild(tr);
+  }
+}
+
 function renderDeals(deals) {
   if (!deals || !deals.generated_at) return;
   const summary = document.getElementById("deals-summary");
@@ -346,6 +373,7 @@ function renderDeals(deals) {
       <td>${escapeHtml(String(d.drop_percent))}%</td>`;
     body.appendChild(tr);
   }
+  renderSectionProgress(deals);
   renderDeepDrops(deals);
   renderCex(deals);
   renderCexArbitrage(deals);

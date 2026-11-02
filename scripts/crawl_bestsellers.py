@@ -16,6 +16,8 @@ from app.bestseller_sections import (
     rotate_section_id,
 )
 from app.config import settings
+from app.scraper.amazon_ie import ProductSnapshot
+from app.services.monitor import record_and_detect
 from app.deals import export_deals, merge_section_deals, render_deals_markdown
 from app.services.bestsellers import (
     crawl,
@@ -25,6 +27,7 @@ from app.services.bestsellers import (
     send_alerts,
     send_cex_alerts,
     send_notification,
+    verify_candidates,
 )
 from app.services.cex_arbitrage import enrich_with_cex, select_any_price_candidates
 from app.services.health import send_health_messages
@@ -63,6 +66,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--markdown", type=Path, default=None, help="Also write a Markdown report here")
     parser.add_argument("--max-items", type=int, default=None, help="Override max_items from the config")
     parser.add_argument("--no-notify", action="store_true", help="Detect and report, but send no messages")
+    parser.add_argument("--publish-fragment", action="store_true", help="Write only this section so publishing can merge with the latest Pages snapshot")
     parser.add_argument(
         "--skip-health",
         action="store_true",
@@ -121,12 +125,39 @@ async def crawl_section(
         d for d in processed.drops if d.get("drop_tier") is not None and (d.get("price_eur") or 0) >= 20
     ]
     deep_candidates.sort(key=lambda d: d.get("drop_percent") or 0, reverse=True)
+    any_candidates = select_any_price_candidates(result, config, skip_asins={d['asin'] for d in deep_candidates})
+    combined = deep_candidates + any_candidates
     async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=30.0) as client:
+        verified, verification_stats = await verify_candidates(client, combined, limit=config.verify_max_candidates)
+        verified_by_asin = {row['asin']: row for row in verified}
+        deep_candidates = [verified_by_asin[d['asin']] for d in deep_candidates if d['asin'] in verified_by_asin]
+        any_candidates = [verified_by_asin[d['asin']] for d in any_candidates if d['asin'] in verified_by_asin]
+        processed.drops = [verified_by_asin[d['asin']] for d in processed.drops if d['asin'] in verified_by_asin]
+        processed.verified_asins = set(verified_by_asin)
+        processed.verification_stats = verification_stats
+        # Only confirmed Amazon-owned offers may generate actionable alerts.
+        # Historical observations from bestseller pages remain useful for baselines.
+        for row in verified:
+            pid = db.add_product(row['asin'], row['url'], row.get('title'))
+            alert = record_and_detect(
+                pid,
+                ProductSnapshot(
+                    asin=row['asin'], url=row['url'], title=row.get('title'),
+                    price_eur=row['price_eur'], list_price_eur=None,
+                    currency='EUR', availability='In stock',
+                    seller_name=row.get('seller_name'), seller_status='amazon',
+                ),
+                known_title=row.get('title'),
+                cooldown_minutes=config.alert_cooldown_minutes,
+                baseline_max_age_days=config.baseline_max_age_days,
+            )
+            if alert:
+                processed.alerts.append(alert)
+        logger.info('[%s] Amazon seller checks: %s', section_id, verification_stats)
+
         lookups, flips = await enrich_with_cex(
             deep_candidates, config, client=client, max_lookups=config.cex_max_lookups
         )
-        seen = {row["asin"] for row in lookups}
-        any_candidates = select_any_price_candidates(result, config, skip_asins=seen)
         arb_lookups, arb_flips = await enrich_with_cex(
             any_candidates,
             config,
@@ -211,10 +242,11 @@ async def run(args: argparse.Namespace) -> None:
         payload = await crawl_section(
             config, section_id=section.id, section_name=section.name, args=args, notify=notify
         )
-        if args.merge_previous and args.merge_previous.exists():
+        if not args.publish_fragment and args.merge_previous and args.merge_previous.exists():
             previous = read_snapshot(args.merge_previous)
             payload = merge_section_deals(previous, payload)
 
+    # Actions publishing re-merges the raw section against the freshest site state.
     write_snapshot(args.output, payload)
     if args.markdown:
         args.markdown.write_text(render_deals_markdown(payload), encoding="utf-8")
