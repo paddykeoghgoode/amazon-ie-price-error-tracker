@@ -20,6 +20,25 @@ This repo is **private**. GitHub Pages (`https://paddykeoghgoode.github.io/amazo
 
 Optional Pages: **Settings → Pages → Source: GitHub Actions**, and make the repo public if you want a standalone URL.
 
+## Bestseller scan (thousands of items, no manual adding)
+
+The **Crawl bestsellers** workflow walks Amazon.ie's bestseller lists, starting with coffee machines and then every department and its subcategories, until it has tracked **10,000 items**. Results go to **[DEALS.md](DEALS.md)** and Telegram.
+
+- Bestseller pages don't show a "was" price, so each item is judged against **its own price history**. An item needs 3 crawls before it can be flagged. It is flagged when its price is ≥75% below its recent median (median ≥ €20).
+- Items sold in several variants at different prices (for example "€9.99 – €24.99") are skipped, because their lowest price jumps between variants.
+- One crawl sends at most 15 Telegram alerts, plus a single "…and N more" message. The same item won't alert again within 24 hours unless its price drops further.
+- If Amazon shows a captcha, the crawl stops and DEALS.md says so.
+
+Edit [`bestsellers.json`](bestsellers.json) to change categories, depth or `max_items`. Category paths are the part of an Amazon.ie bestseller URL after `amazon.ie`, for example `/gp/bestsellers/home/94816616031` for Coffee Machines.
+
+**Actions minutes:** a full 10,000-item crawl is about 410 page requests and takes roughly 16 minutes. Hourly, that's about 11,500 minutes a month. Public repos get Actions for free; private repos on the free plan get 2,000 minutes. So the hourly schedule only runs when the repo is **public**. On a private repo, run it by hand from **Actions → Crawl bestsellers → Run workflow** (about 20 minutes each time), or lower `max_items`.
+
+Run it locally:
+
+```bash
+python -m scripts.crawl_bestsellers --max-items 500 --no-notify
+```
+
 ### Telegram
 
 1. [@BotFather](https://t.me/BotFather) → `/newbot` → copy the token into `TELEGRAM_BOT_TOKEN`.

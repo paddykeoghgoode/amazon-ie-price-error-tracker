@@ -1,0 +1,16 @@
+{
+  "_comment": "Categories are crawled in order until max_items is reached. depth 0 = just that list, 1 = plus its subcategories, 2 = two levels down. Paths come from amazon.ie/gp/bestsellers URLs.",
+  "max_items": 10000,
+  "max_requests": 650,
+  "pages_per_category": 2,
+  "request_delay_seconds": 1.5,
+  "max_alerts_per_run": 15,
+  "alert_cooldown_minutes": 1440,
+  "categories": [
+    { "name": "Coffee machines", "path": "/gp/bestsellers/home/94816616031", "depth": 1 },
+    { "name": "All departments", "path": "/gp/bestsellers", "depth": 2 }
+  ],
+  "exclude": [
+    "/gp/bestsellers/gift-cards"
+  ]
+}

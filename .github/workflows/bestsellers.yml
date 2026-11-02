@@ -1,0 +1,66 @@
+name: Crawl bestsellers
+
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bestsellers-crawl
+  cancel-in-progress: false
+
+jobs:
+  crawl:
+    # A full crawl takes ~16 minutes, so hourly runs need far more than the 2,000 free
+    # Actions minutes a private repo gets. Scheduled runs only happen on public repos
+    # (where Actions is free); manual runs always work.
+    if: github.event_name == 'workflow_dispatch' || !github.event.repository.private
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore price history
+        uses: actions/cache@v4
+        with:
+          path: data/bestsellers.db
+          key: bestsellers-db-v1-${{ github.run_id }}
+          restore-keys: |
+            bestsellers-db-v1-
+
+      - name: Crawl bestseller lists
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_WHATSAPP_FROM: ${{ secrets.TWILIO_WHATSAPP_FROM }}
+          TWILIO_WHATSAPP_TO: ${{ secrets.TWILIO_WHATSAPP_TO }}
+        run: python -m scripts.crawl_bestsellers --config bestsellers.json
+
+      - name: Commit deals report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add DEALS.md docs/deals.json
+          if git diff --cached --quiet; then
+            echo "No report changes"
+            exit 0
+          fi
+          git commit -m "Update bestseller deals report [skip ci]"
+          for attempt in 1 2 3; do
+            git pull --rebase origin "${GITHUB_REF_NAME}" && git push && exit 0
+            sleep $((attempt * 5))
+          done
+          exit 1

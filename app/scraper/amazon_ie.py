@@ -50,12 +50,22 @@ def normalize_product_url(asin: str) -> str:
 def _parse_price(text: str | None) -> float | None:
     if not text:
         return None
-    cleaned = text.replace("\xa0", " ").replace(",", ".")
-    m = re.search(r"([\d]+(?:\.\d{1,2})?)", cleaned)
+    m = re.search(r"\d[\d,.\s\xa0]*", text)
     if not m:
         return None
+    number = re.sub(r"[\s\xa0]", "", m.group()).rstrip(",.")
+    if "," in number and "." in number:
+        # Whichever separator comes last is the decimal point: 1,299.99 or 1.299,99
+        if number.rfind(",") > number.rfind("."):
+            number = number.replace(".", "").replace(",", ".")
+        else:
+            number = number.replace(",", "")
+    elif "," in number:
+        number = number.replace(",", ".") if re.search(r",\d{1,2}$", number) else number.replace(",", "")
+    elif number.count(".") > 1 or re.search(r"\.\d{3}$", number):
+        number = number.replace(".", "")
     try:
-        return float(m.group(1))
+        return float(number)
     except ValueError:
         return None
 

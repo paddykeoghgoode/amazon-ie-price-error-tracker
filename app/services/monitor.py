@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from dataclasses import dataclass
 
 import httpx
 
@@ -7,22 +8,35 @@ from app.config import settings
 from app import database as db
 from app.detector.price_error import evaluate_price, should_notify_again
 from app.notifier.telegram import format_price_alert, send_telegram_message, send_whatsapp_message
-from app.scraper.amazon_ie import extract_asin, fetch_product, normalize_product_url
+from app.scraper.amazon_ie import ProductSnapshot, extract_asin, fetch_product, normalize_product_url
 
 logger = logging.getLogger(__name__)
 
+BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "en-IE,en;q=0.9",
+}
 
-async def check_product(client: httpx.AsyncClient, product: dict) -> None:
-    product_id = int(product["id"])
-    url = product["url"]
-    try:
-        snap = await fetch_product(client, url)
-    except Exception as exc:
-        logger.warning("Scrape failed for %s: %s", url, exc)
-        db.record_price_check(product_id, None, None, None, raw_note=str(exc))
-        return
 
-    if snap.title and snap.title != product.get("title"):
+@dataclass
+class DetectedAlert:
+    alert_id: int
+    asin: str
+    discount_percent: float | None
+    message: str
+
+
+def record_and_detect(
+    product_id: int,
+    snap: ProductSnapshot,
+    *,
+    known_title: str | None = None,
+    cooldown_minutes: int | None = None,
+) -> DetectedAlert | None:
+    if snap.title and snap.title != known_title:
         db.update_product_title(product_id, snap.title)
 
     db.record_price_check(
@@ -38,10 +52,10 @@ async def check_product(client: httpx.AsyncClient, product: dict) -> None:
         list_price_eur=snap.list_price_eur,
     )
     if not verdict.is_error or snap.price_eur is None:
-        return
-    if not should_notify_again(product_id, snap.price_eur):
+        return None
+    if not should_notify_again(product_id, snap.price_eur, cooldown_minutes=cooldown_minutes):
         logger.info("Skipping duplicate alert for product %s", product_id)
-        return
+        return None
 
     alert_id = db.create_alert(
         product_id=product_id,
@@ -50,9 +64,8 @@ async def check_product(client: httpx.AsyncClient, product: dict) -> None:
         discount_percent=verdict.discount_percent,
         reason=verdict.reason,
     )
-
     message = format_price_alert(
-        title=snap.title or product.get("title"),
+        title=snap.title or known_title,
         asin=snap.asin,
         url=snap.url,
         price_eur=snap.price_eur,
@@ -60,38 +73,54 @@ async def check_product(client: httpx.AsyncClient, product: dict) -> None:
         discount_percent=verdict.discount_percent,
         reason=verdict.reason,
     )
+    return DetectedAlert(alert_id, snap.asin, verdict.discount_percent, message)
 
+
+async def send_notification(message: str) -> tuple[bool, bool]:
+    telegram_ok = whatsapp_ok = False
     if settings.telegram_enabled:
         try:
             await send_telegram_message(message)
-            db.mark_alert_notified(alert_id, telegram=True)
-            logger.info("Telegram alert sent for %s", snap.asin)
+            telegram_ok = True
         except Exception as exc:
             logger.exception("Telegram notify failed: %s", exc)
-
     if settings.whatsapp_enabled:
         try:
             await send_whatsapp_message(message)
-            db.mark_alert_notified(alert_id, whatsapp=True)
+            whatsapp_ok = True
         except Exception as exc:
             logger.exception("WhatsApp notify failed: %s", exc)
-
     if not settings.telegram_enabled and not settings.whatsapp_enabled:
         logger.warning(
-            "Price error detected for %s but no notifier configured — set Telegram or Twilio WhatsApp env vars",
-            snap.asin,
+            "Price error detected but no notifier configured — set Telegram or Twilio WhatsApp env vars"
         )
+    return telegram_ok, whatsapp_ok
+
+
+async def notify_alert(alert: DetectedAlert) -> None:
+    telegram_ok, whatsapp_ok = await send_notification(alert.message)
+    if telegram_ok or whatsapp_ok:
+        db.mark_alert_notified(alert.alert_id, telegram=telegram_ok, whatsapp=whatsapp_ok)
+        logger.info("Alert sent for %s", alert.asin)
+
+
+async def check_product(client: httpx.AsyncClient, product: dict) -> None:
+    product_id = int(product["id"])
+    url = product["url"]
+    try:
+        snap = await fetch_product(client, url)
+    except Exception as exc:
+        logger.warning("Scrape failed for %s: %s", url, exc)
+        db.record_price_check(product_id, None, None, None, raw_note=str(exc))
+        return
+
+    alert = record_and_detect(product_id, snap, known_title=product.get("title"))
+    if alert:
+        await notify_alert(alert)
 
 
 async def run_once() -> None:
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-        ),
-        "Accept-Language": "en-IE,en;q=0.9",
-    }
-    async with httpx.AsyncClient(headers=headers, timeout=30.0) as client:
+    async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=30.0) as client:
         products = db.list_products(enabled_only=True)
         for product in products:
             await check_product(client, product)

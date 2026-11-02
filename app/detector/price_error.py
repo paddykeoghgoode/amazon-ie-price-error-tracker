@@ -53,14 +53,17 @@ def evaluate_price(
     )
 
 
-def should_notify_again(product_id: int, price_eur: float) -> bool:
+def should_notify_again(
+    product_id: int, price_eur: float, *, cooldown_minutes: int | None = None
+) -> bool:
     last = db.last_alert_for_product(product_id)
     if not last:
         return True
     from datetime import datetime, timedelta, timezone
 
+    cooldown = settings.cooldown_minutes if cooldown_minutes is None else cooldown_minutes
     created = datetime.fromisoformat(last["created_at"])
-    if datetime.now(timezone.utc) - created > timedelta(minutes=settings.cooldown_minutes):
+    if datetime.now(timezone.utc) - created > timedelta(minutes=cooldown):
         return True
-    last_price = float(last["price_eur"])
-    return abs(last_price - price_eur) >= 0.01
+    # Within the cooldown only a further price cut is worth another message.
+    return price_eur <= float(last["price_eur"]) - 0.01
