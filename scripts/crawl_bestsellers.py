@@ -101,7 +101,10 @@ async def send_section_summary(section_name: str, payload: dict, dashboard_url: 
     message = (
         f"✅ {section_name} bestseller scan done\n\n"
         f"Price-error alerts this section: {alerts}\n"
-        f"CeX cash flips: {flips} (on sale) · {arb} (regular Amazon price)\n\n"
+        f"CeX cash flips: {flips} (on sale) · {arb} (other)\n"
+        f"Catalogue processed: {int((payload.get('catalogue_stats') or {}).get('checked') or 0):,} / "
+        f"{int((payload.get('catalogue_stats') or {}).get('priced') or 0):,} priced listings\n"
+        f"CeX checks so far: {int((payload.get('catalogue_stats') or {}).get('cex_attempted') or 0):,}\n\n"
         f"{dashboard_url}"
     )
     await send_notification(message)
