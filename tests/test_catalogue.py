@@ -132,6 +132,22 @@ class TestCatalogue(unittest.TestCase):
             self.assertTrue(rows[1]["title"].startswith("'=HYPERLINK"))
             self.assertTrue(rows[0]["url"].startswith("https://www.amazon.ie/dp/"))
 
+    def test_old_listings_are_archived_not_lost_or_rechecked(self):
+        old = make_section_catalogue(
+            crawl({"A000000001": 10, "A000000002": 12}), None,
+            section_id="gaming", section_name="Gaming",
+            observed_at="2026-11-02T10:00:00+00:00",
+        )
+        updated = make_section_catalogue(
+            crawl({"A000000002": 15}), old,
+            section_id="gaming", section_name="Gaming",
+            observed_at="2026-11-02T11:00:00+00:00",
+        )
+        self.assertEqual(len(updated["items"]), 2)
+        self.assertEqual(catalogue_progress(updated)["active"], 1)
+        self.assertEqual(catalogue_progress(updated)["archived"], 1)
+        self.assertEqual([r["asin"] for r in select_check_batch(updated, limit=20)], ["A000000002"])
+
     def test_rejects_stale_publish_from_previous_run(self):
         fresh = make_section_catalogue(
             crawl({"A000000001": 10}), None, section_id="gaming", section_name="Gaming",
