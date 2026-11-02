@@ -179,9 +179,78 @@ def leading_brand(title: str | None) -> str | None:
     return None
 
 
+
+# Conservative checks for variants that change CeX's cash offer. If either
+# listing explicitly specifies one of these features, both must agree.
+_CAPACITY_RE = re.compile(r"\b\d+(?:\.\d+)?\s*(?:gb|tb)\b", re.I)
+_MODEL_RE = re.compile(
+    r"\b(?:iphone\s*\d{1,2}|galaxy\s*[sa]\d{2}|pixel\s*\d{1,2}|"
+    r"arctis\s*\d{1,3}[a-z]?|rtx\s*\d{4}(?:\s*(?:ti|super))?|"
+    r"gtx\s*\d{3,4}|rx\s*\d{4}(?:\s*xt)?)\b",
+    re.I,
+)
+_PLATFORM_RE = re.compile(
+    r"\b(?:ps\s*[345]|playstation\s*[345]|xbox\s*(?:one|series\s*[sx])|"
+    r"nintendo\s+switch)\b",
+    re.I,
+)
+_GAME_EDITION_RE = re.compile(r"\b(?:fifa|fc|nba|nhl|wwe|f1)\s*(\d{2,4})\b", re.I)
+_PACK_RE = re.compile(r"\b(\d+)\s*[- ]?\s*(?:pack|pk)\b|\bpack\s+of\s+(\d+)\b", re.I)
+_NON_TRADEABLE_RE = re.compile(
+    r"\b(?:digital\s+(?:download|code|key)|download\s+code|"
+    r"activation\s+(?:code|key)|redeem\s+code|gift\s+card|subscription|dlc)\b",
+    re.I,
+)
+_EDITION_TOKENS = frozenset(
+    {"pro", "plus", "max", "ultra", "lite", "mini", "oled", "slim", "digital", "disc", "disk"}
+)
+
+
+def _identifiers(pattern: re.Pattern, title: str) -> set[str]:
+    return {
+        re.sub(r"\s+", "", match.group(0).lower())
+        .replace("playstation", "ps")
+        .replace("disk", "disc")
+        for match in pattern.finditer(title)
+    }
+
+
+def _pack_sizes(title: str) -> set[int]:
+    return {int(match.group(1) or match.group(2)) for match in _PACK_RE.finditer(title)}
+
+
+def _editions(title: str) -> set[str]:
+    result = set(_tokens(title)) & _EDITION_TOKENS
+    if "disk" in result:
+        result.remove("disk")
+        result.add("disc")
+    return result
+
+
+def _variants_compatible(amazon_title: str, cex_title: str) -> bool:
+    """Reject obvious SKU, platform, pack-size and digital-only mismatches."""
+    if _NON_TRADEABLE_RE.search(amazon_title):
+        return False
+
+    for pattern in (_CAPACITY_RE, _MODEL_RE, _PLATFORM_RE):
+        if _identifiers(pattern, amazon_title) != _identifiers(pattern, cex_title):
+            return False
+
+    amazon_years = {match.group(1) for match in _GAME_EDITION_RE.finditer(amazon_title)}
+    cex_years = {match.group(1) for match in _GAME_EDITION_RE.finditer(cex_title)}
+    if amazon_years != cex_years:
+        return False
+
+    if _pack_sizes(amazon_title) != _pack_sizes(cex_title):
+        return False
+    return _editions(amazon_title) == _editions(cex_title)
+
+
 def titles_match_for_trade_in(amazon_title: str | None, cex_box_name: str | None) -> bool:
     """Reject Algolia hits that only share generic words (e.g. Ozeino headset → SteelSeries)."""
     if not amazon_title or not cex_box_name:
+        return False
+    if not _variants_compatible(amazon_title, cex_box_name):
         return False
     amazon_l = amazon_title.lower()
     cex_l = cex_box_name.lower()
