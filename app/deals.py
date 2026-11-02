@@ -31,6 +31,7 @@ _SECTION_STORE_KEYS = (
     "cex_min_cash_profit_eur",
     "cex_min_cash_profit_percent",
     "cex_enabled",
+    "price_baselines",
 )
 
 
@@ -146,6 +147,7 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
         "cex_near_margin": cex_near,
         "cex_lookups": cex_lookups,
         "cex_stats": stats,
+        "price_baselines": {asin: row for snap in sections.values() for asin, row in (snap.get("price_baselines") or {}).items()},
         "alerts": incoming.get("alerts") or base.get("alerts") or [],
     }
     return merged
@@ -195,6 +197,7 @@ def export_deals(
             reverse=True,
         )[:15],
         "cex_stats": processed.cex_stats,
+        "price_baselines": db.export_price_baselines(set(result.items)),
     }
     if section_id:
         payload["section_id"] = section_id
