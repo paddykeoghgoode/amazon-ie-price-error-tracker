@@ -5,6 +5,7 @@ import asyncio
 import logging
 import os
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import httpx
@@ -296,7 +297,7 @@ async def crawl_section(
     processed.cex_stats = {
         "deep_candidates": sum((row.get("drop_percent") or 0) >= 30 for row in verified),
         "any_price_candidates": sum((row.get("drop_percent") or 0) < 30 for row in verified),
-        "attempted": len(checked_batch) if config.cex_enabled else 0,
+        "attempted": cex_state.get("live_lookups", 0) + cex_state.get("cache_hits", 0),
         "live_lookups": cex_state.get("live_lookups", 0),
         "cache_hits": cex_state.get("cache_hits", 0),
         "deferred": cex_state.get("deferred", 0),
@@ -324,18 +325,47 @@ async def crawl_section(
         section_id=section_id,
         section_name=section_name,
     )
+    # Keep a buy-opportunity alert fingerprint across Actions runs, and only
+    # mark it after the notifier confirms delivery. A deeper confirmed drop may
+    # alert again; repeatedly rechecking the same price should not spam Telegram.
+    catalogue_rows = {row["asin"]: row for row in section_catalogue["items"]}
+    def should_send_cex(row: dict) -> bool:
+        if not row.get("seller_verified") or not row.get("cex_quote_fresh_for_alert"):
+            return False
+        previous = (catalogue_rows.get(row.get("asin")) or {}).get("last_cex_alert") or {}
+        try:
+            last_at = datetime.fromisoformat(previous.get("sent_at") or "")
+            age = datetime.now(timezone.utc) - last_at
+        except (TypeError, ValueError):
+            return True
+        return (
+            age >= timedelta(hours=24)
+            or float(row.get("price_eur") or 0) < float(previous.get("price_eur") or 0) - 0.01
+        )
+
+    def mark_cex_sent(row: dict) -> None:
+        target = catalogue_rows.get(row.get("asin"))
+        if target is not None:
+            target["last_cex_alert"] = {
+                "price_eur": row.get("price_eur"),
+                "sent_at": datetime.now(timezone.utc).isoformat(),
+                "cex_cash_eur": row.get("cex_cash_eur"),
+            }
+
     if notify:
         if processed.alerts:
             await send_alerts(processed.alerts, config, details_url=dashboard_url)
         if processed.cex_flips:
-            await send_cex_alerts(processed.cex_flips, config, dashboard_url=dashboard_url, deep_drop=True)
+            await send_cex_alerts(
+                processed.cex_flips, config, dashboard_url=dashboard_url, deep_drop=True,
+                should_send=should_send_cex, on_sent=mark_cex_sent,
+            )
         if processed.cex_arbitrage:
             await send_cex_alerts(
                 processed.cex_arbitrage,
-                config,
-                dashboard_url=dashboard_url,
-                deep_drop=False,
-                max_alerts=config.cex_any_price_max_alerts_per_run,
+                config, dashboard_url=dashboard_url,
+                deep_drop=False, max_alerts=config.cex_any_price_max_alerts_per_run,
+                should_send=should_send_cex, on_sent=mark_cex_sent,
             )
         if not args.skip_health:
             await send_health_messages(result, processed, config, dashboard_url=dashboard_url)
