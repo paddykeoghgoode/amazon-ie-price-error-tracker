@@ -121,6 +121,23 @@ class TestCexCache(unittest.TestCase):
         self.assertFalse(rows[0]["cex_cash_flip"])
         self.assertEqual(flips, [])
 
+    def test_403_provider_block_pauses_future_queries(self):
+        request = httpx.Request("POST", "https://search.webuy.io/1/indexes/test/query")
+        response = httpx.Response(403, request=request)
+        error = httpx.HTTPStatusError("Forbidden", request=request, response=response)
+        state = {}
+        async def check():
+            with patch.object(cex_ie, "search_boxes", new_callable=AsyncMock) as search:
+                search.side_effect = error
+                return await enrich_with_cex(
+                    [ITEM, {**ITEM, "asin": "B000000002"}], config(),
+                    client=object(), cache={}, run_state=state, now=NOW,
+                ), search.await_count
+        (_, flips), count = asyncio.run(check())
+        self.assertEqual(count, 1)
+        self.assertFalse(flips)
+        self.assertTrue(state["rate_limited"])
+
     def test_cex_http_429_stops_further_queries(self):
         other = {**ITEM, "asin": "B000000002", "title": TITLE}
         request = httpx.Request("POST", "https://search.webuy.io/1/indexes/test/query")
@@ -220,6 +237,11 @@ class TestVerifiedAlerts(unittest.TestCase):
         alert = detect_verified_price(product_id, snap, known_title=TITLE)
         self.assertIsNotNone(alert)
         self.assertEqual(len(db.price_history(product_id, limit=100)), history_count)
+        retry = detect_verified_price(product_id, snap, known_title=TITLE)
+        self.assertIsNotNone(retry)
+        self.assertEqual(retry.alert_id, alert.alert_id, "Retry an unsent alert instead of creating duplicate")
+        self.assertEqual(len(db.recent_alerts()), 1)
+        db.mark_alert_notified(alert.alert_id, telegram=True)
         self.assertIsNone(detect_verified_price(product_id, snap, known_title=TITLE))
 
     def test_unknown_seller_is_not_alertable(self):
