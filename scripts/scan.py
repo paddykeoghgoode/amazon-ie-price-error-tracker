@@ -13,7 +13,13 @@ from app.config import settings
 from app import database as db
 from app.scraper.amazon_ie import extract_asin
 from app.services.monitor import add_watch_url, run_once
-from app.snapshot import export_snapshot, import_snapshot, read_snapshot, write_snapshot
+from app.snapshot import (
+    export_snapshot,
+    import_snapshot,
+    read_snapshot,
+    render_tracker_markdown,
+    write_snapshot,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -118,6 +124,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--watchlist", type=Path, default=Path("watchlist.json"))
     parser.add_argument("--previous", type=Path, default=None)
     parser.add_argument("--output", type=Path, default=Path("docs/data.json"))
+    parser.add_argument("--markdown", type=Path, default=Path("TRACKER.md"))
     parser.add_argument("--skip-fetch", action="store_true", help="Export current DB without hitting Amazon")
     return parser.parse_args()
 
@@ -130,10 +137,11 @@ def main() -> None:
         logger.info("Importing previous snapshot from %s", args.previous)
         import_snapshot(read_snapshot(args.previous))
 
-    repo = os.environ.get("GITHUB_REPOSITORY") or "paddykeoghgoode/amazon-ie-price-error-tracker"
+    env_repo = os.environ.get("GITHUB_REPOSITORY")
+    repo = env_repo or "paddykeoghgoode/amazon-ie-price-error-tracker"
     token = os.environ.get("GITHUB_TOKEN", "")
     watch_urls = load_watchlist(args.watchlist)
-    issue_urls = asyncio.run(fetch_watch_issue_urls(repo, token)) if repo else []
+    issue_urls = asyncio.run(fetch_watch_issue_urls(repo, token)) if env_repo else []
     add_all(watch_urls + issue_urls)
     logger.info(
         "Watching %s product(s) (watchlist=%s issues=%s telegram=%s)",
@@ -148,7 +156,8 @@ def main() -> None:
 
     payload = export_snapshot(github_repo=repo)
     write_snapshot(args.output, payload)
-    logger.info("Wrote snapshot to %s", args.output)
+    args.markdown.write_text(render_tracker_markdown(payload), encoding="utf-8")
+    logger.info("Wrote snapshot to %s and %s", args.output, args.markdown)
 
 
 if __name__ == "__main__":

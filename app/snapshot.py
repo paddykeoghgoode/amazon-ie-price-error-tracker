@@ -4,6 +4,9 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
+
+DUBLIN_TZ = ZoneInfo("Europe/Dublin")
 
 from app.config import settings
 from app import database as db
@@ -113,6 +116,108 @@ def export_snapshot(*, github_repo: str | None = None) -> dict[str, Any]:
         "products": products_out,
         "alerts": db.recent_alerts(limit=50),
     }
+
+
+def _fmt_dublin(iso: str | None) -> str:
+    if not iso:
+        return "—"
+    try:
+        dt = datetime.fromisoformat(iso)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(DUBLIN_TZ).strftime("%d %b %Y, %H:%M IST")
+    except ValueError:
+        return iso
+
+
+def _fmt_euro(value: Any) -> str:
+    if value is None:
+        return "—"
+    try:
+        return f"€{float(value):.2f}"
+    except (TypeError, ValueError):
+        return "—"
+
+
+def _md_status(status: str | None) -> str:
+    if status == "price_error":
+        return "🚨 price error"
+    if status == "fetch_error":
+        return "⚠️ fetch failed"
+    return "watching"
+
+
+def render_tracker_markdown(payload: dict[str, Any]) -> str:
+    repo = payload.get("github_repo") or "paddykeoghgoode/amazon-ie-price-error-tracker"
+    issue_url = payload.get("new_watch_issue_url") or f"https://github.com/{repo}/issues/new?template=watch.yml"
+    generated = _fmt_dublin(payload.get("generated_at"))
+    telegram = "ready" if payload.get("telegram_configured") else "not configured (add Actions secrets)"
+    lines = [
+        "# Amazon.ie price error tracker",
+        "",
+        f"Last scan: **{generated}** · Telegram: **{telegram}** · Flag at ≥{payload.get('min_discount_percent', 75)}% off",
+        "",
+        f"Add a product: [open a Watch issue]({issue_url}) or edit [`watchlist.json`](watchlist.json).",
+        "",
+        "## Watched products",
+        "",
+    ]
+    products = payload.get("products") or []
+    if not products:
+        lines.append("_Nothing on the watch list yet._")
+    else:
+        lines.extend(
+            [
+                "| Product | Now | Was | Status | Checked |",
+                "| --- | --- | --- | --- | --- |",
+            ]
+        )
+        for product in products:
+            title = product.get("title") or product.get("asin") or "Untitled"
+            url = product.get("url") or "#"
+            note = f"<br>{product['note']}" if product.get("note") else ""
+            lines.append(
+                "| "
+                + " | ".join(
+                    [
+                        f"[{title}]({url})<br>`{product.get('asin', '')}`",
+                        _fmt_euro(product.get("price_eur")),
+                        _fmt_euro(product.get("list_price_eur")),
+                        _md_status(product.get("status")) + note,
+                        _fmt_dublin(product.get("checked_at")),
+                    ]
+                )
+                + " |"
+            )
+    lines.extend(["", "## Price-error alerts", ""])
+    alerts = payload.get("alerts") or []
+    if not alerts:
+        lines.append("_No suspected errors yet._")
+    else:
+        for alert in alerts:
+            title = alert.get("product_title") or alert.get("asin") or "Alert"
+            url = alert.get("url") or "#"
+            telegram_state = "Telegram sent" if alert.get("notified_telegram") else "Telegram pending"
+            was = (
+                f" (was {_fmt_euro(alert.get('list_price_eur'))})"
+                if alert.get("list_price_eur") is not None
+                else ""
+            )
+            lines.append(
+                f"- [{title}]({url}) — **{_fmt_euro(alert.get('price_eur'))}**{was}"
+                f" — {alert.get('reason') or ''} — {_fmt_dublin(alert.get('created_at'))} · {telegram_state}"
+            )
+    lines.extend(
+        [
+            "",
+            "---",
+            "",
+            "This file is rewritten by GitHub Actions after each scan. "
+            "Times are Ireland (Europe/Dublin).",
+            "",
+        ]
+    )
+    return "\n".join(lines) + "\n"
 
 
 def write_snapshot(path: Path, payload: dict[str, Any]) -> None:

@@ -5,7 +5,13 @@ from pathlib import Path
 
 from app.config import settings
 from app import database as db
-from app.snapshot import export_snapshot, import_snapshot, write_snapshot, read_snapshot
+from app.snapshot import (
+    export_snapshot,
+    import_snapshot,
+    read_snapshot,
+    render_tracker_markdown,
+    write_snapshot,
+)
 from scripts.scan import extract_asins_from_text, load_watchlist
 
 
@@ -72,6 +78,11 @@ class TestSnapshot(unittest.TestCase):
         self.assertEqual(len(alerts), 1)
         self.assertEqual(alerts[0]["created_at"], "2026-11-01T12:01:00+00:00")
         self.assertEqual(alerts[0]["price_eur"], 19.99)
+
+        markdown = render_tracker_markdown(payload)
+        self.assertIn("price error", markdown)
+        self.assertIn("Snap Item", markdown)
+        self.assertIn("€19.99", markdown)
 
 
 if __name__ == "__main__":

@@ -1,26 +1,24 @@
 # Amazon.ie Price Error Tracker
 
-Track Amazon.ie listings on a **GitHub Pages dashboard**. GitHub Actions scans your watch list about every 20 minutes, updates the page, and can send a **Telegram message as soon as a scan finds a likely price error**.
+GitHub Actions scans your Amazon.ie watch list about every 20 minutes, rewrites **[TRACKER.md](TRACKER.md)** so you can follow prices in the repo, and can send a **Telegram message as soon as a scan finds a likely price error**.
 
-**Live tracker:** [https://paddykeoghgoode.github.io/amazon-ie-price-error-tracker/](https://paddykeoghgoode.github.io/amazon-ie-price-error-tracker/)
+**Track here:** [TRACKER.md](TRACKER.md)
 
-## Use the GitHub page
+This repo is **private**. GitHub Pages (`https://paddykeoghgoode.github.io/amazon-ie-price-error-tracker/`) only works if you make the repo public, or if the account has GitHub Pro. The workflow still tries to publish Pages when GitHub allows it.
 
-1. Merge this repo to `main` (GitHub only runs the Pages workflow on the default branch).
-2. Repo **Settings → Pages → Source: GitHub Actions** (the first workflow run usually creates this).
-3. Add GitHub Actions **secrets** (Settings → Secrets and variables → Actions):
+## Use the tracker
+
+1. Merge to `main` (scheduled scans only run on the default branch).
+2. Add GitHub Actions **secrets** (Settings → Secrets and variables → Actions):
    - `TELEGRAM_BOT_TOKEN`
    - `TELEGRAM_CHAT_ID`
-4. Add products:
-   - From the Pages site (opens a `watch` issue), or
+3. Add products:
+   - Open a [Watch issue](https://github.com/paddykeoghgoode/amazon-ie-price-error-tracker/issues/new?template=watch.yml), or
    - Put URLs/ASINs in [`watchlist.json`](watchlist.json)
-5. Wait for the scheduled scan, or run **Actions → Scan and publish tracker → Run workflow**.
+4. Wait for the scheduled scan, or run **Actions → Scan and publish tracker → Run workflow**.
+5. Refresh [TRACKER.md](TRACKER.md) (times are Ireland / Europe/Dublin).
 
-The dashboard URL is:
-
-`https://<you>.github.io/amazon-ie-price-error-tracker/`
-
-Times on the page are shown in **Ireland (Europe/Dublin)**.
+Optional Pages: **Settings → Pages → Source: GitHub Actions**, and make the repo public if you want a standalone URL.
 
 ### Telegram
 
@@ -64,7 +62,7 @@ python -m scripts.scan --watchlist watchlist.json --output docs/data.json
 
 ## Notes
 
-- The Pages site and `watch` issues are **public** if the repo is public.
+- Watch issues and Pages are visible to anyone if you make the repo public.
 - Amazon may throttle GitHub-hosted scrapes; keep the watch list small.
 - Alerts are heuristic — verify on Amazon before buying.
 
