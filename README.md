@@ -1,8 +1,10 @@
 # Amazon.ie Price Error Tracker
 
+### [Open the price tracker dashboard](https://paddykeoghgoode.github.io/amazon-ie-price-error-tracker/)
+
 Every 30 minutes, GitHub Actions checks Amazon.ie for price errors. It covers about 10,000 bestsellers plus your own watch list, and sends a **Telegram message as soon as a likely price error turns up**.
 
-**Dashboard:** https://paddykeoghgoode.github.io/amazon-ie-price-error-tracker/ (times are Ireland / Europe/Dublin)
+**Dashboard:** [paddykeoghgoode.github.io/amazon-ie-price-error-tracker](https://paddykeoghgoode.github.io/amazon-ie-price-error-tracker/) (times are Ireland / Europe/Dublin)
 
 ## Set up
 
