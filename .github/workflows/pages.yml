@@ -178,6 +178,7 @@ jobs:
             --section "${{ steps.crawl-section.outputs.id }}" \
             --run-number "${{ github.run_number }}" \
             --merge-previous site/previous-deals.json \
+            --publish-fragment \
             --output site/deals.json
 
       - name: Stage section result and Actions summary
