@@ -24,6 +24,7 @@ from app.services.bestsellers import (
     process_crawl,
     send_alerts,
     send_cex_alerts,
+    send_notification,
 )
 from app.services.cex_arbitrage import enrich_with_cex, select_any_price_candidates
 from app.services.health import send_health_messages
@@ -62,6 +63,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--markdown", type=Path, default=None, help="Also write a Markdown report here")
     parser.add_argument("--max-items", type=int, default=None, help="Override max_items from the config")
     parser.add_argument("--no-notify", action="store_true", help="Detect and report, but send no messages")
+    parser.add_argument(
+        "--skip-health",
+        action="store_true",
+        help="Skip daily/welcome health Telegram messages (used between sections in a full crawl)",
+    )
     return parser.parse_args()
 
 
@@ -74,6 +80,20 @@ def resolve_section_id(args: argparse.Namespace, sections: list) -> str:
     if args.section == "all":
         return "all"
     return args.section
+
+
+async def send_section_summary(section_name: str, payload: dict, dashboard_url: str) -> None:
+    stats = payload.get("cex_stats") or {}
+    flips = int(stats.get("cash_flips") or 0)
+    arb = int(stats.get("arbitrage") or 0)
+    alerts = int(payload.get("new_alerts") or 0)
+    message = (
+        f"✅ {section_name} bestseller scan done\n\n"
+        f"Price-error alerts this section: {alerts}\n"
+        f"CeX cash flips: {flips} (on sale) · {arb} (regular Amazon price)\n\n"
+        f"{dashboard_url}"
+    )
+    await send_notification(message)
 
 
 async def crawl_section(
@@ -127,6 +147,14 @@ async def crawl_section(
     repo = os.environ.get("GITHUB_REPOSITORY") or "paddykeoghgoode/amazon-ie-price-error-tracker"
     owner, _, name = repo.partition("/")
     dashboard_url = f"https://{owner}.github.io/{name}/"
+    payload = export_deals(
+        result,
+        processed,
+        github_repo=repo,
+        config=config,
+        section_id=section_id,
+        section_name=section_name,
+    )
     if notify:
         if processed.alerts:
             await send_alerts(processed.alerts, config, details_url=dashboard_url)
@@ -140,16 +168,10 @@ async def crawl_section(
                 deep_drop=False,
                 max_alerts=config.cex_any_price_max_alerts_per_run,
             )
-        await send_health_messages(result, processed, config, dashboard_url=dashboard_url)
-
-    return export_deals(
-        result,
-        processed,
-        github_repo=repo,
-        config=config,
-        section_id=section_id,
-        section_name=section_name,
-    )
+        if not args.skip_health:
+            await send_health_messages(result, processed, config, dashboard_url=dashboard_url)
+        await send_section_summary(section_name, payload, dashboard_url)
+    return payload
 
 
 async def run(args: argparse.Namespace) -> None:
@@ -170,7 +192,7 @@ async def run(args: argparse.Namespace) -> None:
                 config, section_id=section.id, section_name=section.name, args=args, notify=notify
             )
             merged = merge_section_deals(merged, part)
-            notify = False  # only notify once per workflow run
+            args.skip_health = section.id != sections[-1].id
         payload = merged or {}
         payload["section_id"] = "all"
         payload["section_name"] = "All sections"
