@@ -127,6 +127,10 @@ async def enrich_with_cex(
 
     try:
         for item in to_check:
+            # Pace every CeX request, including mismatched and early-exit hits.
+            # This is intentionally not a burst scraper.
+            if config.cex_request_delay_seconds:
+                await asyncio.sleep(config.cex_request_delay_seconds)
             query = cex_ie.search_query_from_title(item.get("title"))
             hits = await cex_ie.search_boxes(client, query, hits_per_page=5)
             hit = cex_ie.pick_best_box_hit(item.get("title"), hits)
