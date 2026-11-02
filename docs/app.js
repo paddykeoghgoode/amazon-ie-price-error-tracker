@@ -226,7 +226,7 @@ function renderCex(deals) {
       empty.textContent =
         lookups > 0
           ? "No on-sale CeX flips met your margin this crawl (see close matches below if any)."
-          : "No CeX cash flips yet — CeX checks run after each bestseller section crawl.";
+          : "No confirmed CeX cash flips in this batch. See the full listing catalogue for cumulative progress.";
     }
   } else {
     if (empty) empty.hidden = true;
@@ -269,7 +269,7 @@ function renderCexArbitrage(deals) {
   const summary = document.getElementById("cex-arb-summary");
   if (summary) {
     summary.textContent =
-      "Regular Amazon bestseller prices vs CeX cash trade-in (gaming/electronics keywords). " +
+      "Every Amazon/FBA-verified listing is queued for CeX across successive scan blocks, without keyword exclusions. " +
       cexStatusLine(deals);
   }
   const table = document.getElementById("cex-arb-table");
@@ -338,6 +338,12 @@ function renderSectionProgress(deals) {
       .join(" · ");
     const verificationHint = reasons ? `<div class="hint">${escapeHtml(reasons)}</div>` : "";
     const cex = section.cex_stats || {};
+    const catalogue = section.catalogue_stats || {};
+    const checkedLabel = catalogue.priced != null
+      ? `${Number(catalogue.checked || 0)} / ${Number(catalogue.priced || 0)}`
+      : "Not started";
+    const remainingLabel = catalogue.priced != null
+      ? `<div class="hint">${Number(catalogue.remaining || 0)} awaiting first check</div>` : "";
     const tr = document.createElement("tr");
     const status = section.scan_status || (section.blocked ? "blocked" : "completed");
     const found = Number(section.new_alerts || 0) + Number(cex.cash_flips || 0) + Number(cex.arbitrage || 0);
@@ -347,10 +353,109 @@ function renderSectionProgress(deals) {
       <td>${escapeHtml(status)}</td>
       <td>${Number(section.items_seen || 0).toLocaleString("en-IE")}</td>
       <td>${verificationLabel}${verificationHint}</td>
+      <td>${checkedLabel}${remainingLabel}</td>
+      <td>${catalogue.cex_attempted == null ? "—" : Number(catalogue.cex_attempted)}</td>
       <td>${found} (${Number(section.new_alerts || 0)} errors, ${Number(cex.cash_flips || 0) + Number(cex.arbitrage || 0)} CeX)</td>`;
     body.appendChild(tr);
   }
 }
+
+let catalogueRows = [];
+let cataloguePage = 0;
+const CATALOGUE_PAGE_SIZE = 50;
+
+function renderCataloguePage() {
+  const body = document.getElementById("catalogue-body");
+  const table = document.getElementById("catalogue-table");
+  const info = document.getElementById("catalogue-info");
+  if (!body || !table) return;
+  const query = (document.getElementById("catalogue-search")?.value || "").toLowerCase().trim();
+  const section = document.getElementById("catalogue-section-filter")?.value || "";
+  const status = document.getElementById("catalogue-status-filter")?.value || "";
+  const filtered = catalogueRows.filter((row) => {
+    if (section && row.section_id !== section) return false;
+    if (status === "matched" && row.cex_status !== "matched") return false;
+    if (status === "verified" && row.verification_status !== "verified") return false;
+    if (status === "pending" && row.last_checked_at) return false;
+    if (status === "rejected" && (!row.last_checked_at || row.verification_status === "verified")) return false;
+    const target = [row.title, row.asin, row.category, row.seller_name].join(" ").toLowerCase();
+    return !query || target.includes(query);
+  });
+  const maxPage = Math.max(0, Math.ceil(filtered.length / CATALOGUE_PAGE_SIZE) - 1);
+  cataloguePage = Math.min(cataloguePage, maxPage);
+  const subset = filtered.slice(cataloguePage * CATALOGUE_PAGE_SIZE, (cataloguePage + 1) * CATALOGUE_PAGE_SIZE);
+  body.innerHTML = "";
+  for (const row of subset) {
+    const tr = document.createElement("tr");
+    const seller = row.verification_status === "verified"
+      ? \`Verified: \${row.seller_name || "seller identified"} (\${row.seller_type || "eligible"})\`
+      : row.verification_status === "pending" ? "Not yet checked" :
+        String(row.verification_status || "not checked").replaceAll("_", " ");
+    let cex = String(row.cex_status || "not checked").replaceAll("_", " ");
+    if (row.cex_status === "matched") {
+      cex = \`Matched: \${fmtEuro(row.cex_cash_eur)} cash · estimated \${fmtEuro(row.cex_net_profit_eur)} net\`;
+    }
+    const cexLink = row.cex_url ? \`<div class="hint"><a href="\${escapeHtml(row.cex_url)}" target="_blank" rel="noopener">CeX item</a></div>\` : "";
+    tr.innerHTML = \`
+      <td><a href="\${escapeHtml(row.url)}" rel="noopener" target="_blank">\${escapeHtml(row.title || row.asin)}</a>
+        <div class="hint">\${escapeHtml(row.asin)}</div></td>
+      <td>\${escapeHtml(row.section_name || row.section_id || "")}</td>
+      <td class="price">\${fmtEuro(row.price_eur)}</td>
+      <td>\${escapeHtml(seller)}</td>
+      <td>\${escapeHtml(cex)}\${cexLink}</td>
+      <td>\${fmtTime(row.last_checked_at)}</td>\`;
+    body.appendChild(tr);
+  }
+  table.hidden = !catalogueRows.length;
+  const start = filtered.length ? cataloguePage * CATALOGUE_PAGE_SIZE + 1 : 0;
+  const end = Math.min(filtered.length, (cataloguePage + 1) * CATALOGUE_PAGE_SIZE);
+  if (info) info.textContent = \`Showing \${start}–\${end} of \${filtered.length.toLocaleString("en-IE")} listings. Product prices are observed, not guaranteed checkout offers.\`;
+  document.getElementById("catalogue-prev").disabled = cataloguePage === 0;
+  document.getElementById("catalogue-next").disabled = cataloguePage >= maxPage;
+}
+
+async function loadCatalogue() {
+  const info = document.getElementById("catalogue-info");
+  if (info) info.textContent = "Loading complete listing inventory…";
+  try {
+    const res = await fetch(\`catalogue.json?t=\${Date.now()}\`, {cache: "no-store"});
+    if (!res.ok) throw new Error("No published catalogue yet");
+    const data = await res.json();
+    const sections = Object.entries(data.sections || {});
+    const options = document.getElementById("catalogue-section-filter");
+    options.innerHTML = '<option value="">All sections</option>';
+    catalogueRows = [];
+    for (const [id, section] of sections) {
+      const option = document.createElement("option");
+      option.value = id;
+      option.textContent = section.section_name || id;
+      options.appendChild(option);
+      for (const row of section.items || []) {
+        catalogueRows.push({ ...row, section_id: id, section_name: section.section_name || id });
+      }
+    }
+    cataloguePage = 0;
+    renderCataloguePage();
+  } catch (err) {
+    if (info) info.textContent = \`Catalogue not available yet (\${err.message}). It is generated by the next new section scan.\`;
+  }
+}
+
+document.getElementById("catalogue-load")?.addEventListener("click", loadCatalogue);
+for (const id of ["catalogue-search", "catalogue-section-filter", "catalogue-status-filter"]) {
+  document.getElementById(id)?.addEventListener("input", () => {
+    cataloguePage = 0;
+    renderCataloguePage();
+  });
+}
+document.getElementById("catalogue-prev")?.addEventListener("click", () => {
+  cataloguePage = Math.max(0, cataloguePage - 1);
+  renderCataloguePage();
+});
+document.getElementById("catalogue-next")?.addEventListener("click", () => {
+  cataloguePage++;
+  renderCataloguePage();
+});
 
 function renderDeals(deals) {
   if (!deals || !deals.generated_at) return;
