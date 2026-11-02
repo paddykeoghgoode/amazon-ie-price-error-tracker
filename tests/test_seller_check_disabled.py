@@ -71,7 +71,8 @@ class TestSellerCheckDisabled(unittest.TestCase):
                     dashboard_url="https://example.invalid", deep_drop=False,
                 )
                 self.assertEqual(count, 1)
-                self.assertIn("NOT checked", send.await_args.args[0])
+                self.assertIn("RESEARCH ONLY", send.await_args.args[0])
+                self.assertIn("not checked", send.await_args.args[0])
         asyncio.run(check())
 
     def test_deferred_cex_research_stays_in_queue(self):

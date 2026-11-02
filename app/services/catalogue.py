@@ -287,7 +287,12 @@ def merge_catalogue(previous: dict | None, fragment: dict) -> dict:
     }
     older = sections.get(sid) or {}
     if older.get("generated_at", "") > fragment.get("generated_at", ""):
-        return previous or {}
+        # A delayed publisher must not reintroduce old seller-verified claims.
+        return {
+            **(previous or {}),
+            "seller_verification_enabled": False,
+            "sections": sections,
+        }
     stats = catalogue_progress(fragment)
     sections[sid] = {
         **_disable_seller_proof(fragment),
