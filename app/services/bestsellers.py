@@ -9,7 +9,7 @@ from pathlib import Path
 import httpx
 
 from app import database as db
-from app.scraper.amazon_ie import AMAZON_IE_BASE, ProductSnapshot, is_amazon_direct_offer, fetch_product
+from app.scraper.amazon_ie import AMAZON_IE_BASE, ProductSnapshot, is_eligible_amazon_offer, eligible_offer_type, fetch_product
 from app.scraper.bestsellers import BestsellerItem, normalize_category_path, parse_bestseller_page
 from app.services.drop_tiers import drop_tier
 from app.services.monitor import DetectedAlert, notify_alert, record_and_detect, send_notification
@@ -375,10 +375,10 @@ async def verify_candidates(client: httpx.AsyncClient, candidates: list[dict], *
         try:
             snap = await fetch_product(client, asin)
             expected = float(candidate.get("price_eur") or 0)
-            if not is_amazon_direct_offer(snap) or not expected or abs(float(snap.price_eur) - expected) > 0.02:
+            if not is_eligible_amazon_offer(snap) or not expected or abs(float(snap.price_eur) - expected) > 0.02:
                 stats["rejected_or_unknown"] += 1
                 continue
-            passed.append({**candidate, "seller_name": snap.seller_name, "seller_verified": True, "verified_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()})
+            passed.append({**candidate, "seller_name": snap.seller_name, "seller_type": eligible_offer_type(snap), "fulfilment_status": snap.fulfilment_status, "seller_verified": True, "verified_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()})
             stats["amazon_verified"] += 1
         except (httpx.HTTPError, ValueError, TypeError):
             stats["rejected_or_unknown"] += 1
