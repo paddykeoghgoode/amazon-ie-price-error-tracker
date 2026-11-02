@@ -117,6 +117,8 @@ jobs:
 
       - id: deployment
         uses: ./.github/actions/deploy-tracker-site
+        with:
+          artifact_name: pages-watchlist-${{ github.run_attempt }}
 
   bestsellers:
     if: >-
@@ -216,6 +218,8 @@ jobs:
 
       - id: deployment
         uses: ./.github/actions/deploy-tracker-site
+        with:
+          artifact_name: pages-bestsellers-${{ github.run_attempt }}
 
   bestsellers-all:
     if: >-
@@ -285,3 +289,5 @@ jobs:
 
       - id: deployment
         uses: ./.github/actions/deploy-tracker-site
+        with:
+          artifact_name: pages-all-${{ matrix.section }}-${{ github.run_attempt }}
