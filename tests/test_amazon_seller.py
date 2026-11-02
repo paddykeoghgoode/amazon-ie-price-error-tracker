@@ -58,6 +58,33 @@ class TestAmazonDirectSeller(unittest.TestCase):
         ))
         self.assertTrue(is_amazon_direct_offer(item))
 
+    def test_scoped_seller_profile_link_with_amazon_dispatch_is_fba(self):
+        item = parse(offer_html(
+            '<div id="desktop_buybox">'
+            '<div>Ships from Amazon</div>'
+            '<a id="sellerProfileTriggerId" href="/sp?seller=123">Gadget Store Ltd</a>'
+            '</div>'
+        ))
+        self.assertEqual(item.seller_status, "third_party")
+        self.assertEqual(item.fulfilment_status, "amazon")
+        self.assertTrue(is_eligible_amazon_offer(item))
+
+    def test_profile_link_outside_current_buybox_does_not_confirm_fba(self):
+        item = parse(offer_html(
+            '<div id="merchant-info">Dispatched from Amazon</div>'
+            '<div id="other-offers"><a id="sellerProfileTriggerId">Gadget Store Ltd</a></div>'
+        ))
+        self.assertFalse(is_eligible_amazon_offer(item))
+
+    def test_new_desktop_buybox_price_selector(self):
+        item = parse(
+            '<span id="productTitle">Sony Gaming Headset</span>'
+            '<div id="apex_desktop"><span class="a-price"><span class="a-offscreen">€39.99</span></span></div>'
+            '<div id="merchant-info">Sold by Amazon</div>'
+        )
+        self.assertEqual(item.price_eur, 39.99)
+        self.assertTrue(is_eligible_amazon_offer(item))
+
     def test_third_party_seller_fulfilled_by_amazon_is_eligible(self):
         item = parse(offer_html('<div id="merchant-info">Sold by Gadget Shop. Fulfilled by Amazon.</div>'))
         self.assertEqual(item.seller_status, "third_party")
