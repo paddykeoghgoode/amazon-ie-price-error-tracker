@@ -168,6 +168,7 @@ class TestDetection(unittest.TestCase):
         self.assertEqual(first.alerts, [])
         self.assertEqual(first.with_history, 0)
         self.run_crawl()
+        self.run_crawl()
 
         crash = self.run_crawl({"B0ROOT0001": "€9.99"})
         self.assertEqual([a.asin for a in crash.alerts], ["B0ROOT0001"])
