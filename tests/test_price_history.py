@@ -60,9 +60,9 @@ class TestDurablePriceReference(unittest.TestCase):
         self.assertEqual(db.import_price_baselines({"INVALID": ["oops", "none", "bad"]}), 0)
 
     def test_expired_reference_does_not_trigger_old_drop(self):
-        for price in (200, 200, 200, 200):
-            self.tick(price)
         stale = (datetime.now(timezone.utc) - timedelta(days=35)).isoformat()
+        for _ in range(4):
+            db.record_price_check(self.pid, 200, None, "EUR", checked_at=stale)
         db.save_price_baseline(self.pid, 200, confirmed_at=stale, last_seen_at=stale)
         self.assertIsNone(self.tick(20))
         self.assertIsNone(db.get_price_baseline(self.pid))
