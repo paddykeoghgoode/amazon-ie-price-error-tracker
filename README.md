@@ -68,6 +68,8 @@ Required profit = max(minimum EUR profit, Amazon price × minimum profit % / 100
 
 The defaults in `bestsellers.json` now use `cex_extra_cost_eur: 5` and `cex_payout_haircut_percent: 10`, as example buffers for delivery/travel/packing and a lower trade-in payout. **Tune these to your own actual costs; they are not CeX fees.** Voucher value is not cash and should not be treated as a cash flip. Profit estimates exclude possible tax liabilities, return costs and other unexpected expenses.
 
+Eligible Amazon offers now include **sold by Amazon** and **third-party sold / fulfilled by Amazon (FBA)**. A marketplace listing only qualifies when the selected buy box explicitly states Amazon dispatch/fulfilment and identifies the seller; Prime eligibility alone does not count. Seller-fulfilled or ambiguous marketplace offers remain excluded. FBA reduces logistics risk but does not guarantee authenticity, grading, unchanged pricing or CeX acceptance.
+
 A listing match is still heuristic. Check the exact variant, whether the Amazon listing is physical and new, Ireland delivery and final checkout total, CeX's current cash quote and store acceptance conditions before spending money.
 
 ## Your own watch list
