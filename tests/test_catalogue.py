@@ -43,8 +43,12 @@ class TestCatalogue(unittest.TestCase):
         for batch_no in range(3):
             batch = select_check_batch(data, limit=40)
             seen.extend(row["asin"] for row in batch)
-            apply_batch_results(data, batch, [], {row["asin"]: "seller_not_detected" for row in batch},
-                                [], cex_enabled=True, checked_at=f"2026-11-02T{batch_no:02d}:00:00+00:00")
+            done = {
+                row["asin"]: {"status": "no_match", "checked_at": f"2026-11-02T{batch_no:02d}:00:00+00:00"}
+                for row in batch
+            }
+            apply_batch_results(data, batch, [], {}, [], cex_enabled=True,
+                                quote_cache=done, checked_at=f"2026-11-02T{batch_no:02d}:00:00+00:00")
         self.assertEqual(len(set(seen)), 105)
         self.assertEqual(catalogue_progress(data)["remaining"], 0)
         self.assertEqual(catalogue_progress(data)["checked"], 105)
@@ -58,12 +62,16 @@ class TestCatalogue(unittest.TestCase):
         for i in range(6):
             batch = select_check_batch(data, limit=3, priority_asins=["A000000000"], urgent_limit=1)
             chosen.extend(row["asin"] for row in batch)
-            apply_batch_results(data, batch, [], {row["asin"]: "no_seller" for row in batch},
-                                [], cex_enabled=True, checked_at=f"2026-11-02T0{i}:00:00+00:00")
+            done = {
+                row["asin"]: {"status": "no_match", "checked_at": f"2026-11-02T0{i}:00:00+00:00"}
+                for row in batch
+            }
+            apply_batch_results(data, batch, [], {}, [], cex_enabled=True,
+                                quote_cache=done, checked_at=f"2026-11-02T0{i}:00:00+00:00")
         self.assertEqual(catalogue_progress(data)["remaining"], 0)
         self.assertEqual(len(set(chosen)), 12)
 
-    def test_matching_result_records_cex_and_seller_evidence(self):
+    def test_matching_result_never_asserts_seller_evidence(self):
         section = make_section_catalogue(
             crawl({"A000000001": 40}), None, section_id="gaming", section_name="Gaming"
         )
@@ -80,7 +88,9 @@ class TestCatalogue(unittest.TestCase):
         apply_batch_results(section, selected, verified, {"A000000001": "verified"},
                             lookups, cex_enabled=True)
         row = section["items"][0]
-        self.assertEqual(row["cex_status"], "matched")
+        self.assertEqual(row["cex_status"], "matched_unverified")
+        self.assertEqual(row["verification_status"], "disabled")
+        self.assertNotIn("seller_name", row)
         self.assertEqual(row["cex_net_profit_eur"], 17)
         self.assertEqual(row["match_confidence"], "model_verified")
         self.assertEqual(catalogue_progress(section)["cex_attempted"], 1)
@@ -102,7 +112,7 @@ class TestCatalogue(unittest.TestCase):
             speculative, cex_enabled=True,
         )
         item = section["items"][0]
-        self.assertEqual(item["verification_status"], "seller_not_detected")
+        self.assertEqual(item["verification_status"], "disabled")
         self.assertEqual(item["cex_status"], "matched_unverified")
         self.assertEqual(catalogue_progress(section)["cex_attempted"], 1)
         self.assertEqual(catalogue_progress(section)["cex_matched"], 1)
@@ -130,7 +140,7 @@ class TestCatalogue(unittest.TestCase):
         self.assertIsNone(new["items"][0]["last_checked_at"])
         self.assertNotIn("cex_cash_eur", new["items"][0])
         self.assertNotIn("seller_name", new["items"][0])
-        self.assertEqual(new["items"][0]["verification_status"], "pending")
+        self.assertEqual(new["items"][0]["verification_status"], "disabled")
 
     def test_merge_preserves_other_sections_and_csv_formula_safety(self):
         a = make_section_catalogue(
