@@ -60,6 +60,7 @@ def make_section_catalogue(
             price is not None
             and prior.get("price_eur") is not None
             and abs(float(prior["price_eur"]) - price) < _PRICE_EPS
+            and (prior.get("title") or "") == (item.title or "")
         )
         row: dict[str, Any] = {
             "asin": asin,
