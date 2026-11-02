@@ -16,6 +16,8 @@ from app.bestseller_sections import (
     rotate_section_id,
 )
 from app.config import settings
+from app.scraper.amazon_ie import ProductSnapshot
+from app.services.monitor import record_and_detect
 from app.deals import export_deals, merge_section_deals, render_deals_markdown
 from app.services.bestsellers import (
     crawl,
@@ -132,6 +134,24 @@ async def crawl_section(
         processed.drops = [verified_by_asin[d['asin']] for d in processed.drops if d['asin'] in verified_by_asin]
         processed.verified_asins = set(verified_by_asin)
         processed.verification_stats = verification_stats
+        # Only confirmed Amazon-owned offers may generate actionable alerts.
+        # Historical observations from bestseller pages remain useful for baselines.
+        for row in verified:
+            pid = db.add_product(row['asin'], row['url'], row.get('title'))
+            alert = record_and_detect(
+                pid,
+                ProductSnapshot(
+                    asin=row['asin'], url=row['url'], title=row.get('title'),
+                    price_eur=row['price_eur'], list_price_eur=None,
+                    currency='EUR', availability='In stock',
+                    seller_name=row.get('seller_name'), seller_status='amazon',
+                ),
+                known_title=row.get('title'),
+                cooldown_minutes=config.alert_cooldown_minutes,
+                baseline_max_age_days=config.baseline_max_age_days,
+            )
+            if alert:
+                processed.alerts.append(alert)
         logger.info('[%s] Amazon seller checks: %s', section_id, verification_stats)
 
         lookups, flips = await enrich_with_cex(
