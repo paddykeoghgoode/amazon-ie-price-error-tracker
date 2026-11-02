@@ -2,7 +2,7 @@
 import unittest
 
 from app.scraper.amazon_ie import (
-    is_amazon_direct_offer, parse_product_html,
+    is_amazon_direct_offer, is_eligible_amazon_offer, eligible_offer_type, parse_product_html,
 )
 
 
@@ -31,10 +31,12 @@ class TestAmazonDirectSeller(unittest.TestCase):
         self.assertEqual(item.seller_status, "amazon")
         self.assertTrue(is_amazon_direct_offer(item))
 
-    def test_third_party_fulfilled_by_amazon_is_rejected(self):
+    def test_third_party_fulfilled_by_amazon_is_eligible(self):
         item = parse(offer_html('<div id="merchant-info">Dispatched from Amazon. Sold by GreatDeals Ltd.</div>'))
         self.assertEqual(item.seller_status, "third_party")
         self.assertFalse(is_amazon_direct_offer(item))
+        self.assertTrue(is_eligible_amazon_offer(item))
+        self.assertEqual(eligible_offer_type(item), "marketplace_fba")
 
     def test_amazon_mentioned_outside_buybox_is_not_proof(self):
         item = parse(offer_html('<div>Amazon fulfilled, Amazon choice, Amazon reviews</div>'))
@@ -55,6 +57,25 @@ class TestAmazonDirectSeller(unittest.TestCase):
             '<span class="tabular-buybox-text">Amazon</span></div></div>'
         ))
         self.assertTrue(is_amazon_direct_offer(item))
+
+    def test_third_party_seller_fulfilled_by_amazon_is_eligible(self):
+        item = parse(offer_html('<div id="merchant-info">Sold by Gadget Shop. Fulfilled by Amazon.</div>'))
+        self.assertEqual(item.seller_status, "third_party")
+        self.assertEqual(item.fulfilment_status, "amazon")
+        self.assertTrue(is_eligible_amazon_offer(item))
+
+    def test_third_party_prime_only_does_not_qualify(self):
+        item = parse(offer_html('<div id="merchant-info">Sold by Gadget Shop. Prime eligible.</div>'))
+        self.assertFalse(is_eligible_amazon_offer(item))
+
+    def test_third_party_with_fulfilment_elsewhere_does_not_qualify(self):
+        item = parse(offer_html('<div id="merchant-info">Sold by Gadget Shop.</div>'
+                                '<div>Other offers fulfilled by Amazon</div>'))
+        self.assertFalse(is_eligible_amazon_offer(item))
+
+    def test_third_party_seller_dispatch_unknown_does_not_qualify(self):
+        item = parse(offer_html('<div id="merchant-info">Sold by Gadget Shop. Dispatched by Gadget Shop.</div>'))
+        self.assertFalse(is_eligible_amazon_offer(item))
 
     def test_unknown_seller_fails_closed(self):
         item = parse(offer_html('<div id="merchant-info">Ships from Amazon</div>'))
