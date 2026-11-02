@@ -85,7 +85,7 @@ def render_deals_markdown(payload: dict[str, Any]) -> str:
             "",
             "---",
             "",
-            "Rewritten by the **Crawl bestsellers** GitHub Action. Categories are set in "
+            "Rewritten by the **Scan and publish tracker** GitHub Action. Categories are set in "
             "[`bestsellers.json`](bestsellers.json). Times are Ireland (Europe/Dublin).",
             "",
         ]
