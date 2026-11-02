@@ -166,6 +166,7 @@ function renderDeepDrops(deals) {
 function cexStatusLine(deals) {
   const stats = deals.cex_stats || {};
   const lookups = stats.lookups ?? (deals.cex_lookups || []).length;
+  const attempted = Number(stats.attempted || 0);
   const minEur = deals.cex_min_cash_profit_eur ?? 5;
   const minPct = deals.cex_min_cash_profit_percent ?? 10;
   if (!lookups && !stats.deep_candidates && !stats.any_price_candidates) {
@@ -178,7 +179,7 @@ function cexStatusLine(deals) {
       `CeX was queued for ${stats.deep_candidates || 0} sale items and ${stats.any_price_candidates || 0} regular-price items, but no CeX match returned a price (API or title match).`
     );
   }
-  return `CeX checked ${lookups} title matches · margin ≥€${minEur} or ≥${minPct}% · ${stats.cash_flips || 0} on-sale flips · ${stats.arbitrage || 0} any-price flips.`;
+  return `CeX attempted on ${attempted} verified offers, matched ${lookups} products · margin ≥€${minEur} or ≥${minPct}% · ${stats.cash_flips || 0} sale flips · ${stats.arbitrage || 0} other flips. See full catalogue for pending checks.`;
 }
 
 function renderNearMargin(bodyId, tableId, rows) {
@@ -496,6 +497,16 @@ function renderDeals(deals) {
     body.appendChild(tr);
   }
   renderSectionProgress(deals);
+  const overview = document.getElementById("catalogue-overview");
+  const progress = deals.catalogue_stats || {};
+  if (overview && progress.discovered != null) {
+    overview.textContent =
+      `Published Amazon listings: ${Number(progress.discovered || 0).toLocaleString("en-IE")} across scanned sections · ` +
+      `${Number(progress.checked || 0).toLocaleString("en-IE")} seller-checked, ` +
+      `${Number(progress.remaining || 0).toLocaleString("en-IE")} awaiting first check, ` +
+      `${Number(progress.cex_attempted || 0).toLocaleString("en-IE")} CeX attempts, ` +
+      `${Number(progress.cex_matched || 0).toLocaleString("en-IE")} confirmed CeX matches.`;
+  }
   renderDeepDrops(deals);
   renderCex(deals);
   renderCexArbitrage(deals);
