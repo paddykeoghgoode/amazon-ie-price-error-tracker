@@ -2,20 +2,57 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
 import httpx
 
 from app.scraper import cex_ie
-
-if TYPE_CHECKING:
-    from app.services.bestsellers import CrawlConfig
+from app.scraper.bestsellers import BestsellerItem
+from app.services.bestsellers import CrawlConfig, CrawlResult
 
 logger = logging.getLogger(__name__)
 
 
 def required_cash_profit(amazon_price: float, *, min_eur: float, min_percent: float) -> float:
     return max(min_eur, amazon_price * min_percent / 100)
+
+
+def item_dict_from_bestseller(
+    asin: str, item: BestsellerItem, category: str | None, *, drop_percent: float | None = None
+) -> dict[str, Any]:
+    return {
+        "asin": asin,
+        "title": item.title,
+        "url": item.url,
+        "category": category,
+        "rank": item.rank,
+        "price_eur": item.price_eur,
+        "drop_percent": drop_percent,
+        "drop_tier": None,
+    }
+
+
+def select_any_price_candidates(
+    result: CrawlResult, config: CrawlConfig, *, skip_asins: set[str]
+) -> list[dict[str, Any]]:
+    """Pick likely CeX-friendly bestsellers to compare even when Amazon is not on sale."""
+    if not config.cex_scan_any_price:
+        return []
+    keywords = [k.lower() for k in config.cex_priority_keywords]
+    scored: list[tuple[int, float, dict[str, Any]]] = []
+    for asin, (item, category) in result.items.items():
+        if asin in skip_asins or item.price_eur is None:
+            continue
+        price = float(item.price_eur)
+        if price < config.cex_any_price_min_amazon_eur or price > config.cex_any_price_max_amazon_eur:
+            continue
+        hay = f"{item.title or ''} {category or ''}".lower()
+        score = sum(1 for kw in keywords if kw in hay)
+        if config.cex_any_price_require_keyword and score == 0:
+            continue
+        scored.append((score, price, item_dict_from_bestseller(asin, item, category)))
+    scored.sort(key=lambda row: (-row[0], -row[1]))
+    return [row[2] for row in scored[: config.cex_any_price_max_lookups]]
 
 
 def build_cex_row(
@@ -55,12 +92,13 @@ async def enrich_with_cex(
     config: CrawlConfig,
     *,
     client: httpx.AsyncClient | None = None,
+    max_lookups: int | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Look up CeX trade-in prices for Amazon drops. Returns (all lookups, cash flips)."""
+    """Look up CeX trade-in prices. Returns (all lookups, rows that pass the cash margin)."""
     if not config.cex_enabled or not candidates:
         return [], []
 
-    cap = config.cex_max_lookups
+    cap = max_lookups if max_lookups is not None else config.cex_max_lookups
     to_check = candidates[:cap]
     own_client = client is None
     if own_client:

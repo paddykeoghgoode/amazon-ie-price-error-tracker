@@ -1,7 +1,9 @@
 import unittest
 
+from app.scraper.bestsellers import BestsellerItem
 from app.scraper.cex_ie import CexPrices, search_query_from_title
-from app.services.cex_arbitrage import build_cex_row, required_cash_profit
+from app.services.bestsellers import CrawlConfig, CrawlResult
+from app.services.cex_arbitrage import build_cex_row, required_cash_profit, select_any_price_candidates
 from app.services.drop_tiers import drop_tier, tiered_deep_drops
 
 
@@ -74,6 +76,40 @@ class TestTieredDrops(unittest.TestCase):
         self.assertEqual(len(grouped["66"]), 1)
         self.assertEqual(len(grouped["40"]), 1)
         self.assertEqual(grouped["50"], [])
+
+
+class TestAnyPriceCandidates(unittest.TestCase):
+    def test_prefers_gaming_and_skips_seen(self):
+        config = CrawlConfig(roots=[], cex_any_price_max_lookups=2, cex_priority_keywords=["playstation"])
+        result = CrawlResult(
+            items={
+                "A": (
+                    BestsellerItem(
+                        asin="A",
+                        title="Playstation 5",
+                        price_eur=400.0,
+                        rank=1,
+                        url="https://www.amazon.ie/dp/A",
+                    ),
+                    "Gaming",
+                ),
+                "B": (
+                    BestsellerItem(
+                        asin="B",
+                        title="Coffee pods",
+                        price_eur=10.0,
+                        rank=2,
+                        url="https://www.amazon.ie/dp/B",
+                    ),
+                    "Kitchen",
+                ),
+            }
+        )
+        picked = select_any_price_candidates(result, config, skip_asins={"A"})
+        self.assertEqual([], picked)  # only gaming item was skipped
+
+        picked2 = select_any_price_candidates(result, config, skip_asins=set())
+        self.assertEqual(["A"], [p["asin"] for p in picked2])
 
 
 if __name__ == "__main__":

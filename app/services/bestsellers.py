@@ -49,6 +49,46 @@ class CrawlConfig:
     cex_min_cash_profit_eur: float = 15.0
     cex_min_cash_profit_percent: float = 10.0
     cex_max_alerts_per_run: int = 5
+    cex_scan_any_price: bool = True
+    cex_any_price_max_lookups: int = 50
+    cex_any_price_min_amazon_eur: float = 20.0
+    cex_any_price_max_amazon_eur: float = 800.0
+    cex_any_price_require_keyword: bool = True
+    cex_any_price_max_alerts_per_run: int = 5
+    cex_priority_keywords: list[str] = field(
+        default_factory=lambda: [
+            "game",
+            "gaming",
+            "playstation",
+            "ps5",
+            "ps4",
+            "xbox",
+            "nintendo",
+            "switch",
+            "console",
+            "iphone",
+            "ipad",
+            "samsung",
+            "pixel",
+            "tablet",
+            "laptop",
+            "macbook",
+            "airpods",
+            "headphone",
+            "headset",
+            "camera",
+            "canon",
+            "nikon",
+            "kindle",
+            "echo",
+            "graphics",
+            "gpu",
+            "oculus",
+            "meta quest",
+            "fitbit",
+            "watch",
+        ]
+    )
 
 
 @dataclass
@@ -68,6 +108,7 @@ class ProcessResult:
     drops: list[dict] = field(default_factory=list)
     cex_lookups: list[dict] = field(default_factory=list)
     cex_flips: list[dict] = field(default_factory=list)
+    cex_arbitrage: list[dict] = field(default_factory=list)
 
 
 def load_config(path: Path) -> CrawlConfig:
@@ -106,6 +147,25 @@ def load_config(path: Path) -> CrawlConfig:
             raw.get("cex_min_cash_profit_percent", defaults.cex_min_cash_profit_percent)
         ),
         cex_max_alerts_per_run=int(raw.get("cex_max_alerts_per_run", defaults.cex_max_alerts_per_run)),
+        cex_scan_any_price=bool(raw.get("cex_scan_any_price", defaults.cex_scan_any_price)),
+        cex_any_price_max_lookups=int(
+            raw.get("cex_any_price_max_lookups", defaults.cex_any_price_max_lookups)
+        ),
+        cex_any_price_min_amazon_eur=float(
+            raw.get("cex_any_price_min_amazon_eur", defaults.cex_any_price_min_amazon_eur)
+        ),
+        cex_any_price_max_amazon_eur=float(
+            raw.get("cex_any_price_max_amazon_eur", defaults.cex_any_price_max_amazon_eur)
+        ),
+        cex_any_price_require_keyword=bool(
+            raw.get("cex_any_price_require_keyword", defaults.cex_any_price_require_keyword)
+        ),
+        cex_any_price_max_alerts_per_run=int(
+            raw.get("cex_any_price_max_alerts_per_run", defaults.cex_any_price_max_alerts_per_run)
+        ),
+        cex_priority_keywords=list(
+            raw.get("cex_priority_keywords", defaults.cex_priority_keywords)
+        ),
     )
 
 
@@ -224,19 +284,35 @@ def process_crawl(result: CrawlResult, config: CrawlConfig) -> ProcessResult:
     return processed
 
 
-async def send_cex_alerts(flips: list[dict], config: CrawlConfig, *, dashboard_url: str) -> int:
+async def send_cex_alerts(
+    flips: list[dict],
+    config: CrawlConfig,
+    *,
+    dashboard_url: str,
+    deep_drop: bool = True,
+    max_alerts: int | None = None,
+) -> int:
+    cap = max_alerts if max_alerts is not None else config.cex_max_alerts_per_run
     sent = 0
-    for row in flips[: config.cex_max_alerts_per_run]:
+    for row in flips[:cap]:
         title = row.get("title") or row.get("asin") or "Item"
         amazon = float(row.get("price_eur") or 0)
         cash = float(row.get("cex_cash_eur") or 0)
         profit = float(row.get("cex_cash_profit_eur") or 0)
         retail = float(row.get("cex_retail_eur") or 0)
         margin = float(row.get("cex_min_profit_eur") or 0)
+        drop = row.get("drop_percent")
+        if deep_drop and drop is not None:
+            headline = "💰 Possible CeX cash flip (Amazon on sale)\n\n"
+            price_line = (
+                f"Amazon now: €{amazon:.2f} ({drop:g}% below its usual Amazon price)\n"
+            )
+        else:
+            headline = "💰 CeX cash profit (no Amazon sale needed)\n\n"
+            price_line = f"Amazon now: €{amazon:.2f} (regular price — no big drop required)\n"
         message = (
-            "💰 Possible CeX cash flip\n\n"
-            f"{title}\n"
-            f"Amazon now: €{amazon:.2f} ({row.get('drop_percent'):g}% below its usual Amazon price)\n"
+            f"{headline}{title}\n"
+            f"{price_line}"
             f"CeX cash trade-in: €{cash:.2f} (~€{profit:.2f} profit after your €{margin:.0f} margin)\n"
             f"CeX also sells similar for €{retail:.2f}\n\n"
             f"{row.get('url')}\n"

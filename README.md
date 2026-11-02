@@ -37,7 +37,8 @@ Each run walks Amazon.ie's bestseller lists. It starts with coffee machines, the
 - Items sold in several variants at different prices (for example "€9.99 – €24.99") are skipped, because their lowest price jumps between variants.
 - One crawl sends at most 15 Telegram alerts, plus a single "…and N more" message. The same item won't alert again within 24 hours unless its price drops further.
 - The dashboard also lists **deep drops** at **40%, 50% and 66%** below each item's recent Amazon price (handy for electronics and games even when it's not a full "price error").
-- For those deep drops, the crawler looks up a **CeX.ie** match and estimates **cash trade-in** profit after your margin (`cex_min_cash_profit_eur` / `cex_min_cash_profit_percent` in [`bestsellers.json`](bestsellers.json)). CeX matching is by product title — always confirm model and grade before you buy. Set `"cex_enabled": false` to turn CeX lookups off. Category paths are the part of an Amazon.ie bestseller URL after `amazon.ie`, for example `/gp/bestsellers/home/94816616031` for Coffee Machines.
+- For those deep drops, the crawler looks up a **CeX.ie** match and estimates **cash trade-in** profit after your margin (`cex_min_cash_profit_eur` / `cex_min_cash_profit_percent` in [`bestsellers.json`](bestsellers.json)). CeX matching is by product title — always confirm model and grade before you buy. Set `"cex_enabled": false` to turn CeX lookups off.
+- It also scans **regular-price** gaming/electronics bestsellers (`cex_scan_any_price`) and lists items where CeX cash trade-in still clears your margin **without** an Amazon sale (`cex_arbitrage` on the dashboard). Tune keywords with `cex_priority_keywords`. Category paths are the part of an Amazon.ie bestseller URL after `amazon.ie`, for example `/gp/bestsellers/home/94816616031` for Coffee Machines.
 
 Run it locally:
 

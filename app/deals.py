@@ -41,6 +41,7 @@ def export_deals(
         "cex_min_cash_profit_percent": config.cex_min_cash_profit_percent if config else 10.0,
         "cex_lookups": processed.cex_lookups[:30],
         "cex_flips": processed.cex_flips[:20],
+        "cex_arbitrage": processed.cex_arbitrage[:30],
     }
     return payload
 
@@ -129,7 +130,7 @@ def render_deals_markdown(payload: dict[str, Any]) -> str:
     )
     lines.append("")
     if not flips:
-        lines.append("_No cash flips met your margin this crawl._")
+        lines.append("_No cash flips met your margin on deep-drop items this crawl._")
     else:
         for row in flips[:15]:
             title = (row.get("title") or row.get("asin") or "").replace("|", "/")
@@ -138,6 +139,24 @@ def render_deals_markdown(payload: dict[str, Any]) -> str:
                 f"CeX cash **{_fmt_euro(row.get('cex_cash_eur'))}** "
                 f"(~**€{row.get('cex_cash_profit_eur'):g}** profit) · "
                 f"[CeX listing]({row.get('cex_url')}) · {row.get('drop_percent'):g}% off usual Amazon price"
+            )
+
+    lines.extend(["", "## CeX profit without an Amazon price drop", ""])
+    arb = payload.get("cex_arbitrage") or []
+    lines.append(
+        "Scans gaming/electronics-style bestsellers at **normal** Amazon prices and lists any where "
+        "CeX cash trade-in still clears your margin (title match only)."
+    )
+    lines.append("")
+    if not arb:
+        lines.append("_Nothing met your margin on regular-price items this crawl._")
+    else:
+        for row in arb[:20]:
+            title = (row.get("title") or row.get("asin") or "").replace("|", "/")
+            lines.append(
+                f"- [{title}]({row.get('url')}) — Amazon **{_fmt_euro(row.get('price_eur'))}**, "
+                f"CeX cash **{_fmt_euro(row.get('cex_cash_eur'))}** "
+                f"(~**€{row.get('cex_cash_profit_eur'):g}** profit) · [CeX listing]({row.get('cex_url')})"
             )
     lines.extend(
         [

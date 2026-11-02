@@ -181,17 +181,50 @@ function renderCex(deals) {
   if (empty) empty.hidden = true;
   if (table) table.hidden = false;
   for (const row of flips) {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
+    appendCexRow(body, row, true);
+  }
+}
+
+function appendCexRow(body, row, showDrop) {
+  const tr = document.createElement("tr");
+  const dropCell = showDrop && row.drop_percent != null
+    ? `<td>${escapeHtml(String(row.drop_percent))}%</td>`
+    : "";
+  tr.innerHTML = `
       <td>
         <a href="${escapeHtml(row.url)}" target="_blank" rel="noopener">${escapeHtml(row.title || row.asin)}</a>
-        <div class="hint"><a href="${escapeHtml(row.cex_url)}" target="_blank" rel="noopener">CeX match</a></div>
+        <div class="hint"><a href="${escapeHtml(row.cex_url)}" target="_blank" rel="noopener">CeX listing</a></div>
       </td>
       <td class="price">${fmtEuro(row.price_eur)}</td>
       <td class="price">${fmtEuro(row.cex_cash_eur)}</td>
       <td class="price">€${Number(row.cex_cash_profit_eur).toFixed(2)}</td>
-      <td>${escapeHtml(String(row.drop_percent))}%</td>`;
-    body.appendChild(tr);
+      ${showDrop ? dropCell : `<td class="was">${fmtEuro(row.cex_retail_eur)}</td>`}`;
+  body.appendChild(tr);
+}
+
+function renderCexArbitrage(deals) {
+  if (!deals || !deals.generated_at) return;
+  const summary = document.getElementById("cex-arb-summary");
+  if (summary) {
+    summary.textContent =
+      "Normal Amazon bestseller prices vs CeX cash trade-in (gaming/electronics keywords). " +
+      "Each row includes Amazon + CeX links when profit clears your margin — no price drop required.";
+  }
+  const rows = deals.cex_arbitrage || [];
+  const table = document.getElementById("cex-arb-table");
+  const body = document.getElementById("cex-arb-body");
+  const empty = document.getElementById("cex-arb-empty");
+  if (!body) return;
+  body.innerHTML = "";
+  if (!rows.length) {
+    if (table) table.hidden = true;
+    if (empty) empty.hidden = false;
+    return;
+  }
+  if (empty) empty.hidden = true;
+  if (table) table.hidden = false;
+  for (const row of rows) {
+    appendCexRow(body, row, false);
   }
 }
 
@@ -233,6 +266,7 @@ function renderDeals(deals) {
   }
   renderDeepDrops(deals);
   renderCex(deals);
+  renderCexArbitrage(deals);
 }
 
 fetch(`deals.json?t=${Date.now()}`, { cache: "no-store" })
