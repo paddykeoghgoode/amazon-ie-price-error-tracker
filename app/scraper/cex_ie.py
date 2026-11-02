@@ -311,7 +311,12 @@ async def search_boxes(client: httpx.AsyncClient, query: str, *, hits_per_page: 
     try:
         resp = await client.post(url, json=body, headers=headers, timeout=20.0)
         resp.raise_for_status()
-        return resp.json().get("hits") or []
+        payload = resp.json()
+        if not isinstance(payload, dict) or not isinstance(payload.get("hits"), list):
+            if strict:
+                raise ValueError("Unexpected CeX search response; not a confirmed empty result")
+            return []
+        return payload["hits"]
     except httpx.HTTPError as exc:
         logger.warning("CeX search failed for %r: %s", query[:60], exc)
         if strict:
@@ -331,9 +336,15 @@ async def fetch_box_prices(client: httpx.AsyncClient, box_id: str, *, strict: bo
             raise
         return None
 
-    if payload.get("response", {}).get("ack") != "Success":
+    if not isinstance(payload, dict) or not isinstance(payload.get("response"), dict):
+        if strict:
+            raise ValueError("Unexpected CeX box detail response")
         return None
-    details = payload["response"]["data"].get("boxDetails") or []
+    if payload["response"].get("ack") != "Success":
+        if strict:
+            raise ValueError("CeX box details not acknowledged")
+        return None
+    details = (payload["response"].get("data") or {}).get("boxDetails") or []
     if not details:
         return None
     box = details[0]
