@@ -49,6 +49,25 @@ def record_and_detect(
         snap.currency,
     )
 
+    return detect_verified_price(
+        product_id, snap, known_title=known_title,
+        cooldown_minutes=cooldown_minutes,
+    )
+
+
+def detect_verified_price(
+    product_id: int,
+    snap: ProductSnapshot,
+    *,
+    known_title: str | None = None,
+    cooldown_minutes: int | None = None,
+) -> DetectedAlert | None:
+    """Create an alert only for a confirmed buy-box offer.
+
+    The bestseller crawler has already saved its price observation before it
+    verifies the product page. Calling record_and_detect again would duplicate
+    that price observation and distort price history/baselines.
+    """
     verdict = evaluate_price(
         product_id=product_id,
         price_eur=snap.price_eur,
