@@ -31,7 +31,7 @@ The **Crawl bestsellers** workflow walks Amazon.ie's bestseller lists, starting 
 
 Edit [`bestsellers.json`](bestsellers.json) to change categories, depth or `max_items`. Category paths are the part of an Amazon.ie bestseller URL after `amazon.ie`, for example `/gp/bestsellers/home/94816616031` for Coffee Machines.
 
-**Actions minutes:** a full crawl takes about 20 minutes. Hourly, that's roughly 14,000 minutes a month. Public repos get Actions for free; private repos on the free plan get 2,000 minutes. So the hourly schedule only runs when the repo is **public**. On a private repo, run it by hand from **Actions → Crawl bestsellers → Run workflow** (about 20 minutes each time), or lower `max_items`.
+**Actions minutes:** a full 10,000-item crawl is about 410 page requests and takes roughly 16 minutes. Hourly, that's about 11,500 minutes a month. Public repos get Actions for free; private repos on the free plan get 2,000 minutes. So the hourly schedule only runs when the repo is **public**. On a private repo, run it by hand from **Actions → Crawl bestsellers → Run workflow** (about 20 minutes each time), or lower `max_items`.
 
 Run it locally:
 

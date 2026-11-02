@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   crawl:
-    # A full crawl takes ~20 minutes, so hourly runs need far more than the 2,000 free
+    # A full crawl takes ~16 minutes, so hourly runs need far more than the 2,000 free
     # Actions minutes a private repo gets. Scheduled runs only happen on public repos
     # (where Actions is free); manual runs always work.
     if: github.event_name == 'workflow_dispatch' || !github.event.repository.private
