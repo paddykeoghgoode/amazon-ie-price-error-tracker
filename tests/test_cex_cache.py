@@ -230,7 +230,7 @@ class TestVerifiedAlerts(unittest.TestCase):
         snap = ProductSnapshot(
             asin="B000000001", url=ITEM["url"], title=TITLE,
             price_eur=20.0, list_price_eur=None, currency="EUR",
-            seller_name=None, seller_status="unknown",
+            availability=None, seller_name=None, seller_status="unknown",
         )
         self.assertIsNone(detect_verified_price(product_id, snap, known_title=TITLE))
 
