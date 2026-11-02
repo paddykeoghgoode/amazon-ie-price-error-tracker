@@ -12,12 +12,17 @@ def report(data: dict, published: bool = False) -> str:
         "",
         f"Scan timestamp (UTC): **{data.get('last_section_at') or data.get('generated_at') or 'unknown'}**",
         "",
-        "| Section | Last scan (UTC) | Status | Items | Verified / attempted | Price errors | CeX sale flips | CeX regular flips |",
-        "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |",
+        "| Section | Last scan (UTC) | Status | Items | Verified / attempted | Catalogue checked / priced | CeX attempted | CeX matched | Price errors | CeX sale flips | CeX regular flips |",
+        "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for sid, section in sections.items():
         stats = section.get("cex_stats") or {}
         verified = section.get("verification_stats") or {}
+        cat = section.get("catalogue_stats") or {}
+        progress = (
+            f"{int(cat.get('checked') or 0)}/{int(cat.get('priced') or 0)}"
+            if "priced" in cat else "not started"
+        )
         checked = (
             f"{int(verified.get('amazon_verified') or 0)}/{int(verified.get('attempted') or 0)}"
             if "attempted" in verified else "not measured"
@@ -28,6 +33,9 @@ def report(data: dict, published: bool = False) -> str:
             f"| {section.get('scan_status') or ('blocked' if section.get('blocked') else 'completed')} "
             f"| {int(section.get('items_seen') or 0)} "
             f"| {checked} "
+            f"| {progress} "
+            f"| {int(cat.get('cex_attempted') or 0)} "
+            f"| {int(cat.get('cex_matched') or 0)} "
             f"| {int(section.get('new_alerts') or 0)} "
             f"| {int(stats.get('cash_flips') or 0)} "
             f"| {int(stats.get('arbitrage') or 0)} |"
