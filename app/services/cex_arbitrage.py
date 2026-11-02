@@ -272,9 +272,12 @@ async def enrich_with_cex(
                                 cache[asin] = prior
                     except httpx.HTTPStatusError as exc:
                         state["errors"] += 1
-                        if exc.response.status_code == 429:
+                        if exc.response.status_code in (403, 429, 503):
                             state["rate_limited"] = True
-                            logger.warning("CeX returned HTTP 429; stopping further live CeX requests this scan")
+                            logger.warning(
+                                "CeX returned HTTP %s; pausing further live CeX requests for this scan",
+                                exc.response.status_code,
+                            )
                         if cache is not None:
                             if prices and isinstance(prior, dict):
                                 mark_error(prior, now)
