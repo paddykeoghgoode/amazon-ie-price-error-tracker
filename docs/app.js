@@ -200,7 +200,7 @@ function renderNearMargin(bodyId, tableId, rows) {
       </td>
       <td class="price">${fmtEuro(row.price_eur)}<div class="hint">Found ${fmtTime(row.found_at || row.verified_at)}</div></td>
       <td class="price">${fmtEuro(row.cex_cash_eur)}</td>
-      <td class="price">€${Number(row.cex_cash_profit_eur).toFixed(2)}</td>`;
+      <td class="price">€${Number(row.cex_cash_profit_eur).toFixed(2)}<div class="hint">Max buy ${fmtEuro(row.cex_max_buy_eur)} · ${escapeHtml(row.match_confidence || "title_only")}</div></td>`;
     body.appendChild(tr);
   }
 }
