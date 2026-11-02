@@ -8,7 +8,7 @@ from app.config import settings
 from app import database as db
 from app.detector.price_error import evaluate_price, should_notify_again
 from app.notifier.telegram import format_price_alert, send_telegram_message, send_whatsapp_message
-from app.scraper.amazon_ie import ProductSnapshot, extract_asin, fetch_product, normalize_product_url, is_amazon_direct_offer
+from app.scraper.amazon_ie import ProductSnapshot, extract_asin, fetch_product, normalize_product_url, is_eligible_amazon_offer
 from app.services.price_history import observe_price_reference
 
 logger = logging.getLogger(__name__)
@@ -54,7 +54,7 @@ def record_and_detect(
         price_eur=snap.price_eur,
         list_price_eur=snap.list_price_eur,
     )
-    if not verdict.is_error or snap.price_eur is None or not is_amazon_direct_offer(snap):
+    if not verdict.is_error or snap.price_eur is None or not is_eligible_amazon_offer(snap):
         return None
     if not should_notify_again(product_id, snap.price_eur, cooldown_minutes=cooldown_minutes):
         logger.info("Skipping duplicate alert for product %s", product_id)
