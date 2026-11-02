@@ -179,7 +179,7 @@ function cexStatusLine(deals) {
       `CeX was queued for ${stats.deep_candidates || 0} sale items and ${stats.any_price_candidates || 0} regular-price items, but no CeX match returned a price (API or title match).`
     );
   }
-  return `CeX attempted on ${attempted} verified offers, matched ${lookups} products · margin ≥€${minEur} or ≥${minPct}% · ${stats.cash_flips || 0} sale flips · ${stats.arbitrage || 0} other flips. See full catalogue for pending checks.`;
+  return `CeX researched ${attempted} listings (cached or live); ${lookups} seller-verified CeX matches · margin ≥€${minEur} or ≥${minPct}% · ${stats.cash_flips || 0} sale flips · ${stats.arbitrage || 0} other flips. See full catalogue for pending checks.`;
 }
 
 function renderNearMargin(bodyId, tableId, rows) {
@@ -455,7 +455,7 @@ async function loadCatalogue() {
 }
 
 document.getElementById("catalogue-load")?.addEventListener("click", loadCatalogue);
-for (const id of ["catalogue-search", "catalogue-section-filter", "catalogue-status-filter"]) {
+for (const id of ["catalogue-search", "catalogue-section-filter", "catalogue-status-filter", "catalogue-activity-filter"]) {
   document.getElementById(id)?.addEventListener("input", () => {
     cataloguePage = 0;
     renderCataloguePage();
