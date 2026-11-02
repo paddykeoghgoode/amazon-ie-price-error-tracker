@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
 
 from app.scraper import cex_ie
 from app.scraper.product_identity import normalise_barcode, normalise_model
+from app.services.cex_cache import (
+    age_hours, cache_price, cache_valid, mark_error, quote_entry,
+    retry_allowed, status_entry,
+)
 from app.scraper.bestsellers import BestsellerItem
 from app.services.bestsellers import CrawlConfig, CrawlResult
 
@@ -104,55 +109,199 @@ def build_cex_row(
     }
 
 
+def _compatible_quote(item: dict[str, Any], prices: cex_ie.CexPrices) -> bool:
+    if not cex_ie.titles_match_for_trade_in(item.get("title"), prices.box_name):
+        return False
+    barcode = normalise_barcode(item.get("barcode"))
+    model = normalise_model(item.get("model_number"))
+    if barcode and prices.barcodes and barcode not in prices.barcodes:
+        return False
+    if model and prices.model_number and model != prices.model_number:
+        return False
+    return True
+
+
+def _match_level(item: dict[str, Any], prices: cex_ie.CexPrices) -> str:
+    if normalise_barcode(item.get("barcode")) and prices.barcodes:
+        return "barcode_verified"
+    if normalise_model(item.get("model_number")) and prices.model_number:
+        return "model_verified"
+    return "title_only"
+
+
 async def enrich_with_cex(
     candidates: list[dict[str, Any]],
     config: CrawlConfig,
     *,
     client: httpx.AsyncClient | None = None,
     max_lookups: int | None = None,
+    cache: dict[str, dict] | None = None,
+    run_state: dict | None = None,
+    now: datetime | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Look up CeX trade-in prices. Returns (all lookups, rows that pass the cash margin)."""
+    """Price all candidate ASINs, reusing a timestamped CeX quote when suitable.
+
+    An Amazon price change recalculates profit from the cached CeX cash quote;
+    it does NOT force a new CeX search. Positive quotes expire after 72h by
+    default; no-match research after 7 days. High-margin verified offers are
+    refreshed directly via their CeX box ID if the quote is >12h old.
+    Never alert on a quote older than that. On CeX 429, stop new CeX requests
+    for the rest of the section scan rather than retrying around the limit.
+
+    cache=None retains the old uncached behaviour for standalone clients.
+    cache is modified in place and must be saved with the public catalogue.
+    """
     if not config.cex_enabled or not candidates:
         return [], []
-
     cap = max_lookups if max_lookups is not None else config.cex_max_lookups
     to_check = candidates[:cap]
     own_client = client is None
     if own_client:
         client = httpx.AsyncClient(headers=cex_ie.CEX_HEADERS, timeout=20.0)
-
     assert client is not None
+
+    now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    state = run_state if run_state is not None else {}
+    state.setdefault("live_lookups", 0)
+    state.setdefault("cache_hits", 0)
+    state.setdefault("deferred", 0)
+    state.setdefault("errors", 0)
+    state.setdefault("rate_limited", False)
+    budget = max(1, int(getattr(config, "cex_live_lookups_per_run", 40)))
+    quote_ttl = float(getattr(config, "cex_quote_ttl_hours", 72))
+    negative_ttl = float(getattr(config, "cex_no_match_ttl_hours", 168))
+    error_ttl = float(getattr(config, "cex_error_retry_hours", 6))
+    alert_ttl = float(getattr(config, "cex_alert_quote_max_age_hours", 12))
     lookups: list[dict[str, Any]] = []
     flips: list[dict[str, Any]] = []
 
+    async def pace() -> None:
+        if config.cex_request_delay_seconds > 0:
+            await asyncio.sleep(config.cex_request_delay_seconds)
+
+    async def request_quote(
+        item: dict[str, Any], *, box_id: str | None = None
+    ) -> cex_ie.CexPrices | None:
+        # The box ID is stable across price changes; reusing it needs one call
+        # instead of repeated fuzzy title searches.
+        if box_id:
+            await pace()
+            return await cex_ie.fetch_box_prices(client, box_id, strict=cache is not None)
+        query = cex_ie.search_query_from_title(item.get("title"))
+        await pace()
+        hits = await cex_ie.search_boxes(client, query, hits_per_page=5, strict=cache is not None)
+        hit = cex_ie.pick_best_box_hit(item.get("title"), hits)
+        if not hit:
+            return None
+        await pace()
+        return await cex_ie.fetch_box_prices(
+            client, str(hit.get("boxId") or ""), strict=cache is not None
+        )
+
     try:
         for item in to_check:
-            # Pace every CeX request, including mismatched and early-exit hits.
-            # This is intentionally not a burst scraper.
-            if config.cex_request_delay_seconds:
-                await asyncio.sleep(config.cex_request_delay_seconds)
-            query = cex_ie.search_query_from_title(item.get("title"))
-            hits = await cex_ie.search_boxes(client, query, hits_per_page=5)
-            hit = cex_ie.pick_best_box_hit(item.get("title"), hits)
-            if not hit:
-                await asyncio.sleep(config.cex_request_delay_seconds)
+            asin = str(item.get("asin") or "")
+            title = item.get("title")
+            prior = cache.get(asin) if cache is not None else None
+            usable = cache is not None and cache_valid(
+                prior, title=title, now=now, quote_ttl_hours=quote_ttl,
+                no_match_ttl_hours=negative_ttl, error_retry_hours=error_ttl,
+            )
+            prices = cache_price(prior) if prior and prior.get("title") == title else None
+            quote_source = "cache"
+            quote_fresh = False
+
+            # A negative CeX match also gets a TTL. A transient error should
+            # never be permanently stored as "no matching CeX product".
+            if usable and prior.get("status") in ("no_match", "error"):
+                state["cache_hits"] += 1
                 continue
-            box_id = str(hit.get("boxId") or "")
-            prices = await cex_ie.fetch_box_prices(client, box_id)
-            if not prices or not cex_ie.titles_match_for_trade_in(item.get("title"), prices.box_name):
-                await asyncio.sleep(config.cex_request_delay_seconds)
+
+            if usable and prices and not _compatible_quote(item, prices):
+                usable = False
+                prices = None
+
+            # Cached quote can be used to recompute today's profit, but an
+            # apparently profitable and eligible item requires a recent quote.
+            high_interest = False
+            if prices and _compatible_quote(item, prices):
+                estimate = build_cex_row(
+                    item, prices, min_profit_eur=config.cex_min_cash_profit_eur,
+                    min_profit_percent=config.cex_min_cash_profit_percent,
+                    delivery_eur=config.cex_delivery_eur,
+                    min_roi_percent=config.cex_min_roi_percent,
+                    extra_cost_eur=config.cex_extra_cost_eur,
+                    payout_haircut_percent=config.cex_payout_haircut_percent,
+                )
+                high_interest = bool(
+                    item.get("seller_verified") and estimate["cex_cash_flip"]
+                )
+
+            age = age_hours(prior, now) if prices else None
+            quote_fresh = age is not None and age <= alert_ttl
+            needs_refresh = (
+                not usable or prices is None or
+                (high_interest and not quote_fresh)
+            )
+            if needs_refresh:
+                may_request = (
+                    not state["rate_limited"] and
+                    (cache is None or state["live_lookups"] < budget) and
+                    retry_allowed(prior, now, error_ttl)
+                )
+                if may_request:
+                    state["live_lookups"] += 1
+                    try:
+                        # On a known matching SKU only fetch its detail.
+                        refreshed = await request_quote(
+                            item, box_id=prices.box_id if prices and _compatible_quote(item, prices) else None,
+                        )
+                        if refreshed and _compatible_quote(item, refreshed) and refreshed.cash_eur > 0:
+                            prices = refreshed
+                            if cache is not None:
+                                prior = quote_entry(title, prices, now)
+                                cache[asin] = prior
+                            quote_source = "live"
+                            quote_fresh = True
+                        else:
+                            # If the old SKU no longer matches the CeX detail,
+                            # do not reuse its old cash payout.
+                            prices = None
+                            if cache is not None:
+                                prior = status_entry(title, "no_match", now)
+                                cache[asin] = prior
+                    except httpx.HTTPStatusError as exc:
+                        state["errors"] += 1
+                        if exc.response.status_code == 429:
+                            state["rate_limited"] = True
+                            logger.warning("CeX returned HTTP 429; stopping further live CeX requests this scan")
+                        if cache is not None:
+                            if prices and isinstance(prior, dict):
+                                mark_error(prior, now)
+                            else:
+                                prior = status_entry(title, "error", now)
+                                cache[asin] = prior
+                        quote_fresh = False
+                    except (httpx.HTTPError, ValueError, TypeError, OverflowError) as exc:
+                        state["errors"] += 1
+                        logger.warning("CeX lookup unavailable for ASIN %s: %s", asin, type(exc).__name__)
+                        if cache is not None:
+                            if prices and isinstance(prior, dict):
+                                mark_error(prior, now)
+                            else:
+                                prior = status_entry(title, "error", now)
+                                cache[asin] = prior
+                        quote_fresh = False
+                else:
+                    state["deferred"] += 1
+
+            if not prices or not _compatible_quote(item, prices):
                 continue
-            amazon_barcode = normalise_barcode(item.get('barcode'))
-            amazon_model = normalise_model(item.get('model_number'))
-            if amazon_barcode and prices.barcodes and amazon_barcode not in prices.barcodes:
-                continue
-            if amazon_model and prices.model_number and amazon_model != prices.model_number:
-                continue
-            identity = ('barcode_verified' if amazon_barcode and prices.barcodes else
-                        'model_verified' if amazon_model and prices.model_number else 'title_only')
+            age = age_hours(prior, now) if cache is not None else 0
+            quote_fresh = bool(age is not None and age <= alert_ttl and
+                               retry_allowed(prior, now, error_ttl))
             row = build_cex_row(
-                item,
-                prices,
+                item, prices,
                 min_profit_eur=config.cex_min_cash_profit_eur,
                 min_profit_percent=config.cex_min_cash_profit_percent,
                 delivery_eur=config.cex_delivery_eur,
@@ -160,13 +309,20 @@ async def enrich_with_cex(
                 extra_cost_eur=config.cex_extra_cost_eur,
                 payout_haircut_percent=config.cex_payout_haircut_percent,
             )
-            row['match_confidence'] = identity
-            row['amazon_barcode'] = amazon_barcode
-            row['cex_barcodes'] = list(prices.barcodes)
+            row["match_confidence"] = _match_level(item, prices)
+            row["amazon_barcode"] = normalise_barcode(item.get("barcode"))
+            row["cex_barcodes"] = list(prices.barcodes)
+            row["cex_quote_checked_at"] = (prior or {}).get("checked_at") if cache is not None else now.isoformat()
+            row["cex_quote_source"] = quote_source
+            row["cex_quote_fresh_for_alert"] = quote_fresh
+            # Stale quotes are research estimates, never actionable flips.
+            if not quote_fresh:
+                row["cex_cash_flip"] = False
             lookups.append(row)
             if row["cex_cash_flip"]:
                 flips.append(row)
-            await asyncio.sleep(config.cex_request_delay_seconds)
+            if usable and quote_source == "cache":
+                state["cache_hits"] += 1
     finally:
         if own_client:
             await client.aclose()
