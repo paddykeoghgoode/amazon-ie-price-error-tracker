@@ -391,10 +391,12 @@ function renderCataloguePage() {
   body.innerHTML = "";
   for (const row of subset) {
     const tr = document.createElement("tr");
-    const seller = row.verification_status === "verified"
-      ? `Verified: ${row.seller_name || "seller identified"} (${row.seller_type || "eligible"})`
-      : row.verification_status === "pending" ? "Not yet checked" :
-        String(row.verification_status || "not checked").replaceAll("_", " ");
+    const seller = row.active === false
+      ? `Archived listing — last seen ${fmtTime(row.last_seen_at)}; not checked now`
+      : row.verification_status === "verified"
+        ? `Verified at last check: ${row.seller_name || "seller identified"} (${row.seller_type || "eligible"})`
+        : row.verification_status === "pending" ? "Not yet checked" :
+          String(row.verification_status || "not checked").replaceAll("_", " ");
     let cex = String(row.cex_status || "not checked").replaceAll("_", " ");
     if (row.cex_status === "matched") {
       cex = `Matched: ${fmtEuro(row.cex_cash_eur)} cash · estimated ${fmtEuro(row.cex_net_profit_eur)} net`;
