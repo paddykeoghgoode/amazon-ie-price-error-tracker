@@ -110,7 +110,112 @@ a { color: var(--accent); }
 .alerts .price { color: var(--danger); }
 .alerts .time { color: var(--muted); font-size: 0.8rem; }
 
+
+/* Five responsive views keep the large tracker usable on phones and desktop. */
+.dashboard-nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg);
+  padding: 0.8rem 0 0.55rem;
+  border-bottom: 1px solid #2d3a4d;
+}
+.tab-list {
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  overscroll-behavior-x: contain;
+}
+.tab-button {
+  flex: 0 0 auto;
+  background: transparent;
+  border: 1px solid #344358;
+  color: var(--text);
+  white-space: nowrap;
+  font-size: 0.88rem;
+  padding: 0.68rem 0.9rem;
+  border-radius: 9px;
+}
+.tab-button:hover { background: #223047; }
+.tab-button[aria-selected="true"] {
+  color: #10151b;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible {
+  outline: 2px solid #8fc8ff;
+  outline-offset: 3px;
+}
+[role="tabpanel"][hidden] { display: none !important; }
+
+.drops-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.drops-heading h2 { margin-bottom: 0.4rem; }
+.drops-heading .hint { margin-top: 0; }
+.drop-count {
+  color: var(--accent);
+  border: 1px solid #3d4b5d;
+  border-radius: 999px;
+  padding: 0.38rem 0.7rem;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.drop-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin: 1.2rem 0 0.8rem;
+}
+.drop-control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.38rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.drop-control input, .drop-control select {
+  background: #0f1419;
+  color: var(--text);
+  border: 1px solid #38485b;
+  border-radius: 8px;
+  min-width: 0;
+  padding: 0.65rem;
+  font: inherit;
+  font-size: 0.87rem;
+}
+.drop-control.search-control { grid-column: 1 / -1; }
+.drop-percent { color: var(--ok); font-weight: 700; white-space: nowrap; }
+.saving-eur { color: #b7ebce; font-weight: 700; white-space: nowrap; }
+#general-drops-table { min-width: 800px; }
+#general-drops-table thead th { white-space: nowrap; }
+#general-drops-table .time { font-size: 0.85rem; white-space: nowrap; }
+.pagination-controls {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.9rem;
+  font-size: 0.85rem;
+}
+.pagination-button {
+  padding: 0.45rem 0.75rem;
+  background: transparent;
+  border: 1px solid #42526a;
+  color: var(--text);
+}
+.pagination-button:hover:not(:disabled) { border-color: var(--accent); }
+.pagination-button:disabled { opacity: 0.45; cursor: not-allowed; }
+
 @media (max-width: 640px) {
   body { padding: 1rem; }
   header h1 { font-size: 1.5rem; }
+  .tab-button { padding: 0.58rem 0.75rem; font-size: 0.84rem; }
+  .drop-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .drops-heading { flex-wrap: wrap; }
 }
