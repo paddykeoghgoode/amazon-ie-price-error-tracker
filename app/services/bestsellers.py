@@ -51,6 +51,8 @@ class CrawlConfig:
     cex_min_cash_profit_eur: float = 5.0
     cex_min_cash_profit_percent: float = 10.0
     cex_extra_cost_eur: float = 0.0
+    cex_delivery_eur: float = 0.0
+    cex_min_roi_percent: float = 10.0
     cex_payout_haircut_percent: float = 0.0
     cex_max_alerts_per_run: int = 5
     cex_scan_any_price: bool = True
@@ -157,6 +159,8 @@ def load_config(path: Path) -> CrawlConfig:
         ),
         cex_max_alerts_per_run=int(raw.get("cex_max_alerts_per_run", defaults.cex_max_alerts_per_run)),
         cex_extra_cost_eur=max(0.0, float(raw.get("cex_extra_cost_eur", defaults.cex_extra_cost_eur))),
+        cex_delivery_eur=max(0.0, float(raw.get("cex_delivery_eur", defaults.cex_delivery_eur))),
+        cex_min_roi_percent=max(0.0, float(raw.get("cex_min_roi_percent", defaults.cex_min_roi_percent))),
         cex_payout_haircut_percent=min(100.0, max(0.0, float(raw.get("cex_payout_haircut_percent", defaults.cex_payout_haircut_percent)))),
         cex_scan_any_price=bool(raw.get("cex_scan_any_price", defaults.cex_scan_any_price)),
         cex_any_price_max_lookups=int(
@@ -378,7 +382,7 @@ async def verify_candidates(client: httpx.AsyncClient, candidates: list[dict], *
             if not is_eligible_amazon_offer(snap) or not expected or abs(float(snap.price_eur) - expected) > 0.02:
                 stats["rejected_or_unknown"] += 1
                 continue
-            passed.append({**candidate, "seller_name": snap.seller_name, "seller_type": eligible_offer_type(snap), "fulfilment_status": snap.fulfilment_status, "seller_verified": True, "verified_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()})
+            passed.append({**candidate, "seller_name": snap.seller_name, "seller_type": eligible_offer_type(snap), "fulfilment_status": snap.fulfilment_status, "barcode": snap.barcode, "model_number": snap.model_number, "seller_verified": True, "verified_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()})
             stats["amazon_verified"] += 1
         except (httpx.HTTPError, ValueError, TypeError):
             stats["rejected_or_unknown"] += 1
