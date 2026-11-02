@@ -18,8 +18,37 @@
   <section class="card">
     <h2>Section scan progress</h2>
     <p class="hint">Each block publishes independently. Times are Ireland time. Offer verification checks shortlisted deals only. “Not measured” means the section has not been rescanned with verification reporting; 0 / N means N checks ran but none passed.</p>
-    <div class="table-wrap"><table id="section-table" hidden><thead><tr><th>Section</th><th>Last scanned</th><th>Status</th><th>Items</th><th>Verified / attempted</th><th>Finds</th></tr></thead><tbody id="section-body"></tbody></table></div>
+    <div class="table-wrap"><table id="section-table" hidden><thead><tr><th>Section</th><th>Last scanned</th><th>Status</th><th>Items</th><th>Verified / attempted (this scan)</th><th>Catalogue checked</th><th>CeX attempted</th><th>Finds</th></tr></thead><tbody id="section-body"></tbody></table></div>
     <p id="section-empty" class="empty">No section scans published yet.</p>
+  </section>
+  <section class="card">
+    <h2>All Amazon bestseller listings</h2>
+    <p class="hint">All ASINs discovered in each section, not just the 25 highest-ranked candidates. Verification and CeX checks continue in batches and retain their progress between scans. Seller unknown or unmatched is <strong>not</strong> a buy recommendation.</p>
+    <p class="hint"><a href="catalogue.csv" download>Download complete listing CSV</a> · <a href="catalogue.json" target="_blank" rel="noopener">View raw JSON</a></p>
+    <div id="catalogue-overview" class="hint">The catalogue will populate after the next section scan publishes.</div>
+    <div class="catalogue-controls" style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0">
+      <button type="button" id="catalogue-load">Browse listings</button>
+      <input id="catalogue-search" type="search" placeholder="Search title, ASIN, category…" aria-label="Search listings" style="flex:1;min-width:220px"/>
+      <select id="catalogue-section-filter" aria-label="Filter section"><option value="">All sections</option></select>
+      <select id="catalogue-status-filter" aria-label="Filter status">
+        <option value="">All verification statuses</option>
+        <option value="pending">Awaiting check</option>
+        <option value="verified">Amazon/FBA verified</option>
+        <option value="matched">CeX matched</option>
+        <option value="rejected">Seller or offer unverified</option>
+      </select>
+    </div>
+    <p id="catalogue-info" class="hint" role="status">Click Browse listings to load the full current inventory.</p>
+    <div class="table-wrap">
+      <table id="catalogue-table" hidden>
+        <thead><tr><th>Amazon listing</th><th>Section</th><th>Amazon price</th><th>Seller / verification</th><th>CeX check</th><th>Last checked</th></tr></thead>
+        <tbody id="catalogue-body"></tbody>
+      </table>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:12px">
+      <button type="button" id="catalogue-prev" disabled>Previous</button>
+      <button type="button" id="catalogue-next" disabled>Next</button>
+    </div>
   </section>
   <section class="card">
     <h2>Add a product</h2>
