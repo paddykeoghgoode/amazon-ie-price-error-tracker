@@ -1,5 +1,5 @@
 {
-  "_comment": "Categories are crawled in order until max_items is reached. depth 0 = just that list, 1 = plus its subcategories, 2 = two levels down. Paths come from amazon.ie/gp/bestsellers URLs.",
+  "_comment": "Scheduled runs crawl one section (~5–8 min) and merge into deals.json. Use workflow dispatch with 'all' for a full crawl. depth: 0 = that list only, 1 = + subcategories, 2 = two levels.",
   "max_items": 12000,
   "max_requests": 800,
   "pages_per_category": 2,
@@ -14,36 +14,66 @@
   "cex_min_cash_profit_percent": 10,
   "cex_scan_any_price": true,
   "cex_any_price_max_lookups": 50,
-  "categories": [
-    { "name": "Video games", "path": "/gp/bestsellers/videogames", "depth": 2 },
-    { "name": "Electronics", "path": "/gp/bestsellers/electronics", "depth": 2 },
-    { "name": "Toys & games", "path": "/gp/bestsellers/toys", "depth": 2 },
-    { "name": "Amazon devices", "path": "/gp/bestsellers/amazon-devices", "depth": 1 },
-    { "name": "Musical instruments", "path": "/gp/bestsellers/musical-instruments", "depth": 1 },
-    { "name": "Sports & outdoors", "path": "/gp/bestsellers/sports", "depth": 1 },
-    { "name": "Coffee machines", "path": "/gp/bestsellers/home/94816616031", "depth": 1 },
-    { "name": "Home & kitchen", "path": "/gp/bestsellers/home", "depth": 1 },
-    { "name": "Computers & accessories", "path": "/gp/bestsellers/electronics/94799106031", "depth": 1 },
-    { "name": "Mobile phones", "path": "/gp/bestsellers/electronics/94799095031", "depth": 1 },
-    { "name": "Headphones & audio", "path": "/gp/bestsellers/electronics/94799098031", "depth": 1 },
-    { "name": "Beauty", "path": "/gp/bestsellers/beauty", "depth": 1 },
-    { "name": "Health & personal care", "path": "/gp/bestsellers/health", "depth": 1 },
-    { "name": "Baby", "path": "/gp/bestsellers/baby", "depth": 1 },
-    { "name": "Fashion", "path": "/gp/bestsellers/fashion", "depth": 1 },
-    { "name": "Books", "path": "/gp/bestsellers/books", "depth": 1 },
-    { "name": "Music", "path": "/gp/bestsellers/music", "depth": 1 },
-    { "name": "Movies & TV", "path": "/gp/bestsellers/movies-tv", "depth": 1 },
-    { "name": "Office products", "path": "/gp/bestsellers/officeproduct", "depth": 1 },
-    { "name": "Pet supplies", "path": "/gp/bestsellers/pet-supplies", "depth": 1 },
-    { "name": "Garden", "path": "/gp/bestsellers/garden", "depth": 1 },
-    { "name": "DIY & tools", "path": "/gp/bestsellers/home-improvement", "depth": 1 },
-    { "name": "Automotive", "path": "/gp/bestsellers/automotive", "depth": 1 },
-    { "name": "Grocery", "path": "/gp/bestsellers/grocery", "depth": 1 },
-    { "name": "Arts & crafts", "path": "/gp/bestsellers/arts-crafts", "depth": 1 },
-    { "name": "Software", "path": "/gp/bestsellers/software", "depth": 1 },
-    { "name": "All departments (fill gaps)", "path": "/gp/bestsellers", "depth": 1 }
+  "sections": [
+    {
+      "id": "gaming",
+      "name": "Gaming & tech",
+      "max_items": 3500,
+      "max_requests": 220,
+      "categories": [
+        { "name": "Video games", "path": "/gp/bestsellers/videogames", "depth": 2 },
+        { "name": "Electronics", "path": "/gp/bestsellers/electronics", "depth": 2 },
+        { "name": "Toys & games", "path": "/gp/bestsellers/toys", "depth": 2 },
+        { "name": "Amazon devices", "path": "/gp/bestsellers/amazon-devices", "depth": 1 },
+        { "name": "Musical instruments", "path": "/gp/bestsellers/musical-instruments", "depth": 1 },
+        { "name": "Computers", "path": "/gp/bestsellers/electronics/94799106031", "depth": 1 },
+        { "name": "Mobile phones", "path": "/gp/bestsellers/electronics/94799095031", "depth": 1 },
+        { "name": "Headphones", "path": "/gp/bestsellers/electronics/94799098031", "depth": 1 },
+        { "name": "Software", "path": "/gp/bestsellers/software", "depth": 1 }
+      ]
+    },
+    {
+      "id": "home",
+      "name": "Home & garden",
+      "max_items": 3000,
+      "max_requests": 200,
+      "categories": [
+        { "name": "Coffee machines", "path": "/gp/bestsellers/home/94816616031", "depth": 1 },
+        { "name": "Home & kitchen", "path": "/gp/bestsellers/home", "depth": 1 },
+        { "name": "Garden", "path": "/gp/bestsellers/garden", "depth": 1 },
+        { "name": "DIY & tools", "path": "/gp/bestsellers/home-improvement", "depth": 1 },
+        { "name": "Grocery", "path": "/gp/bestsellers/grocery", "depth": 1 },
+        { "name": "Pet supplies", "path": "/gp/bestsellers/pet-supplies", "depth": 1 }
+      ]
+    },
+    {
+      "id": "lifestyle",
+      "name": "Lifestyle",
+      "max_items": 3000,
+      "max_requests": 200,
+      "categories": [
+        { "name": "Beauty", "path": "/gp/bestsellers/beauty", "depth": 1 },
+        { "name": "Health", "path": "/gp/bestsellers/health", "depth": 1 },
+        { "name": "Baby", "path": "/gp/bestsellers/baby", "depth": 1 },
+        { "name": "Fashion", "path": "/gp/bestsellers/fashion", "depth": 1 },
+        { "name": "Sports", "path": "/gp/bestsellers/sports", "depth": 1 }
+      ]
+    },
+    {
+      "id": "general",
+      "name": "Books & media",
+      "max_items": 3000,
+      "max_requests": 200,
+      "categories": [
+        { "name": "Books", "path": "/gp/bestsellers/books", "depth": 1 },
+        { "name": "Music", "path": "/gp/bestsellers/music", "depth": 1 },
+        { "name": "Movies & TV", "path": "/gp/bestsellers/movies-tv", "depth": 1 },
+        { "name": "Office", "path": "/gp/bestsellers/officeproduct", "depth": 1 },
+        { "name": "Automotive", "path": "/gp/bestsellers/automotive", "depth": 1 },
+        { "name": "Arts & crafts", "path": "/gp/bestsellers/arts-crafts", "depth": 1 },
+        { "name": "All departments", "path": "/gp/bestsellers", "depth": 1 }
+      ]
+    }
   ],
-  "exclude": [
-    "/gp/bestsellers/gift-cards"
-  ]
+  "exclude": ["/gp/bestsellers/gift-cards"]
 }

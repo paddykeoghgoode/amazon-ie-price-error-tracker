@@ -9,6 +9,147 @@ from app.services.bestsellers import CrawlConfig, CrawlResult, ProcessResult
 from app.services.drop_tiers import tiered_deep_drops
 from app.snapshot import _fmt_dublin, _fmt_euro
 
+_SECTION_STORE_KEYS = (
+    "generated_at",
+    "section_id",
+    "section_name",
+    "items_seen",
+    "items_priced",
+    "items_with_history",
+    "categories_crawled",
+    "requests",
+    "errors",
+    "blocked",
+    "drops",
+    "deep_drops",
+    "deep_drop_tiers",
+    "cex_flips",
+    "cex_arbitrage",
+    "cex_near_margin",
+    "cex_lookups",
+    "cex_stats",
+    "cex_min_cash_profit_eur",
+    "cex_min_cash_profit_percent",
+    "cex_enabled",
+)
+
+
+def _dedupe_by_asin(rows: list[dict]) -> list[dict]:
+    out: dict[str, dict] = {}
+    for row in rows:
+        asin = row.get("asin")
+        if asin:
+            out[str(asin)] = row
+    return list(out.values())
+
+
+def _merge_deep_drops(sections: dict[str, dict]) -> dict[str, list[dict]]:
+    tiers: set[int] = set()
+    for snap in sections.values():
+        for t in snap.get("deep_drop_tiers") or []:
+            tiers.add(int(t))
+    merged: dict[str, list[dict]] = {str(t): [] for t in sorted(tiers)}
+    for snap in sections.values():
+        for key, rows in (snap.get("deep_drops") or {}).items():
+            merged.setdefault(key, []).extend(rows)
+    for key in merged:
+        merged[key] = sorted(
+            _dedupe_by_asin(merged[key]),
+            key=lambda r: r.get("drop_percent") or 0,
+            reverse=True,
+        )
+    return merged
+
+
+def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
+    """Merge one section crawl into the rolling deals snapshot."""
+    section_id = str(incoming.get("section_id") or "default")
+    sections: dict[str, dict] = dict((previous or {}).get("sections") or {})
+    sections[section_id] = {key: incoming[key] for key in _SECTION_STORE_KEYS if key in incoming}
+    if incoming.get("section_name"):
+        sections[section_id]["section_name"] = incoming["section_name"]
+
+    drops: list[dict] = []
+    cex_flips: list[dict] = []
+    cex_arbitrage: list[dict] = []
+    cex_near: list[dict] = []
+    cex_lookups: list[dict] = []
+    items_seen = 0
+    items_priced = 0
+    items_with_history = 0
+    categories_crawled = 0
+    requests = 0
+    errors = 0
+    blocked = False
+    stats = {"deep_candidates": 0, "any_price_candidates": 0, "lookups": 0, "cash_flips": 0, "arbitrage": 0}
+
+    for snap in sections.values():
+        drops.extend(snap.get("drops") or [])
+        cex_flips.extend(snap.get("cex_flips") or [])
+        cex_arbitrage.extend(snap.get("cex_arbitrage") or [])
+        cex_near.extend(snap.get("cex_near_margin") or [])
+        cex_lookups.extend(snap.get("cex_lookups") or [])
+        items_seen += int(snap.get("items_seen") or 0)
+        items_priced += int(snap.get("items_priced") or 0)
+        items_with_history += int(snap.get("items_with_history") or 0)
+        categories_crawled += int(snap.get("categories_crawled") or 0)
+        requests += int(snap.get("requests") or 0)
+        errors += int(snap.get("errors") or 0)
+        blocked = blocked or bool(snap.get("blocked"))
+        st = snap.get("cex_stats") or {}
+        for key in stats:
+            stats[key] += int(st.get(key) or 0)
+
+    drops = sorted(_dedupe_by_asin(drops), key=lambda r: r.get("drop_percent") or 0, reverse=True)
+    cex_flips = sorted(
+        _dedupe_by_asin(cex_flips), key=lambda r: r.get("cex_cash_profit_eur") or 0, reverse=True
+    )
+    cex_arbitrage = sorted(
+        _dedupe_by_asin(cex_arbitrage), key=lambda r: r.get("cex_cash_profit_eur") or 0, reverse=True
+    )
+    cex_near = sorted(
+        _dedupe_by_asin(cex_near), key=lambda r: r.get("cex_cash_profit_eur") or 0, reverse=True
+    )[:15]
+    cex_lookups = sorted(
+        _dedupe_by_asin(cex_lookups), key=lambda r: r.get("cex_cash_profit_eur") or 0, reverse=True
+    )[:30]
+
+    base = previous or {}
+    merged: dict[str, Any] = {
+        **{k: v for k, v in base.items() if k not in _SECTION_STORE_KEYS and k != "sections"},
+        "generated_at": incoming.get("generated_at"),
+        "github_repo": incoming.get("github_repo") or base.get("github_repo"),
+        "telegram_configured": incoming.get("telegram_configured", base.get("telegram_configured")),
+        "min_discount_percent": incoming.get("min_discount_percent", base.get("min_discount_percent", 75)),
+        "sections": sections,
+        "section_order": list(sections.keys()),
+        "last_section_id": section_id,
+        "last_section_name": incoming.get("section_name"),
+        "last_section_at": incoming.get("generated_at"),
+        "items_seen": items_seen,
+        "items_priced": items_priced,
+        "items_with_history": items_with_history,
+        "categories_crawled": categories_crawled,
+        "requests": requests,
+        "errors": errors,
+        "blocked": blocked,
+        "drops": drops[:50],
+        "deep_drop_tiers": incoming.get("deep_drop_tiers") or base.get("deep_drop_tiers") or [40, 50, 66],
+        "deep_drops": _merge_deep_drops(sections),
+        "cex_enabled": incoming.get("cex_enabled", base.get("cex_enabled", True)),
+        "cex_min_cash_profit_eur": incoming.get("cex_min_cash_profit_eur", base.get("cex_min_cash_profit_eur", 5)),
+        "cex_min_cash_profit_percent": incoming.get(
+            "cex_min_cash_profit_percent", base.get("cex_min_cash_profit_percent", 10)
+        ),
+        "cex_flips": cex_flips[:20],
+        "cex_arbitrage": cex_arbitrage[:30],
+        "cex_near_margin": cex_near,
+        "cex_lookups": cex_lookups,
+        "cex_stats": stats,
+        "alerts": incoming.get("alerts") or base.get("alerts") or [],
+    }
+    return merged
+
 
 def export_deals(
     result: CrawlResult,
@@ -17,6 +158,8 @@ def export_deals(
     github_repo: str,
     config: CrawlConfig | None = None,
     max_drops: int = 50,
+    section_id: str | None = None,
+    section_name: str | None = None,
 ) -> dict[str, Any]:
     tiers = (config.deep_drop_tiers if config else [40.0, 50.0, 66.0])
     payload: dict[str, Any] = {
@@ -53,6 +196,10 @@ def export_deals(
         )[:15],
         "cex_stats": processed.cex_stats,
     }
+    if section_id:
+        payload["section_id"] = section_id
+    if section_name:
+        payload["section_name"] = section_name
     return payload
 
 

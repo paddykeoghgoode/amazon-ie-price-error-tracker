@@ -9,8 +9,14 @@ from pathlib import Path
 import httpx
 
 from app import database as db
+from app.bestseller_sections import (
+    config_for_all_sections,
+    config_for_section,
+    load_sections,
+    rotate_section_id,
+)
 from app.config import settings
-from app.deals import export_deals, render_deals_markdown
+from app.deals import export_deals, merge_section_deals, render_deals_markdown
 from app.services.bestsellers import (
     crawl,
     httpx_fetcher,
@@ -22,7 +28,7 @@ from app.services.bestsellers import (
 from app.services.cex_arbitrage import enrich_with_cex, select_any_price_candidates
 from app.services.health import send_health_messages
 from app.services.monitor import BROWSER_HEADERS
-from app.snapshot import write_snapshot
+from app.snapshot import read_snapshot, write_snapshot
 
 logging.basicConfig(
     level=logging.INFO,
@@ -36,21 +42,53 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", type=Path, default=Path("bestsellers.json"))
     parser.add_argument("--database", type=Path, default=Path("data/bestsellers.db"))
     parser.add_argument("--output", type=Path, default=Path("docs/deals.json"))
+    parser.add_argument(
+        "--section",
+        default="rotate",
+        help="Section id from bestsellers.json, 'all' for full crawl, or 'rotate' (uses --run-number)",
+    )
+    parser.add_argument(
+        "--run-number",
+        type=int,
+        default=None,
+        help="GitHub run number for rotate mode (defaults to GITHUB_RUN_NUMBER)",
+    )
+    parser.add_argument(
+        "--merge-previous",
+        type=Path,
+        default=None,
+        help="When crawling one section, merge into this existing deals.json snapshot",
+    )
     parser.add_argument("--markdown", type=Path, default=None, help="Also write a Markdown report here")
     parser.add_argument("--max-items", type=int, default=None, help="Override max_items from the config")
     parser.add_argument("--no-notify", action="store_true", help="Detect and report, but send no messages")
     return parser.parse_args()
 
 
-async def run(args: argparse.Namespace) -> None:
-    config = load_config(args.config)
-    if args.max_items is not None:
-        config.max_items = args.max_items
+def resolve_section_id(args: argparse.Namespace, sections: list) -> str:
+    if args.section == "rotate":
+        run_no = args.run_number
+        if run_no is None:
+            run_no = int(os.environ.get("GITHUB_RUN_NUMBER", "0") or 0)
+        return rotate_section_id(sections, run_no)
+    if args.section == "all":
+        return "all"
+    return args.section
 
+
+async def crawl_section(
+    config,
+    *,
+    section_id: str,
+    section_name: str,
+    args: argparse.Namespace,
+    notify: bool,
+) -> dict:
     async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=30.0) as client:
         result = await crawl(httpx_fetcher(client), config)
     logger.info(
-        "Crawled %s lists with %s requests (%s failed, blocked=%s): %s items",
+        "[%s] Crawled %s lists with %s requests (%s failed, blocked=%s): %s items",
+        section_id,
         len(result.categories),
         result.requests,
         result.errors,
@@ -59,13 +97,6 @@ async def run(args: argparse.Namespace) -> None:
     )
 
     processed = process_crawl(result, config)
-    logger.info(
-        "%s priced, %s with history, %s new alerts",
-        processed.priced,
-        processed.with_history,
-        len(processed.alerts),
-    )
-
     deep_candidates = [
         d for d in processed.drops if d.get("drop_tier") is not None and (d.get("price_eur") or 0) >= 20
     ]
@@ -92,48 +123,77 @@ async def run(args: argparse.Namespace) -> None:
         "cash_flips": len(flips),
         "arbitrage": len(arb_flips),
     }
-    logger.info(
-        "CeX: %s deep-drop lookups (%s flips), %s any-price lookups (%s arbitrage)",
-        len(lookups),
-        len(flips),
-        len(arb_lookups),
-        len(arb_flips),
-    )
 
     repo = os.environ.get("GITHUB_REPOSITORY") or "paddykeoghgoode/amazon-ie-price-error-tracker"
     owner, _, name = repo.partition("/")
     dashboard_url = f"https://{owner}.github.io/{name}/"
-    if not args.no_notify:
+    if notify:
         if processed.alerts:
-            sent = await send_alerts(processed.alerts, config, details_url=dashboard_url)
-            logger.info("Sent %s alert message(s)", sent)
+            await send_alerts(processed.alerts, config, details_url=dashboard_url)
         if processed.cex_flips:
-            cex_sent = await send_cex_alerts(
-                processed.cex_flips, config, dashboard_url=dashboard_url, deep_drop=True
-            )
-            logger.info("Sent %s CeX deep-drop flip message(s)", cex_sent)
+            await send_cex_alerts(processed.cex_flips, config, dashboard_url=dashboard_url, deep_drop=True)
         if processed.cex_arbitrage:
-            arb_sent = await send_cex_alerts(
+            await send_cex_alerts(
                 processed.cex_arbitrage,
                 config,
                 dashboard_url=dashboard_url,
                 deep_drop=False,
                 max_alerts=config.cex_any_price_max_alerts_per_run,
             )
-            logger.info("Sent %s CeX any-price arbitrage message(s)", arb_sent)
-        health = await send_health_messages(result, processed, config, dashboard_url=dashboard_url)
-        logger.info("Sent %s status message(s)", len(health))
+        await send_health_messages(result, processed, config, dashboard_url=dashboard_url)
 
-    payload = export_deals(result, processed, github_repo=repo, config=config)
+    return export_deals(
+        result,
+        processed,
+        github_repo=repo,
+        config=config,
+        section_id=section_id,
+        section_name=section_name,
+    )
+
+
+async def run(args: argparse.Namespace) -> None:
+    base = load_config(args.config)
+    if args.max_items is not None:
+        base.max_items = args.max_items
+    sections = load_sections(args.config)
+    section_id = resolve_section_id(args, sections)
+    notify = not args.no_notify
+
+    if section_id == "all":
+        merged: dict | None = None
+        for section in sections:
+            if section.id == "all":
+                continue
+            config = config_for_section(base, section)
+            part = await crawl_section(
+                config, section_id=section.id, section_name=section.name, args=args, notify=notify
+            )
+            merged = merge_section_deals(merged, part)
+            notify = False  # only notify once per workflow run
+        payload = merged or {}
+        payload["section_id"] = "all"
+        payload["section_name"] = "All sections"
+    else:
+        section = next((s for s in sections if s.id == section_id), None)
+        if section is None:
+            raise SystemExit(f"Unknown section {section_id!r}. Options: {[s.id for s in sections]}")
+        config = config_for_section(base, section)
+        payload = await crawl_section(
+            config, section_id=section.id, section_name=section.name, args=args, notify=notify
+        )
+        if args.merge_previous and args.merge_previous.exists():
+            previous = read_snapshot(args.merge_previous)
+            payload = merge_section_deals(previous, payload)
+
     write_snapshot(args.output, payload)
     if args.markdown:
         args.markdown.write_text(render_deals_markdown(payload), encoding="utf-8")
-    logger.info("Wrote %s", args.output)
+    logger.info("Wrote %s (section=%s)", args.output, section_id)
 
 
 def main() -> None:
     args = parse_args()
-    # Bestseller history lives in its own database so it never mixes with the watch list.
     settings.database_path = args.database
     db.init_db()
     asyncio.run(run(args))

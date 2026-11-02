@@ -279,13 +279,27 @@ function renderCexArbitrage(deals) {
   renderNearMargin("cex-arb-near-body", "cex-arb-near-table", near);
 }
 
+function sectionFreshness(deals) {
+  const sections = deals.sections || {};
+  const parts = Object.entries(sections).map(([, s]) => {
+    const name = s.section_name || s.section_id || "Section";
+    return `${name} ${fmtTime(s.generated_at)}`;
+  });
+  if (parts.length) return parts.join(" · ");
+  if (deals.last_section_name && deals.last_section_at) {
+    return `Last section: ${deals.last_section_name} · ${fmtTime(deals.last_section_at)}`;
+  }
+  return "";
+}
+
 function renderDeals(deals) {
   if (!deals || !deals.generated_at) return;
   const summary = document.getElementById("deals-summary");
+  const fresh = sectionFreshness(deals);
   summary.textContent =
-    `Last crawl ${fmtTime(deals.generated_at)} · ${Number(deals.items_seen || 0).toLocaleString("en-IE")} bestsellers ` +
-    `across ${deals.categories_crawled || 0} lists · ${Number(deals.items_with_history || 0).toLocaleString("en-IE")} with enough history to judge` +
-    (deals.blocked ? " · Amazon blocked part of this crawl" : "");
+    `Last update ${fmtTime(deals.generated_at)} · ${Number(deals.items_seen || 0).toLocaleString("en-IE")} bestsellers tracked (all sections) · ${Number(deals.items_with_history || 0).toLocaleString("en-IE")} with enough history` +
+    (deals.blocked ? " · Amazon blocked part of a recent crawl" : "") +
+    (fresh ? ` · ${fresh}` : "");
 
   const alerts = deals.alerts || [];
   const list = document.getElementById("deals-alerts");
