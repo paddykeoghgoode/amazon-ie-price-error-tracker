@@ -114,6 +114,8 @@ jobs:
           curl -fsSL "$PAGES_URL/deals.json?t=$(date +%s)" -o docs/deals.json || true
           test -s docs/deals.json || echo '{}' > docs/deals.json
           curl -fsSL "$PAGES_URL/hotlist.json?t=$(date +%s)" -o docs/hotlist.json || echo '{}' > docs/hotlist.json
+          curl -fsSL "$PAGES_URL/catalogue.json?t=$(date +%s)" -o docs/catalogue.json || echo '{"sections":{}}' > docs/catalogue.json
+          curl -fsSL "$PAGES_URL/catalogue.csv?t=$(date +%s)" -o docs/catalogue.csv || printf 'section,asin,title,url,category,rank,price_eur\n' > docs/catalogue.csv
           ls -la docs
 
       - id: deployment
@@ -159,10 +161,11 @@ jobs:
             echo "id=rotate" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Fetch published deals for merge
+      - name: Fetch published deals and complete listing catalogue
         run: |
           mkdir -p site
           curl -fsSL "$PAGES_URL/deals.json?t=$(date +%s)" -o site/previous-deals.json || echo '{}' > site/previous-deals.json
+          curl -fsSL "$PAGES_URL/catalogue.json?t=$(date +%s)" -o site/previous-catalogue.json || echo '{}' > site/previous-catalogue.json
 
       - name: Crawl bestseller section
         env:
@@ -179,18 +182,23 @@ jobs:
             --section "${{ steps.crawl-section.outputs.id }}" \
             --run-number "${{ github.run_number }}" \
             --merge-previous site/previous-deals.json \
+            --previous-catalogue site/previous-catalogue.json \
+            --catalogue-output site/catalogue.fragment.json \
             --publish-fragment \
             --output site/deals.json
 
-      - name: Stage section result and Actions summary
+      - name: Stage section results and Actions summary
         run: |
           cp site/deals.json bestsellers-data.json
+          cp site/catalogue.fragment.json catalogue-fragment.json
           python -m scripts.scan_summary --input bestsellers-data.json --summary "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v7
         with:
           name: bestsellers-data
-          path: bestsellers-data.json
+          path: |
+            bestsellers-data.json
+            catalogue-fragment.json
           retention-days: 1
 
   publish-bestsellers:
@@ -226,6 +234,9 @@ jobs:
           curl -fsSL "$PAGES_URL/deals.json?t=$(date +%s)" -o docs/deals.previous.json || echo '{}' > docs/deals.previous.json
           python -m scripts.merge_deals --previous docs/deals.previous.json --incoming incoming/bestsellers-data.json --output docs/deals.json
           rm docs/deals.previous.json
+          curl -fsSL "$PAGES_URL/catalogue.json?t=$(date +%s)" -o docs/catalogue.previous.json || echo '{}' > docs/catalogue.previous.json
+          python -m scripts.merge_catalogue --previous docs/catalogue.previous.json --incoming incoming/catalogue-fragment.json --output docs/catalogue.json --csv docs/catalogue.csv
+          rm docs/catalogue.previous.json
           curl -fsSL "$PAGES_URL/data.json?t=$(date +%s)" -o docs/data.json.new \
             && mv docs/data.json.new docs/data.json || true
           curl -fsSL "$PAGES_URL/hotlist.json?t=$(date +%s)" -o docs/hotlist.json || echo '{}' > docs/hotlist.json
@@ -275,10 +286,11 @@ jobs:
           restore-keys: |
             bestsellers-db-v1-
 
-      - name: Fetch published deals for merge
+      - name: Fetch published deals and complete listing catalogue
         run: |
           mkdir -p site
           curl -fsSL "$PAGES_URL/deals.json?t=$(date +%s)" -o site/previous-deals.json || echo '{}' > site/previous-deals.json
+          curl -fsSL "$PAGES_URL/catalogue.json?t=$(date +%s)" -o site/previous-catalogue.json || echo '{}' > site/previous-catalogue.json
 
       - name: Crawl section and notify
         env:
@@ -297,6 +309,8 @@ jobs:
             --config bestsellers.json \
             --section "${{ matrix.section }}" \
             --merge-previous site/previous-deals.json \
+            --previous-catalogue site/previous-catalogue.json \
+            --catalogue-output site/catalogue.fragment.json \
             --publish-fragment \
             --output site/deals.json \
             $EXTRA
@@ -311,6 +325,9 @@ jobs:
           curl -fsSL "$PAGES_URL/deals.json?t=$(date +%s)" -o docs/deals.previous.json || echo '{}' > docs/deals.previous.json
           python -m scripts.merge_deals --previous docs/deals.previous.json --incoming site/deals.json --output docs/deals.json
           rm docs/deals.previous.json
+          curl -fsSL "$PAGES_URL/catalogue.json?t=$(date +%s)" -o docs/catalogue.previous.json || echo '{}' > docs/catalogue.previous.json
+          python -m scripts.merge_catalogue --previous docs/catalogue.previous.json --incoming site/catalogue.fragment.json --output docs/catalogue.json --csv docs/catalogue.csv
+          rm docs/catalogue.previous.json
           curl -fsSL "$PAGES_URL/data.json?t=$(date +%s)" -o docs/data.json || true
           curl -fsSL "$PAGES_URL/hotlist.json?t=$(date +%s)" -o docs/hotlist.json || echo '{}' > docs/hotlist.json
           ls -la docs
