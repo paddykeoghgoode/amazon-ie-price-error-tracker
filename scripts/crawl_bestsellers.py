@@ -370,6 +370,9 @@ async def crawl_section(
         if not args.skip_health:
             await send_health_messages(result, processed, config, dashboard_url=dashboard_url)
         await send_section_summary(section_name, payload, dashboard_url)
+    # export_deals was created before the async notifications. Refresh delivery
+    # flags after sends so Pages doesn't say "Telegram pending" for sent alerts.
+    payload["alerts"] = db.recent_alerts(limit=50)
     return payload, section_catalogue
 
 
