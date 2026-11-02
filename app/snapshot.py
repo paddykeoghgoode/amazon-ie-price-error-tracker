@@ -103,6 +103,7 @@ def export_snapshot(*, github_repo: str | None = None) -> dict[str, Any]:
     pages_base = f"https://{repo.split('/')[0]}.github.io/{repo.split('/')[-1]}/" if repo else ""
     return {
         "generated_at": _utc_now(),
+        "scan_kind": "watchlist",
         "telegram_configured": settings.telegram_enabled,
         "whatsapp_configured": settings.whatsapp_enabled,
         "min_discount_percent": settings.min_discount_percent,

@@ -12,7 +12,7 @@ import httpx
 from app.config import settings
 from app import database as db
 from app.scraper.amazon_ie import extract_asin
-from app.services.monitor import add_watch_url, run_once
+from app.services.monitor import add_watch_url, run_once, send_notification
 from app.snapshot import (
     export_snapshot,
     import_snapshot,
@@ -126,7 +126,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, default=Path("docs/data.json"))
     parser.add_argument("--markdown", type=Path, default=None, help="Also write a Markdown report here")
     parser.add_argument("--skip-fetch", action="store_true", help="Export current DB without hitting Amazon")
+    parser.add_argument(
+        "--no-summary",
+        action="store_true",
+        help="Skip the post-scan Telegram/WhatsApp summary (alerts still send)",
+    )
     return parser.parse_args()
+
+
+async def send_watchlist_summary(payload: dict) -> None:
+    products = payload.get("products") or []
+    price_errors = sum(1 for p in products if p.get("status") == "price_error")
+    fetch_errors = sum(1 for p in products if p.get("status") == "fetch_error")
+    url = payload.get("pages_url") or "https://github.io/"
+    message = (
+        "✅ Watchlist scan done\n\n"
+        f"Products watched: {len(products)}\n"
+        f"Price errors now: {price_errors}\n"
+        f"Fetch failed: {fetch_errors}\n\n"
+        f"{url}"
+    )
+    await send_notification(message)
 
 
 def main() -> None:
@@ -155,6 +175,8 @@ def main() -> None:
         asyncio.run(run_once())
 
     payload = export_snapshot(github_repo=repo)
+    if not args.skip_fetch and not args.no_summary:
+        asyncio.run(send_watchlist_summary(payload))
     write_snapshot(args.output, payload)
     if args.markdown:
         args.markdown.write_text(render_tracker_markdown(payload), encoding="utf-8")

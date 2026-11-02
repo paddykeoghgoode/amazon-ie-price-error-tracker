@@ -103,6 +103,10 @@ class TestHealthMessages(unittest.TestCase):
         self.assertEqual(len(sent), 1)
         self.assertIn("only found 10 items", sent[0])
 
+    def test_min_healthy_scales_with_section_size(self):
+        self.assertEqual(health.min_healthy_items_for_config(CrawlConfig(roots=[], max_items=3500)), 200)
+        self.assertEqual(health.min_healthy_items_for_config(CrawlConfig(roots=[], max_items=400)), 80)
+
     def test_failed_send_is_retried_next_run(self):
         self.send.return_value = (False, False)
         self.assertEqual(self.run_health(healthy_result(), MORNING), [])

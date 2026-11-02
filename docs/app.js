@@ -1,4 +1,8 @@
 const DUBLIN = "Europe/Dublin";
+const LIVE_REFRESH_MS = 90_000;
+
+let lastDataAt = "";
+let lastDealsAt = "";
 
 function escapeHtml(s) {
   return String(s)
@@ -54,11 +58,12 @@ function render(data) {
   const status = document.getElementById("status");
   const errorCount = (data.products || []).filter((p) => p.status === "price_error").length;
   const parts = [];
-  if (data.generated_at) parts.push(`Last scan ${fmtTime(data.generated_at)}`);
-  else parts.push("No scan yet — merge to main, then run the Pages workflow");
+  if (data.generated_at) parts.push(`Watchlist ${fmtTime(data.generated_at)}`);
+  else parts.push("Watchlist: no scan yet — run the Pages workflow");
   parts.push(data.telegram_configured ? "Telegram: ready" : "Telegram: add repo secrets");
   if (data.whatsapp_configured) parts.push("WhatsApp: ready");
   parts.push(`Flag at ≥${data.min_discount_percent || 75}% off`);
+  parts.push("Page auto-refreshes every 90s");
   status.textContent = parts.join(" · ");
   status.className = "status " + (errorCount ? "alert" : data.generated_at ? "ok" : "warn");
 
@@ -165,7 +170,7 @@ function cexStatusLine(deals) {
   const minPct = deals.cex_min_cash_profit_percent ?? 10;
   if (!lookups && !stats.deep_candidates && !stats.any_price_candidates) {
     return (
-      "No CeX data in this snapshot — run Actions → Scan and publish tracker (bestseller crawl must finish, ~20 min)."
+      "No CeX data in this snapshot yet — wait for a bestseller section crawl (one runs every 30 minutes, ~5–8 min each)."
     );
   }
   if (!lookups) {
@@ -221,7 +226,7 @@ function renderCex(deals) {
       empty.textContent =
         lookups > 0
           ? "No on-sale CeX flips met your margin this crawl (see close matches below if any)."
-          : "No CeX cash flips yet — wait for a full bestseller crawl (~20 min) after merging.";
+          : "No CeX cash flips yet — CeX checks run after each bestseller section crawl.";
     }
   } else {
     if (empty) empty.hidden = true;
@@ -279,11 +284,22 @@ function renderCexArbitrage(deals) {
   renderNearMargin("cex-arb-near-body", "cex-arb-near-table", near);
 }
 
+function sectionAgeHours(iso) {
+  if (!iso) return null;
+  try {
+    return (Date.now() - new Date(iso).getTime()) / (3600 * 1000);
+  } catch {
+    return null;
+  }
+}
+
 function sectionFreshness(deals) {
   const sections = deals.sections || {};
   const parts = Object.entries(sections).map(([, s]) => {
     const name = s.section_name || s.section_id || "Section";
-    return `${name} ${fmtTime(s.generated_at)}`;
+    const age = sectionAgeHours(s.generated_at);
+    const stale = age != null && age > 2.5 ? " (stale)" : "";
+    return `${name} ${fmtTime(s.generated_at)}${stale}`;
   });
   if (parts.length) return parts.join(" · ");
   if (deals.last_section_name && deals.last_section_at) {
@@ -297,7 +313,8 @@ function renderDeals(deals) {
   const summary = document.getElementById("deals-summary");
   const fresh = sectionFreshness(deals);
   summary.textContent =
-    `Last update ${fmtTime(deals.generated_at)} · ${Number(deals.items_seen || 0).toLocaleString("en-IE")} bestsellers tracked (all sections) · ${Number(deals.items_with_history || 0).toLocaleString("en-IE")} with enough history` +
+    `Bestsellers ${fmtTime(deals.generated_at)} · ${Number(deals.items_seen || 0).toLocaleString("en-IE")} item-slots tracked across sections · ${Number(deals.items_with_history || 0).toLocaleString("en-IE")} with enough history` +
+    (deals.last_section_name ? ` · latest: ${deals.last_section_name}` : "") +
     (deals.blocked ? " · Amazon blocked part of a recent crawl" : "") +
     (fresh ? ` · ${fresh}` : "");
 
@@ -336,13 +353,43 @@ function renderDeals(deals) {
 
 fetch(`deals.json?t=${Date.now()}`, { cache: "no-store" })
   .then((res) => (res.ok ? res.json() : null))
-  .then(renderDeals)
+  .then((deals) => {
+    if (deals) {
+      lastDealsAt = deals.generated_at || "";
+      renderDeals(deals);
+    }
+  })
   .catch(() => {});
 
+function refreshIfChanged() {
+  Promise.all([
+    fetch(`data.json?t=${Date.now()}`, { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .catch(() => null),
+    fetch(`deals.json?t=${Date.now()}`, { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .catch(() => null),
+  ]).then(([data, deals]) => {
+    if (data && (data.generated_at || "") !== lastDataAt) {
+      lastDataAt = data.generated_at || "";
+      render(data);
+    }
+    if (deals && (deals.generated_at || "") !== lastDealsAt) {
+      lastDealsAt = deals.generated_at || "";
+      renderDeals(deals);
+    }
+  });
+}
+
 loadData()
-  .then(render)
+  .then((data) => {
+    lastDataAt = data.generated_at || "";
+    render(data);
+  })
   .catch((err) => {
     const status = document.getElementById("status");
     status.textContent = `Could not load tracker data (${err.message}).`;
     status.className = "status warn";
   });
+
+setInterval(refreshIfChanged, LIVE_REFRESH_MS);
