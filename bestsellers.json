@@ -12,6 +12,8 @@
   "cex_max_lookups": 40,
   "cex_min_cash_profit_eur": 5,
   "cex_min_cash_profit_percent": 10,
+  "cex_extra_cost_eur": 5,
+  "cex_payout_haircut_percent": 10,
   "cex_scan_any_price": true,
   "cex_any_price_max_lookups": 50,
   "sections": [
