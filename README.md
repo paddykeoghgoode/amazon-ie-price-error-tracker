@@ -11,8 +11,8 @@ Every 30 minutes, GitHub Actions checks Amazon.ie for price errors. It covers ab
 1. Add GitHub Actions **secrets** (Settings → Secrets and variables → Actions):
    - `TELEGRAM_BOT_TOKEN`
    - `TELEGRAM_CHAT_ID`
-2. Run **Actions → Scan and publish tracker → Run workflow** once. You should get a "✅ connected" message on Telegram within about 20 minutes.
-3. After that it runs by itself at :05 and :35 past every hour.
+2. Run **Actions → Scan and publish tracker → Run workflow** once. You should get a "✅ connected" message on Telegram after the first bestseller section crawl (~5–8 minutes). The watchlist scan also sends a short summary each run.
+3. After that it runs by itself at :05 and :35 past every hour. The dashboard and Telegram update **as each scan finishes** (watchlist and one bestseller section per run), not only when the whole workflow is done.
 
 Settings → Pages → Source must be **GitHub Actions**, and the repo must be **public**. Scheduled bestseller crawls take about 16 minutes each, which is only free on public repos. On a private repo, only manual runs crawl bestsellers.
 
@@ -31,7 +31,7 @@ Besides price-error alerts, the bot sends:
 
 ## Bestseller scan (thousands of items, no manual adding)
 
-Each scheduled run crawls **one section** from [`bestsellers.json`](bestsellers.json) (~5–8 minutes), merges it into the dashboard, and rotates **gaming → home → lifestyle → general** every 30 minutes. Run **Actions → Scan and publish tracker** with section **all** when you want a full crawl (~20 minutes).
+Each scheduled run crawls **one section** from [`bestsellers.json`](bestsellers.json) (~5–8 minutes), **publishes the dashboard**, sends a **section summary on Telegram**, and rotates **gaming → home → lifestyle → general** every 30 minutes. Run **Actions → Scan and publish tracker** with section **all** when you want a full crawl (~20 minutes, with a publish after each section).
 
 - Bestseller pages don't show a "was" price, so each item is judged against **its own price history**. An item needs 3 crawls before it can be flagged. It is flagged when its price is ≥75% below its recent median (median ≥ €20).
 - Items sold in several variants at different prices (for example "€9.99 – €24.99") are skipped, because their lowest price jumps between variants.

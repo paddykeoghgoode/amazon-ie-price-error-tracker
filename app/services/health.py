@@ -15,19 +15,26 @@ DIGEST_KEY = "daily_summary_date"
 
 PROBLEM_REPEAT_HOURS = 12
 # A full crawl finds ~10,000 items; far fewer without a captcha means the page layout changed.
-MIN_HEALTHY_ITEMS = 200
+DEFAULT_MIN_HEALTHY_ITEMS = 200
 
 
-def _problem(result: CrawlResult) -> str | None:
+def min_healthy_items_for_config(config: CrawlConfig) -> int:
+    """Scale the health threshold for section-sized crawls (not the full ~10k run)."""
+    cap = max(80, min(DEFAULT_MIN_HEALTHY_ITEMS, config.max_items // 8))
+    return cap
+
+
+def _problem(result: CrawlResult, *, min_healthy_items: int) -> str | None:
     if result.blocked:
         return (
             f"⚠️ Amazon blocked the bestseller crawl after {len(result.items):,} items "
             f"({result.requests} pages, {result.errors} failed). "
             "It will retry on the next run; you'll hear from me when it recovers."
         )
-    if len(result.items) < MIN_HEALTHY_ITEMS:
+    if len(result.items) < min_healthy_items:
         return (
             f"⚠️ The bestseller crawl only found {len(result.items):,} items "
+            f"(expected at least ~{min_healthy_items:,} for this section) "
             f"from {result.requests} pages. Amazon may have changed its page layout, "
             "so price errors could be missed until the tracker is fixed."
         )
@@ -65,7 +72,8 @@ async def send_health_messages(
             db.set_meta(WELCOME_KEY, now.isoformat())
             sent.append(message)
 
-    problem = _problem(result)
+    min_healthy = min_healthy_items_for_config(config)
+    problem = _problem(result, min_healthy_items=min_healthy)
     if problem:
         last = db.get_meta(PROBLEM_ALERT_KEY)
         due = last is None or now - datetime.fromisoformat(last) >= timedelta(hours=PROBLEM_REPEAT_HOURS)
