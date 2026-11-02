@@ -5,6 +5,18 @@ on:
     # Off the top of the hour, when GitHub's scheduler is least delayed.
     - cron: "5,35 * * * *"
   workflow_dispatch:
+    inputs:
+      crawl_section:
+        description: "Bestseller section (rotate = one section per run, all = full ~20 min crawl)"
+        type: choice
+        default: rotate
+        options:
+          - rotate
+          - all
+          - gaming
+          - home
+          - lifestyle
+          - general
   push:
     branches: [main]
   issues:
@@ -84,7 +96,7 @@ jobs:
       github.event_name == 'issues' ||
       (github.event_name == 'schedule' && !github.event.repository.private)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
 
@@ -103,7 +115,21 @@ jobs:
           restore-keys: |
             bestsellers-db-v1-
 
-      - name: Crawl bestseller lists
+      - name: Choose bestseller section
+        id: crawl-section
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "id=${{ inputs.crawl_section }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "id=rotate" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fetch published deals for merge
+        run: |
+          mkdir -p site
+          curl -fsSL "$PAGES_URL/deals.json?t=$(date +%s)" -o site/previous-deals.json || echo '{}' > site/previous-deals.json
+
+      - name: Crawl bestseller section
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -111,7 +137,15 @@ jobs:
           TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
           TWILIO_WHATSAPP_FROM: ${{ secrets.TWILIO_WHATSAPP_FROM }}
           TWILIO_WHATSAPP_TO: ${{ secrets.TWILIO_WHATSAPP_TO }}
-        run: python -m scripts.crawl_bestsellers --config bestsellers.json --output site/deals.json
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          SECTION="${{ steps.crawl-section.outputs.id }}"
+          python -m scripts.crawl_bestsellers \
+            --config bestsellers.json \
+            --section "$SECTION" \
+            --run-number "${{ github.run_number }}" \
+            --merge-previous site/previous-deals.json \
+            --output site/deals.json
 
       - uses: actions/upload-artifact@v7
         with:
