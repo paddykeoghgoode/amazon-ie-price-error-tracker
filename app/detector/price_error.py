@@ -36,16 +36,17 @@ def evaluate_price(
         if disc >= settings.min_discount_percent:
             reasons.append(f"{disc}% off list price (€{list_price_eur:.2f} → €{price_eur:.2f})")
 
-    median = db.median_historical_price(product_id)
-    if median and median >= settings.min_list_price_eur:
-        drop = _discount(price_eur, median)
+    anchor = db.get_price_baseline(product_id)
+    reference_eur = float(anchor["reference_eur"]) if anchor else None
+    if reference_eur and reference_eur >= settings.min_list_price_eur:
+        drop = _discount(price_eur, reference_eur)
         if drop >= settings.min_discount_percent:
-            reasons.append(f"{drop}% below recent median (€{median:.2f})")
+            reasons.append(f"{drop}% below historical reference (€{reference_eur:.2f})")
 
     if not reasons:
         return PriceErrorVerdict(False, "No suspicious discount")
 
-    reference = list_price_eur or median
+    reference = list_price_eur or reference_eur
     return PriceErrorVerdict(
         is_error=True,
         reason="; ".join(reasons),

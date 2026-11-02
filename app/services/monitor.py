@@ -9,6 +9,7 @@ from app import database as db
 from app.detector.price_error import evaluate_price, should_notify_again
 from app.notifier.telegram import format_price_alert, send_telegram_message, send_whatsapp_message
 from app.scraper.amazon_ie import ProductSnapshot, extract_asin, fetch_product, normalize_product_url
+from app.services.price_history import observe_price_reference
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +36,12 @@ def record_and_detect(
     *,
     known_title: str | None = None,
     cooldown_minutes: int | None = None,
+    baseline_max_age_days: int = 30,
 ) -> DetectedAlert | None:
     if snap.title and snap.title != known_title:
         db.update_product_title(product_id, snap.title)
 
+    observe_price_reference(product_id, snap.price_eur, max_age_days=baseline_max_age_days)
     db.record_price_check(
         product_id,
         snap.price_eur,
