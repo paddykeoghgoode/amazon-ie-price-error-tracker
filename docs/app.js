@@ -270,7 +270,7 @@ function renderCexArbitrage(deals) {
   const summary = document.getElementById("cex-arb-summary");
   if (summary) {
     summary.textContent =
-      "Every Amazon/FBA-verified listing is queued for CeX across successive scan blocks, without keyword exclusions. " +
+      "Every discovered priced listing is queued for a CeX comparison, even when the Amazon seller is unknown. Only seller-verified matches can become buying alerts. " +
       cexStatusLine(deals);
   }
   const table = document.getElementById("cex-arb-table");
@@ -378,7 +378,7 @@ function renderCataloguePage() {
     if (section && row.section_id !== section) return false;
     if (activity === "active" && row.active === false) return false;
     if (activity === "archived" && row.active !== false) return false;
-    if (status === "matched" && row.cex_status !== "matched") return false;
+    if (status === "matched" && !["matched", "matched_unverified"].includes(row.cex_status)) return false;
     if (status === "verified" && row.verification_status !== "verified") return false;
     if (status === "pending" && row.last_checked_at) return false;
     if (status === "rejected" && (!row.last_checked_at || row.verification_status === "verified")) return false;
@@ -399,7 +399,9 @@ function renderCataloguePage() {
           String(row.verification_status || "not checked").replaceAll("_", " ");
     let cex = String(row.cex_status || "not checked").replaceAll("_", " ");
     if (row.cex_status === "matched") {
-      cex = `Matched: ${fmtEuro(row.cex_cash_eur)} cash · estimated ${fmtEuro(row.cex_net_profit_eur)} net`;
+      cex = `Eligible listing: ${fmtEuro(row.cex_cash_eur)} CeX cash · estimated ${fmtEuro(row.cex_net_profit_eur)} net`;
+    } else if (row.cex_status === "matched_unverified") {
+      cex = `RESEARCH ONLY — seller/price not verified. CeX quote: ${fmtEuro(row.cex_cash_eur)}. Not a buy signal.`;
     }
     const cexLink = row.cex_url ? `<div class="hint"><a href="${escapeHtml(row.cex_url)}" target="_blank" rel="noopener">CeX item</a></div>` : "";
     tr.innerHTML = `
