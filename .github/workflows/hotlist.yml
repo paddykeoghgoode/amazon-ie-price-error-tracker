@@ -51,4 +51,4 @@ jobs:
         with:
           artifact_name: pages-hotlist-${{ github.run_attempt }}
       - name: Report scan time and counts
-        run: python -c "import json,os; d=json.load(open('docs/hotlist.json')); open(os.environ['GITHUB_STEP_SUMMARY'],'a').write('Hotlist checked %s, verified %s at %s UTC\\n' % (len(d['products']), d['verified'], d['generated_at']))"
+        run: python -c "import json,os; d=json.load(open('docs/hotlist.json')); open(os.environ['GITHUB_STEP_SUMMARY'],'a').write('Hotlist checked %s, verified %s at %s UTC\\n' % (len(d['products']), d['price_read'], d['generated_at']))"

@@ -159,7 +159,7 @@ function renderDeepDrops(deals) {
   const summary = document.getElementById("deep-summary");
   if (summary && any) {
     summary.textContent =
-      "Deep drops vs each item’s recent Amazon median — tiers at 40%, 50% and 66%. Electronics and games often still make sense at these levels.";
+      "Observed drops from historical Amazon prices — tiers at 40%, 50% and 66%. Seller, condition and checkout price NOT checked.";
   }
 }
 
@@ -179,7 +179,7 @@ function cexStatusLine(deals) {
       `CeX was queued for ${stats.deep_candidates || 0} sale items and ${stats.any_price_candidates || 0} regular-price items, but no CeX match returned a price (API or title match).`
     );
   }
-  return `CeX researched ${attempted} listings (cached or live); ${lookups} seller-verified CeX matches · margin ≥€${minEur} or ≥${minPct}% · ${stats.cash_flips || 0} sale flips · ${stats.arbitrage || 0} other flips. See full catalogue for pending checks.`;
+  return `CeX checked ${attempted} records (cached or live); ${lookups} provisional CeX matches · margin ≥€${minEur} or ≥${minPct}% · ${stats.cash_flips || 0} sale leads · ${stats.arbitrage || 0} other leads. Seller/checkout not verified.`;
 }
 
 function renderNearMargin(bodyId, tableId, rows) {
@@ -242,9 +242,7 @@ function renderCex(deals) {
 
 function appendCexRow(body, row, showDrop) {
   const tr = document.createElement("tr");
-  const sellerEvidence = row.seller_verified
-    ? `Verified: ${row.seller_name || "seller named"} (${row.seller_type || "offer"})`
-    : "Seller NOT verified — historical lead only";
+  const sellerEvidence = "Seller/checkout not checked — research lead";
   const matchEvidence = row.match_confidence
     ? ` · CeX: ${row.match_confidence.replaceAll("_", " ")}`
     : "";
@@ -270,7 +268,7 @@ function renderCexArbitrage(deals) {
   const summary = document.getElementById("cex-arb-summary");
   if (summary) {
     summary.textContent =
-      "Every discovered priced listing is queued for a CeX comparison, even when the Amazon seller is unknown. Only seller-verified matches can become buying alerts. " +
+      "Every priced listing enters the CeX research queue. Seller and checkout price are NOT verified; all matches are research leads. " +
       cexStatusLine(deals);
   }
   const table = document.getElementById("cex-arb-table");
@@ -327,36 +325,25 @@ function renderSectionProgress(deals) {
   table.hidden = !rows.length;
   if (empty) empty.hidden = !!rows.length;
   for (const section of rows) {
-    const verified = section.verification_stats || {};
-    const wasMeasured = Object.prototype.hasOwnProperty.call(verified, "attempted");
-    const verificationLabel = wasMeasured
-      ? `${Number(verified.amazon_verified || 0)} / ${Number(verified.attempted || 0)}`
-      : "Not measured";
-    const reasons = Object.entries(verified.rejection_reasons || {})
-      .sort((a, b) => Number(b[1]) - Number(a[1]))
-      .slice(0, 2)
-      .map(([reason, count]) => `${reason.replaceAll("_", " ")}: ${count}`)
-      .join(" · ");
-    const verificationHint = reasons ? `<div class="hint">${escapeHtml(reasons)}</div>` : "";
     const cex = section.cex_stats || {};
     const catalogue = section.catalogue_stats || {};
-    const checkedLabel = catalogue.priced != null
+    const progress = catalogue.priced != null
       ? `${Number(catalogue.checked || 0)} / ${Number(catalogue.priced || 0)}`
       : "Not started";
-    const remainingLabel = catalogue.priced != null
-      ? `<div class="hint">${Number(catalogue.remaining || 0)} awaiting first check</div>` : "";
+    const pending = catalogue.priced != null
+      ? `<div class="hint">${Number(catalogue.remaining || 0)} awaiting CeX research</div>` : "";
     const tr = document.createElement("tr");
     const status = section.scan_status || (section.blocked ? "blocked" : "completed");
-    const found = Number(section.new_alerts || 0) + Number(cex.cash_flips || 0) + Number(cex.arbitrage || 0);
+    const finds = Number(section.new_alerts || 0) + Number(cex.cash_flips || 0) + Number(cex.arbitrage || 0);
     tr.innerHTML = `
       <td>${escapeHtml(section.section_name || section.section_id || "Section")}</td>
       <td>${fmtTime(section.generated_at)}</td>
       <td>${escapeHtml(status)}</td>
       <td>${Number(section.items_seen || 0).toLocaleString("en-IE")}</td>
-      <td>${verificationLabel}${verificationHint}</td>
-      <td>${checkedLabel}${remainingLabel}</td>
-      <td>${catalogue.cex_attempted == null ? "—" : Number(catalogue.cex_attempted)}</td>
-      <td>${found} (${Number(section.new_alerts || 0)} errors, ${Number(cex.cash_flips || 0) + Number(cex.arbitrage || 0)} CeX)</td>`;
+      <td>Disabled</td>
+      <td>${progress}${pending}</td>
+      <td>${Number(cex.live_lookups || 0)} live / ${Number(cex.cache_hits || 0)} cached</td>
+      <td>${finds} (${Number(section.new_alerts || 0)} price leads, ${Number(cex.cash_flips || 0) + Number(cex.arbitrage || 0)} CeX)</td>`;
     body.appendChild(tr);
   }
 }
@@ -379,9 +366,8 @@ function renderCataloguePage() {
     if (activity === "active" && row.active === false) return false;
     if (activity === "archived" && row.active !== false) return false;
     if (status === "matched" && !["matched", "matched_unverified", "matched_stale_quote"].includes(row.cex_status)) return false;
-    if (status === "verified" && row.verification_status !== "verified") return false;
     if (status === "pending" && row.last_checked_at) return false;
-    if (status === "rejected" && (!row.last_checked_at || row.verification_status === "verified")) return false;
+    if (status === "no_match" && row.cex_status !== "no_confirmed_match") return false;
     const target = [row.title, row.asin, row.category, row.seller_name].join(" ").toLowerCase();
     return !query || target.includes(query);
   });
@@ -392,18 +378,15 @@ function renderCataloguePage() {
   for (const row of subset) {
     const tr = document.createElement("tr");
     const seller = row.active === false
-      ? `Archived listing — last seen ${fmtTime(row.last_seen_at)}; not checked now`
-      : row.verification_status === "verified"
-        ? `Verified at last check: ${row.seller_name || "seller identified"} (${row.seller_type || "eligible"})`
-        : row.verification_status === "pending" ? "Not yet checked" :
-          String(row.verification_status || "not checked").replaceAll("_", " ");
+      ? `Archived listing — last seen ${fmtTime(row.last_seen_at)}`
+      : "Not checked (seller verification disabled)";
     let cex = String(row.cex_status || "not checked").replaceAll("_", " ");
     if (row.cex_status === "matched") {
-      cex = `Verified seller · estimated ${fmtEuro(row.cex_net_profit_eur)} net · CeX cash ${fmtEuro(row.cex_cash_eur)}`;
+      cex = `RESEARCH ONLY — estimated ${fmtEuro(row.cex_net_profit_eur)} net, CeX cash ${fmtEuro(row.cex_cash_eur)}; Amazon offer not checked`;
     } else if (row.cex_status === "matched_stale_quote") {
       cex = `RESEARCH ONLY — CeX quote too old for an alert. Last quote: ${fmtTime(row.cex_quote_checked_at)}`;
     } else if (row.cex_status === "matched_unverified") {
-      cex = `RESEARCH ONLY — seller/price not verified. CeX quote: ${fmtEuro(row.cex_cash_eur)}. Not a buy signal.`;
+      cex = `RESEARCH ONLY — CeX cash quote: ${fmtEuro(row.cex_cash_eur)}; verify Amazon seller, condition and checkout.`;
     }
     if (row.cex_quote_checked_at) {
       cex += ` · CeX quoted ${fmtTime(row.cex_quote_checked_at)}`;
@@ -515,7 +498,7 @@ function renderDeals(deals) {
     overview.textContent =
       `Published Amazon listings: ${Number(progress.discovered || 0).toLocaleString("en-IE")} across scanned sections · ` +
       `${Number(progress.active ?? progress.discovered ?? 0).toLocaleString("en-IE")} currently listed, ` +
-      `${Number(progress.checked || 0).toLocaleString("en-IE")} seller-checked, ` +
+      `${Number(progress.checked || 0).toLocaleString("en-IE")} CeX-researched, ` +
       `${Number(progress.remaining || 0).toLocaleString("en-IE")} awaiting first check, ` +
       `${Number(progress.cex_attempted || 0).toLocaleString("en-IE")} CeX attempts, ` +
       `${Number(progress.cex_matched || 0).toLocaleString("en-IE")} confirmed CeX matches.`;

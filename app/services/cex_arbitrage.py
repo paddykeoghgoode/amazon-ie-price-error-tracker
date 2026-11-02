@@ -143,7 +143,7 @@ async def enrich_with_cex(
 
     An Amazon price change recalculates profit from the cached CeX cash quote;
     it does NOT force a new CeX search. Positive quotes expire after 72h by
-    default; no-match research after 7 days. High-margin verified offers are
+    default; no-match research after 7 days. High-margin research leads are
     refreshed directly via their CeX box ID if the quote is >12h old.
     Never alert on a quote older than that. On CeX 429, stop new CeX requests
     for the rest of the section scan rather than retrying around the limit.
@@ -233,9 +233,9 @@ async def enrich_with_cex(
                     extra_cost_eur=config.cex_extra_cost_eur,
                     payout_haircut_percent=config.cex_payout_haircut_percent,
                 )
-                high_interest = bool(
-                    item.get("seller_verified") and estimate["cex_cash_flip"]
-                )
+                # Seller checks are disabled. Refresh attractive *research*
+                # leads so a stale CeX cash quote cannot trigger an alert.
+                high_interest = bool(estimate["cex_cash_flip"])
 
             age = age_hours(prior, now) if prices else None
             quote_fresh = age is not None and age <= alert_ttl

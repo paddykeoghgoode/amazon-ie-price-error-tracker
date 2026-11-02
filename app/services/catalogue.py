@@ -44,10 +44,10 @@ def make_section_catalogue(
     section_name: str,
     observed_at: str | None = None,
 ) -> dict:
-    """Refresh listing prices while preserving checks only for the *same* price.
+    """Refresh observed prices and reuse CeX quotes, never seller-verification claims.
 
-    Never promote an old seller/offer verification after an ASIN price changes.
-    Missing-price listings are still exported, with an explicit status.
+    Seller verification is disabled. All results are research leads and quoted
+    prices are not guaranteed checkout offers.
     """
     stamp = observed_at or _utc_now()
     old = {
@@ -74,7 +74,7 @@ def make_section_catalogue(
             "active": True,
             "first_seen_at": prior.get("first_seen_at") or stamp,
             "last_seen_at": stamp,
-            "verification_status": "pending" if price is not None else "no_price",
+            "verification_status": "disabled",
             "last_checked_at": None,
             "cex_status": "not_checked" if price is not None else "not_applicable",
         }
@@ -89,11 +89,12 @@ def make_section_catalogue(
                 row["last_cex_alert"] = prior["last_cex_alert"]
         if same_price:
             for key in (
-                "verification_status", "last_checked_at", "cex_status",
-                *_SELLER_FIELDS, *_CEX_FIELDS,
+                "last_checked_at", "cex_status", *_CEX_FIELDS,
             ):
                 if key in prior:
                     row[key] = prior[key]
+        if row.get("cex_status") == "matched":
+            row["cex_status"] = "matched_unverified"
         items.append(row)
     # Preserve recently discovered listings that fall out of the bestseller
     # chart, but do not spend Amazon/CeX requests on stale, unobserved prices.
@@ -111,7 +112,12 @@ def make_section_catalogue(
         except (TypeError, ValueError):
             fresh_enough = False
         if fresh_enough:
-            items.append({**prior, "active": False})
+            archived = {**prior, "active": False, "verification_status": "disabled"}
+            for field in _SELLER_FIELDS:
+                archived.pop(field, None)
+            if archived.get("cex_status") == "matched":
+                archived["cex_status"] = "matched_unverified"
+            items.append(archived)
     return {
         "section_id": section_id,
         "section_name": section_name,
@@ -126,8 +132,8 @@ def select_check_batch(
 ) -> list[dict]:
     """Rotate through *every* priced listing without a fixed shortlist cut-off.
 
-    Unchecked rows go before previously checked ones. For all other rows, the
-    oldest verification is refreshed first. The urgent lane never consumes
+    Unchecked rows go before previously researched ones. For all other rows,
+    the oldest CeX research is refreshed first. The urgent lane never consumes
     more than a small part of the batch, preventing high-ranked products from
     starving the rest of the catalogue.
     """
@@ -158,57 +164,55 @@ def select_check_batch(
 def apply_batch_results(
     section: dict,
     selected: list[dict],
-    verified: list[dict],
-    outcomes: dict[str, str],
+    verified: list[dict],  # legacy argument, intentionally ignored
+    outcomes: dict[str, str],  # legacy argument, intentionally ignored
     cex_lookups: list[dict],
     *,
     cex_enabled: bool,
     checked_at: str | None = None,
     quote_cache: dict[str, dict] | None = None,
 ) -> dict:
-    """Keep CeX research for ALL priced ASINs; distinguish unsafe leads.
+    """Store CeX research for all queued Amazon listings without seller gating.
 
-    A title-matched CeX quote for a seller-unverified Amazon listing is never
-    an actionable buy alert. It is still useful as a provisional research lead.
+    Match results are always provisional research leads. A fresh CeX quote
+    does not establish the Amazon checkout seller, condition or exact variant.
     """
     stamp = checked_at or _utc_now()
     rows = {row["asin"]: row for row in section.get("items") or []}
-    eligible = {row["asin"]: row for row in verified}
     matches = {row["asin"]: row for row in cex_lookups}
     for item in selected:
         asin = item["asin"]
         row = rows[asin]
-        row["last_checked_at"] = stamp
-        cache_entry = (quote_cache or {}).get(asin) if quote_cache is not None else row.get("cex_quote_cache")
+        row["verification_status"] = "disabled"
+        for key in _SELLER_FIELDS:
+            row.pop(key, None)
+        cache_entry = (
+            quote_cache.get(asin) if quote_cache is not None
+            else row.get("cex_quote_cache")
+        )
         if isinstance(cache_entry, dict):
             row["cex_quote_cache"] = cache_entry
-        # Timestamp reflects the *CeX API quote*, not the Amazon seller check.
-        row["cex_checked_at"] = cache_entry.get("checked_at") if (
-            cex_enabled and isinstance(cache_entry, dict) and cache_entry.get("status") != "error"
-        ) else None
-        verified_item = eligible.get(asin)
-        if verified_item:
-            row["verification_status"] = "verified"
-            row["seller_name"] = verified_item.get("seller_name")
-            row["seller_type"] = verified_item.get("seller_type")
-            row["fulfilment_status"] = verified_item.get("fulfilment_status")
-        else:
-            row["verification_status"] = outcomes.get(asin, "not_verified")
-            for key in _SELLER_FIELDS:
-                row.pop(key, None)
-
         matched = matches.get(asin)
-        if cex_enabled and matched and row.get("cex_checked_at") is None:
-            # Legacy clients may supply a direct CeX match without a quote
-            # cache. Do not silently regress their counted matches.
-            row["cex_checked_at"] = matched.get("cex_quote_checked_at") or stamp
+        # Do not mark a deferred CeX lookup as completed: keep it queued on
+        # the next scan so every ASIN can eventually receive a first lookup.
+        if matched or (isinstance(cache_entry, dict) and cache_entry.get("status") in
+                       ("matched", "no_match", "error")):
+            row["last_checked_at"] = stamp
+        row["cex_checked_at"] = (
+            cache_entry.get("checked_at")
+            if cex_enabled and isinstance(cache_entry, dict) and
+               cache_entry.get("status") in ("matched", "no_match")
+            else None
+        )
         if cex_enabled and matched:
-            if not verified_item:
-                row["cex_status"] = "matched_unverified"
-            elif not matched.get("cex_quote_fresh_for_alert", True):
-                row["cex_status"] = "matched_stale_quote"
-            else:
-                row["cex_status"] = "matched"
+            if row.get("cex_checked_at") is None:
+                # Support legacy direct research rows without quote-cache
+                # metadata, but do not treat them as seller-verified.
+                row["cex_checked_at"] = matched.get("cex_quote_checked_at") or stamp
+            row["cex_status"] = (
+                "matched_unverified" if matched.get("cex_quote_fresh_for_alert", True)
+                else "matched_stale_quote"
+            )
             row["cex_box_name"] = matched.get("cex_title")
             row["cex_url"] = matched.get("cex_url")
             row["cex_cash_eur"] = matched.get("cex_cash_eur")
@@ -223,8 +227,7 @@ def apply_batch_results(
             row["cex_status"] = (
                 "disabled" if not cex_enabled else
                 "no_confirmed_match" if status == "no_match" else
-                "provider_retry_later" if status == "error" else
-                "queued"
+                "provider_retry_later" if status == "error" else "queued"
             )
             for key in _CEX_FIELDS:
                 if key != "cex_checked_at":
@@ -244,13 +247,32 @@ def catalogue_progress(section: dict, *, checked_this_run: int = 0) -> dict:
         "priced": len(priced),
         "checked": len(checked),
         "remaining": len(priced) - len(checked),
-        "verified": sum(row.get("verification_status") == "verified" for row in checked),
+        "verified": 0,  # Seller verification is intentionally disabled.
         "cex_attempted": sum(bool(row.get("cex_checked_at")) for row in checked),
         "cex_matched": sum(row.get("cex_status") in ("matched", "matched_unverified", "matched_stale_quote") for row in checked),
-        "cex_eligible_matched": sum(row.get("cex_status") == "matched" for row in checked),
+        "cex_eligible_matched": 0,  # No CeX match is checkout-verified.
         "cex_cache_records": sum(isinstance(row.get("cex_quote_cache"), dict) for row in checked),
         "unpriced": len(active) - len(priced),
         "checked_this_run": checked_this_run,
+    }
+
+
+def _disable_seller_proof(section: dict) -> dict:
+    """Migrate existing published sections without preserving old 'verified' badges."""
+    rows = []
+    for old in section.get("items") or []:
+        row = {**old, "verification_status": "disabled"}
+        for field in _SELLER_FIELDS:
+            row.pop(field, None)
+        if row.get("cex_status") == "matched":
+            row["cex_status"] = "matched_unverified"
+        rows.append(row)
+    return {
+        **section, "items": rows,
+        "stats": {
+            **(section.get("stats") or {}), "verified": 0,
+            "cex_eligible_matched": 0,
+        },
     }
 
 
@@ -259,13 +281,21 @@ def merge_catalogue(previous: dict | None, fragment: dict) -> dict:
     sid = fragment.get("section_id")
     if not sid or not isinstance(fragment.get("items"), list):
         raise ValueError("Expected one section fragment with an items list")
-    sections = dict((previous or {}).get("sections") or {})
+    sections = {
+        sid: _disable_seller_proof(section)
+        for sid, section in ((previous or {}).get("sections") or {}).items()
+    }
     older = sections.get(sid) or {}
     if older.get("generated_at", "") > fragment.get("generated_at", ""):
-        return previous or {}
+        # A delayed publisher must not reintroduce old seller-verified claims.
+        return {
+            **(previous or {}),
+            "seller_verification_enabled": False,
+            "sections": sections,
+        }
     stats = catalogue_progress(fragment)
     sections[sid] = {
-        **fragment,
+        **_disable_seller_proof(fragment),
         "stats": {
             **stats,
             "checked_this_run": fragment.get("checked_this_run", stats["checked_this_run"]),
@@ -274,6 +304,7 @@ def merge_catalogue(previous: dict | None, fragment: dict) -> dict:
     return {
         "generated_at": fragment.get("generated_at"),
         "last_section_id": sid,
+        "seller_verification_enabled": False,
         "sections": sections,
     }
 

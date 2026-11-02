@@ -18,8 +18,6 @@ from app.bestseller_sections import (
     rotate_section_id,
 )
 from app.config import settings
-from app.scraper.amazon_ie import ProductSnapshot
-from app.services.monitor import detect_verified_price
 from app.deals import export_deals, merge_section_deals, render_deals_markdown
 from app.services.bestsellers import (
     crawl,
@@ -29,7 +27,6 @@ from app.services.bestsellers import (
     send_alerts,
     send_cex_alerts,
     send_notification,
-    verify_candidates,
 )
 from app.services.cex_arbitrage import enrich_with_cex
 from app.services.health import send_health_messages
@@ -101,11 +98,12 @@ async def send_section_summary(section_name: str, payload: dict, dashboard_url: 
     alerts = int(payload.get("new_alerts") or 0)
     message = (
         f"✅ {section_name} bestseller scan done\n\n"
-        f"Price-error alerts this section: {alerts}\n"
-        f"CeX cash flips: {flips} (on sale) · {arb} (other)\n"
+        f"Possible price-error leads this section: {alerts}\n"
+        f"Possible CeX profit leads: {flips} (on sale) · {arb} (other)\n"
         f"Catalogue processed: {int((payload.get('catalogue_stats') or {}).get('checked') or 0):,} / "
         f"{int((payload.get('catalogue_stats') or {}).get('priced') or 0):,} priced listings\n"
         f"CeX checks so far: {int((payload.get('catalogue_stats') or {}).get('cex_attempted') or 0):,}\n\n"
+        "⚠️ Observed Amazon prices only; seller/condition/checkout NOT verified.\n"
         f"{dashboard_url}"
     )
     await send_notification(message)
@@ -132,187 +130,102 @@ async def crawl_section(
         len(result.items),
     )
 
-    processed = process_crawl(result, config)
+    # One scan of bestseller pages records thousands of observed prices. Seller
+    # verification is intentionally DISABLED: it is not an eligibility gate
+    # for price-drop leads, CeX matching or Telegram research alerts.
+    processed = process_crawl(result, config, allow_alerts=True)
     section_catalogue = make_section_catalogue(
         result,
         previous_catalogue_section,
         section_id=section_id,
         section_name=section_name,
     )
-    # Full ASIN catalogue: never filter by CeX keywords, item price band, or
-    # arbitrary top-25/top-50 shortlist. The only cap is work PER RUN, not which
-    # listings will ever get examined.
     urgent = [row["asin"] for row in processed.drops if (row.get("drop_percent") or 0) >= 30]
     batch = select_check_batch(
-        section_catalogue,
-        limit=config.catalogue_checks_per_run,
+        section_catalogue, limit=config.catalogue_checks_per_run,
         priority_asins=urgent,
     )
     drop_by_asin = {row["asin"]: row for row in processed.drops}
     candidates = [
-        {**row, "drop_percent": drop_by_asin.get(row["asin"], {}).get("drop_percent"),
-         "drop_tier": drop_by_asin.get(row["asin"], {}).get("drop_tier"),
-         "reference_eur": drop_by_asin.get(row["asin"], {}).get("reference_eur")}
+        {
+            **row,
+            "drop_percent": drop_by_asin.get(row["asin"], {}).get("drop_percent"),
+            "drop_tier": drop_by_asin.get(row["asin"], {}).get("drop_tier"),
+            "reference_eur": drop_by_asin.get(row["asin"], {}).get("reference_eur"),
+            "observed_at": section_catalogue["generated_at"],
+        }
         for row in batch
     ]
-    outcomes: dict[str, str] = {}
-    verified: list[dict] = []
-    lookups: list[dict] = []  # eligible seller matches only, safe for deal alerts
-    research_lookups: list[dict] = []  # all CeX matches, including seller-unverified
-    flips: list[dict] = []
-    checked_batch: list[dict] = []
-    # The public section catalogue is the durable cache, not the ephemeral
-    # GitHub Actions process. Reuse quotes even when Amazon's item price changes.
+    # CeX quotes are cached independently of changing Amazon listing prices.
     quote_cache: dict[str, dict] = {
         row["asin"]: row["cex_quote_cache"]
         for row in section_catalogue["items"]
         if row.get("asin") and isinstance(row.get("cex_quote_cache"), dict)
     }
     cex_state: dict = {}
-    verification_stats = {
-        "attempted": 0, "amazon_verified": 0, "rejected_or_unknown": 0,
-        "rejection_reasons": {}, "sample_failures": [],
-    }
+    lookups: list[dict] = []
+    flips: list[dict] = []
+    checked_batch: list[dict] = []
     started = time.monotonic()
-    # Commit progress in short groups; stop safely after the configured budget
-    # rather than letting Actions kill the whole job after a slow Amazon/CeX page.
-    async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=15.0) as client:
+    # Small batches and a time budget keep GitHub Actions from timing out.
+    # No additional Amazon product-page/seller requests are made here.
+    async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=20.0) as client:
         for offset in range(0, len(candidates), 20):
             if offset and time.monotonic() - started >= config.catalogue_time_budget_seconds:
-                logger.warning("[%s] Batch time budget reached, unexamined ASINs remain queued", section_id)
+                logger.warning("[%s] CeX research time budget reached; remaining ASINs stay queued", section_id)
                 break
             group = candidates[offset:offset + 20]
-            part_verified, part_stats = await verify_candidates(
-                client,
-                group,
-                limit=len(group),
-                delay_seconds=config.request_delay_seconds,
-                on_result=lambda asin, status: outcomes.__setitem__(asin, status),
+            part_lookups, part_flips = await enrich_with_cex(
+                group, config, client=client, max_lookups=len(group),
+                cache=quote_cache, run_state=cex_state,
             )
-            # Search CeX for EVERY priced listing in the group, even when
-            # Amazon's seller cannot be determined. Unverified results are
-            # kept only as provisional catalogue research, never buy alerts.
-            verified_group = {row["asin"]: row for row in part_verified}
-            research_candidates = [
-                verified_group.get(row["asin"], row) for row in group
-            ]
-            all_matches, all_flips = await enrich_with_cex(
-                research_candidates, config, client=client,
-                max_lookups=len(research_candidates),
-                cache=quote_cache,
-                run_state=cex_state,
-            )
-            verified_matches = [
-                row for row in all_matches if row["asin"] in verified_group
-            ]
-            verified_flips = [
-                row for row in all_flips if row["asin"] in verified_group
-            ]
             checked_batch.extend(group)
-            verified.extend(part_verified)
-            research_lookups.extend(all_matches)
-            lookups.extend(verified_matches)
-            flips.extend(verified_flips)
-            for key in ("attempted", "amazon_verified", "rejected_or_unknown"):
-                verification_stats[key] += int(part_stats.get(key) or 0)
-            for reason, count in (part_stats.get("rejection_reasons") or {}).items():
-                reasons = verification_stats["rejection_reasons"]
-                reasons[reason] = reasons.get(reason, 0) + count
-            remaining_samples = 5 - len(verification_stats["sample_failures"])
-            if remaining_samples > 0:
-                verification_stats["sample_failures"].extend(
-                    (part_stats.get("sample_failures") or [])[:remaining_samples]
-                )
-            logger.info(
-                "[%s] Verified %s/%s in current progressive batch; %s CeX matches",
-                section_id, verification_stats["amazon_verified"], len(checked_batch), len(lookups),
-            )
-            failures = part_stats.get("rejection_reasons") or {}
-            if failures.get("amazon_http_429", 0) >= 2:
-                logger.warning("[%s] Amazon is throttling; leaving remaining ASINs queued", section_id)
+            lookups.extend(part_lookups)
+            flips.extend(part_flips)
+            logger.info("[%s] CeX research %s/%s queued, live=%s cache=%s deferred=%s",
+                        section_id, len(checked_batch), len(candidates),
+                        cex_state.get("live_lookups", 0),
+                        cex_state.get("cache_hits", 0),
+                        cex_state.get("deferred", 0))
+            if cex_state.get("rate_limited"):
+                logger.warning("[%s] CeX limited requests: stop this section's CeX lookups", section_id)
                 break
-    verified_by_asin = {row["asin"]: row for row in verified}
-    processed.drops = [
-        {**drop_by_asin[asin], **row}
-        for asin, row in verified_by_asin.items() if asin in drop_by_asin
-    ]
-    processed.verified_asins = set(verified_by_asin)
-    processed.verification_stats = verification_stats
-    # process_crawl() already recorded the initial bestseller price. Now that
-    # Amazon/FBA seller AND exact offered price are confirmed, evaluate that
-    # observation for a real price-error alert without writing it a second time.
-    for row in verified:
-        product_id = db.add_product(row["asin"], row["url"], row.get("verified_title") or row.get("title"))
-        snap = ProductSnapshot(
-            asin=row["asin"], url=row["url"], title=row.get("verified_title") or row.get("title"),
-            price_eur=row["price_eur"], list_price_eur=None, currency="EUR",
-            availability="In stock", seller_name=row.get("seller_name"),
-            seller_status="amazon" if row.get("seller_type") == "amazon_retail" else "third_party",
-            fulfilment_status=row.get("fulfilment_status") or "unknown",
-        )
-        alert = detect_verified_price(
-            product_id, snap, known_title=row.get("title"),
-            cooldown_minutes=config.alert_cooldown_minutes,
-        )
-        if alert:
-            processed.alerts.append(alert)
-    logger.info(
-        "[%s] Amazon verification: %s/%s products examined, %s",
-        section_id, len(checked_batch),
-        len([r for r in section_catalogue["items"] if r["price_eur"] is not None]),
-        verification_stats,
-    )
-    if verification_stats["attempted"] >= 10 and not verification_stats["amazon_verified"]:
-        logger.warning(
-            "[%s] No verified offers from %s checks. Rejection reasons: %s; samples: %s",
-            section_id, verification_stats["attempted"],
-            verification_stats.get("rejection_reasons"),
-            verification_stats.get("sample_failures"),
-        )
 
     apply_batch_results(
-        section_catalogue,
-        checked_batch,
-        verified,
-        outcomes,
-        research_lookups,
-        cex_enabled=config.cex_enabled,
-        quote_cache=quote_cache,
+        section_catalogue, checked_batch, [], {}, lookups,
+        cex_enabled=config.cex_enabled, quote_cache=quote_cache,
     )
     section_catalogue["checked_this_run"] = len(checked_batch)
     processed.catalogue_stats = catalogue_progress(
-        section_catalogue, checked_this_run=len(checked_batch)
+        section_catalogue, checked_this_run=len(checked_batch),
     )
+    processed.verified_asins = set()
+    processed.verification_stats = {"status": "disabled"}
     processed.cex_lookups = lookups
     processed.cex_flips = sorted(
-        [row for row in flips if row.get("drop_percent") is not None and row["drop_percent"] >= 30],
-        key=lambda row: row.get("cex_cash_profit_eur") or 0,
-        reverse=True,
+        [row for row in flips if (row.get("drop_percent") or 0) >= 30],
+        key=lambda row: row.get("cex_cash_profit_eur") or 0, reverse=True,
     )
     processed.cex_arbitrage = sorted(
-        [row for row in flips if row not in processed.cex_flips],
-        key=lambda row: row.get("cex_cash_profit_eur") or 0,
-        reverse=True,
+        [row for row in flips if (row.get("drop_percent") or 0) < 30],
+        key=lambda row: row.get("cex_cash_profit_eur") or 0, reverse=True,
     )
     processed.cex_stats = {
-        "deep_candidates": sum((row.get("drop_percent") or 0) >= 30 for row in verified),
-        "any_price_candidates": sum((row.get("drop_percent") or 0) < 30 for row in verified),
+        "deep_candidates": sum((row.get("drop_percent") or 0) >= 30 for row in checked_batch),
+        "any_price_candidates": sum((row.get("drop_percent") or 0) < 30 for row in checked_batch),
         "attempted": cex_state.get("live_lookups", 0) + cex_state.get("cache_hits", 0),
         "live_lookups": cex_state.get("live_lookups", 0),
         "cache_hits": cex_state.get("cache_hits", 0),
         "deferred": cex_state.get("deferred", 0),
         "errors": cex_state.get("errors", 0),
         "rate_limited": bool(cex_state.get("rate_limited", False)),
-        "provisional_matches": len(research_lookups) - len(lookups),
-        "lookups": len(processed.cex_lookups),
+        "provisional_matches": len(lookups),
+        "lookups": len(lookups),
         "cash_flips": len(processed.cex_flips),
         "arbitrage": len(processed.cex_arbitrage),
     }
-    logger.info(
-        "[%s] Catalogue: %s; CeX cache: %s; eligible matches: %s; provisional: %s; profitable: %s",
-        section_id, processed.catalogue_stats, cex_state,
-        len(lookups), len(research_lookups) - len(lookups), len(flips),
-    )
+    logger.info("[%s] Seller verification disabled; %s observed drops; %s CeX research matches; cache %s",
+                section_id, len(processed.drops), len(lookups), cex_state)
 
     repo = os.environ.get("GITHUB_REPOSITORY") or "paddykeoghgoode/amazon-ie-price-error-tracker"
     owner, _, name = repo.partition("/")
@@ -330,7 +243,7 @@ async def crawl_section(
     # alert again; repeatedly rechecking the same price should not spam Telegram.
     catalogue_rows = {row["asin"]: row for row in section_catalogue["items"]}
     def should_send_cex(row: dict) -> bool:
-        if not row.get("seller_verified") or not row.get("cex_quote_fresh_for_alert"):
+        if not row.get("cex_quote_fresh_for_alert"):
             return False
         previous = (catalogue_rows.get(row.get("asin")) or {}).get("last_cex_alert") or {}
         try:

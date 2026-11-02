@@ -1,21 +1,25 @@
-"""Fast targeted checks of recent Amazon-verified drops."""
+"""Fast targeted price-only follow-up for recent observed Amazon drops.
+
+No seller verification occurs. The product detail price might also be a
+different variant; all messages require manual checkout confirmation.
+"""
 import argparse
 import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import httpx
-from app.scraper.amazon_ie import fetch_product, eligible_offer_type
+from app.scraper.amazon_ie import fetch_product
 from app.services.monitor import BROWSER_HEADERS, send_notification
 from app.snapshot import read_snapshot, write_snapshot
 
 def candidates(deals, now, limit=12):
     rows = {}
     for row in (deals.get("drops") or []) + (deals.get("cex_flips") or []):
-        if not row.get("seller_verified") or float(row.get("drop_percent") or 0) < 30:
+        if float(row.get("drop_percent") or 0) < 30:
             continue
         try:
-            stamp = datetime.fromisoformat(row.get("verified_at") or row.get("found_at") or "")
+            stamp = datetime.fromisoformat(row.get("found_at") or row.get("observed_at") or "")
             if stamp.tzinfo is None or not timedelta(0) <= now - stamp <= timedelta(hours=48):
                 continue
         except (ValueError, TypeError):
@@ -31,29 +35,28 @@ async def recheck(deals, previous, limit=12, notify=True):
         for row in candidates(deals, now, limit=limit):
             asin = row["asin"]
             item = {"asin": asin, "title": row.get("title"), "url": row.get("url"),
-                    "status": "not_verified", "found_at": row.get("found_at"),
+                    "status": "price_not_read", "found_at": row.get("found_at"),
                     "checked_at": datetime.now(timezone.utc).isoformat()}
             try:
                 snap = await fetch_product(client, asin)
-                offer_type = eligible_offer_type(snap)
-                if offer_type:
-                    item.update(status="verified", price_eur=snap.price_eur,
-                                seller_name=snap.seller_name, seller_type=offer_type)
+                if snap.price_eur is not None and snap.price_eur > 0:
+                    item.update(status="price_read", price_eur=snap.price_eur)
                     earlier = prior.get(asin) or {}
                     threshold = min(float(earlier.get("price_eur") or float("inf")),
                                     float(row.get("price_eur") or float("inf")))
                     if notify and snap.price_eur < threshold - 0.01:
                         await send_notification(
-                            f"🚨 Verified further drop\n{snap.title or asin}\n"
-                            f"Now €{snap.price_eur:.2f}, previously €{threshold:.2f}\n"
-                            f"Seller: {snap.seller_name} ({offer_type})\n"
+                            f"🚨 Observed further Amazon price drop (UNVERIFIED OFFER)\n"
+                            f"{snap.title or asin}\n"
+                            f"Page price €{snap.price_eur:.2f}, previously €{threshold:.2f}\n"
+                            "⚠️ Seller, condition, variant and checkout price NOT checked. Research only.\n"
                             f"Checked {item['checked_at']} UTC\n{row.get('url')}")
             except (httpx.HTTPError, ValueError, TypeError):
                 pass
             out.append(item)
             await asyncio.sleep(1)
     return {"generated_at": datetime.now(timezone.utc).isoformat(), "scan_kind": "hotlist",
-            "products": out, "verified": sum(row["status"] == "verified" for row in out)}
+            "products": out, "price_read": sum(row["status"] == "price_read" for row in out)}
 
 def main():
     p = argparse.ArgumentParser()
@@ -67,6 +70,6 @@ def main():
                                 read_snapshot(a.previous) if a.previous.exists() else {},
                                 limit=a.limit, notify=not a.no_notify))
     write_snapshot(a.output, result)
-    print(json.dumps({"checked": len(result["products"]), "verified": result["verified"]}))
+    print(json.dumps({"checked": len(result["products"]), "price_read": result["price_read"]}))
 if __name__ == "__main__":
     main()

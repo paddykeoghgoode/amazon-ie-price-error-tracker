@@ -12,21 +12,17 @@ def report(data: dict, published: bool = False) -> str:
         "",
         f"Scan timestamp (UTC): **{data.get('last_section_at') or data.get('generated_at') or 'unknown'}**",
         "",
-        "| Section | Last scan (UTC) | Status | Items | Verified / attempted | Catalogue checked / priced | CeX attempted | CeX matched | Price errors | CeX sale flips | CeX regular flips |",
+        "| Section | Last scan (UTC) | Status | Items | Seller check | Catalogue checked / priced | CeX attempted | CeX matched | Price errors | CeX sale flips | CeX regular flips |",
         "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for sid, section in sections.items():
         stats = section.get("cex_stats") or {}
-        verified = section.get("verification_stats") or {}
         cat = section.get("catalogue_stats") or {}
         progress = (
             f"{int(cat.get('checked') or 0)}/{int(cat.get('priced') or 0)}"
             if "priced" in cat else "not started"
         )
-        checked = (
-            f"{int(verified.get('amazon_verified') or 0)}/{int(verified.get('attempted') or 0)}"
-            if "attempted" in verified else "not measured"
-        )
+        checked = "disabled"
         lines.append(
             f"| {section.get('section_name') or sid} "
             f"| {section.get('generated_at') or 'unknown'} "
@@ -40,14 +36,7 @@ def report(data: dict, published: bool = False) -> str:
             f"| {int(stats.get('cash_flips') or 0)} "
             f"| {int(stats.get('arbitrage') or 0)} |"
         )
-    for sid, section in sections.items():
-        reasons = (section.get("verification_stats") or {}).get("rejection_reasons") or {}
-        if reasons:
-            breakdown = ", ".join(
-                f"{reason.replace('_', ' ')}: {count}"
-                for reason, count in sorted(reasons.items(), key=lambda item: -int(item[1]))
-            )
-            lines.append(f"\n**{section.get('section_name') or sid} rejection reasons:** {breakdown}")
+    lines.append("\n**Every finding is a research lead. Amazon seller, condition and checkout price are not checked.**")
     return "\n".join(lines) + "\n"
 
 

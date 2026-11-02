@@ -32,6 +32,7 @@ _SECTION_STORE_KEYS = (
     "cex_min_cash_profit_percent",
     "cex_enabled",
     "verification_stats",
+    "seller_verification_enabled",
     "catalogue_stats",
     "new_alerts",
     "scan_status",
@@ -66,11 +67,48 @@ def _merge_deep_drops(sections: dict[str, dict]) -> dict[str, list[dict]]:
     return merged
 
 
+def _unverified_research_rows(rows: list[dict]) -> list[dict]:
+    """Prevent historical scans from retaining an obsolete seller-verified flag."""
+    cleaned = []
+    for original in rows:
+        row = {**original}
+        for key in ("seller_verified", "seller_name", "seller_type",
+                    "seller_status", "fulfilment_status", "verified_at"):
+            row.pop(key, None)
+        row["seller_check"] = "disabled"
+        cleaned.append(row)
+    return cleaned
+
+
+def _disable_seller_claims(section: dict) -> dict:
+    snap = {**section, "seller_verification_enabled": False,
+            "verification_stats": {"status": "disabled"}}
+    for kind in ("drops", "cex_flips", "cex_arbitrage", "cex_near_margin", "cex_lookups"):
+        if kind in snap:
+            snap[kind] = _unverified_research_rows(snap[kind] or [])
+    if "deep_drops" in snap:
+        snap["deep_drops"] = {
+            tier: _unverified_research_rows(rows or [])
+            for tier, rows in (snap["deep_drops"] or {}).items()
+        }
+    stats = dict(snap.get("catalogue_stats") or {})
+    if stats:
+        stats["verified"] = 0
+        stats["cex_eligible_matched"] = 0
+        snap["catalogue_stats"] = stats
+    return snap
+
+
 def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
     """Merge one section crawl into the rolling deals snapshot."""
     section_id = str(incoming.get("section_id") or "default")
-    sections: dict[str, dict] = dict((previous or {}).get("sections") or {})
-    sections[section_id] = {key: incoming[key] for key in _SECTION_STORE_KEYS if key in incoming}
+    sections: dict[str, dict] = {
+        sid: _disable_seller_claims(snap)
+        for sid, snap in ((previous or {}).get("sections") or {}).items()
+    }
+    sections[section_id] = _disable_seller_claims({
+        key: incoming[key] for key in _SECTION_STORE_KEYS if key in incoming
+    })
     if incoming.get("section_name"):
         sections[section_id]["section_name"] = incoming["section_name"]
     # Keep the first sighting time for the same ASIN and listing price while
@@ -98,7 +136,7 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
     requests = 0
     errors = 0
     blocked = False
-    verify_stats = {"attempted": 0, "amazon_verified": 0, "rejected_or_unknown": 0}
+    verify_stats = {"status": "disabled"}
     stats = {"deep_candidates": 0, "any_price_candidates": 0, "attempted": 0, "live_lookups": 0, "cache_hits": 0, "deferred": 0, "errors": 0, "rate_limited": 0, "provisional_matches": 0, "lookups": 0, "cash_flips": 0, "arbitrage": 0}
     catalogue_stats = {"discovered": 0, "active": 0, "archived": 0, "priced": 0, "checked": 0, "remaining": 0, "verified": 0, "cex_attempted": 0, "cex_matched": 0, "cex_eligible_matched": 0, "cex_cache_records": 0, "unpriced": 0, "checked_this_run": 0}
 
@@ -115,8 +153,6 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
         requests += int(snap.get("requests") or 0)
         errors += int(snap.get("errors") or 0)
         blocked = blocked or bool(snap.get("blocked"))
-        for key in verify_stats:
-            verify_stats[key] += int((snap.get('verification_stats') or {}).get(key) or 0)
         for key in catalogue_stats:
             catalogue_stats[key] += int((snap.get('catalogue_stats') or {}).get(key) or 0)
         st = snap.get("cex_stats") or {}
@@ -175,6 +211,7 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
         "cex_lookups": cex_lookups,
         "cex_stats": stats,
         "verification_stats": verify_stats,
+        "seller_verification_enabled": False,
         "catalogue_stats": catalogue_stats,
         "price_baselines": {asin: row for snap in sections.values() for asin, row in (snap.get("price_baselines") or {}).items()},
         "alerts": incoming.get("alerts") or base.get("alerts") or [],
@@ -206,7 +243,8 @@ def export_deals(
         "items_priced": processed.priced,
         "items_with_history": processed.with_history,
         "new_alerts": len(processed.alerts),
-        "verification_stats": processed.verification_stats,
+        "seller_verification_enabled": False,
+        "verification_stats": {"status": "disabled"},
         "catalogue_stats": processed.catalogue_stats,
         "scan_status": "blocked" if result.blocked else ("partial" if result.errors else "completed"),
         "drops": [{**row, "found_at": datetime.now(timezone.utc).isoformat()} for row in processed.drops[:max_drops]],
@@ -217,8 +255,8 @@ def export_deals(
         "cex_min_cash_profit_eur": config.cex_min_cash_profit_eur if config else 5.0,
         "cex_min_cash_profit_percent": config.cex_min_cash_profit_percent if config else 10.0,
         "cex_lookups": processed.cex_lookups[:30],
-        "cex_flips": [{**row, "found_at": row.get("verified_at")} for row in processed.cex_flips[:20]],
-        "cex_arbitrage": [{**row, "found_at": row.get("verified_at")} for row in processed.cex_arbitrage[:30]],
+        "cex_flips": [{**row, "found_at": row.get("observed_at") or datetime.now(timezone.utc).isoformat()} for row in processed.cex_flips[:20]],
+        "cex_arbitrage": [{**row, "found_at": row.get("observed_at") or datetime.now(timezone.utc).isoformat()} for row in processed.cex_arbitrage[:30]],
         "cex_near_margin": sorted(
             [
                 row
@@ -252,6 +290,7 @@ def render_deals_markdown(payload: dict[str, Any]) -> str:
         "(an item needs 3 crawls before it can be flagged)",
         f"- Flag rule: price ≥{payload.get('min_discount_percent', 75):g}% below that item's recent median price",
         f"- Pages fetched: {payload.get('requests', 0)} ({payload.get('errors', 0)} failed)",
+        "- **Research leads only:** seller, listing condition and final checkout price are not verified.",
     ]
     if payload.get("blocked"):
         lines.extend(

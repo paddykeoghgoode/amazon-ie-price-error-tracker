@@ -44,14 +44,14 @@ class TestNetProfit(unittest.TestCase):
 
 
 class TestHotlist(unittest.TestCase):
-    def test_only_recent_verified_drops(self):
+    def test_recent_observed_drops_do_not_require_seller(self):
         now = datetime.now(timezone.utc)
         data = {"drops": [
-            {"asin": "A", "drop_percent": 40, "seller_verified": True, "verified_at": now.isoformat()},
-            {"asin": "B", "drop_percent": 90, "seller_verified": False, "verified_at": now.isoformat()},
-            {"asin": "C", "drop_percent": 10, "seller_verified": True, "verified_at": now.isoformat()},
+            {"asin": "A", "drop_percent": 40, "found_at": now.isoformat()},
+            {"asin": "B", "drop_percent": 90, "found_at": now.isoformat()},
+            {"asin": "C", "drop_percent": 10, "found_at": now.isoformat()},
         ]}
-        self.assertEqual([r["asin"] for r in candidates(data, now)], ["A"])
+        self.assertEqual([r["asin"] for r in candidates(data, now)], ["B", "A"])
 
 
 if __name__ == "__main__":

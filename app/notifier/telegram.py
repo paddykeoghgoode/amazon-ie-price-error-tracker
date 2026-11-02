@@ -34,7 +34,8 @@ def format_price_alert(
     reason: str,
 ) -> str:
     lines = [
-        "🚨 Possible Amazon.ie price error",
+        "🚨 POSSIBLE Amazon.ie price drop — research lead",
+        "⚠️ Seller, condition and checkout price NOT verified. Confirm the exact offer before buying.",
         "",
         title or f"ASIN {asin}",
         f"Now: €{price_eur:.2f}",
