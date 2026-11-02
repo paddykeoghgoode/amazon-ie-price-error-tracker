@@ -37,11 +37,21 @@ def export_deals(
         "deep_drop_tiers": [int(t) for t in tiers],
         "deep_drops": tiered_deep_drops(processed.drops, tiers),
         "cex_enabled": bool(config.cex_enabled if config else True),
-        "cex_min_cash_profit_eur": config.cex_min_cash_profit_eur if config else 15.0,
+        "cex_min_cash_profit_eur": config.cex_min_cash_profit_eur if config else 5.0,
         "cex_min_cash_profit_percent": config.cex_min_cash_profit_percent if config else 10.0,
         "cex_lookups": processed.cex_lookups[:30],
         "cex_flips": processed.cex_flips[:20],
         "cex_arbitrage": processed.cex_arbitrage[:30],
+        "cex_near_margin": sorted(
+            [
+                row
+                for row in processed.cex_lookups
+                if not row.get("cex_cash_flip") and (row.get("cex_cash_profit_eur") or 0) > 0
+            ],
+            key=lambda r: r.get("cex_cash_profit_eur") or 0,
+            reverse=True,
+        )[:15],
+        "cex_stats": processed.cex_stats,
     }
     return payload
 
@@ -122,7 +132,7 @@ def render_deals_markdown(payload: dict[str, Any]) -> str:
 
     lines.extend(["", "## CeX cash trade-in (after your profit margin)", ""])
     flips = payload.get("cex_flips") or []
-    min_eur = payload.get("cex_min_cash_profit_eur", 15)
+    min_eur = payload.get("cex_min_cash_profit_eur", 5)
     min_pct = payload.get("cex_min_cash_profit_percent", 10)
     lines.append(
         f"CeX match is approximate (search by title). A flip needs at least **€{min_eur:g}** "

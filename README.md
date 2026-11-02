@@ -31,7 +31,7 @@ Besides price-error alerts, the bot sends:
 
 ## Bestseller scan (thousands of items, no manual adding)
 
-Each run walks Amazon.ie's bestseller lists. It starts with coffee machines, then goes through every department and its subcategories until it has tracked **10,000 items**.
+Each run walks Amazon.ie's bestseller lists in the order set in [`bestsellers.json`](bestsellers.json): **video games, electronics, toys**, then home, beauty, books, and the rest (see the `categories` array). It stops at **`max_items`** (default **12,000** unique products).
 
 - Bestseller pages don't show a "was" price, so each item is judged against **its own price history**. An item needs 3 crawls before it can be flagged. It is flagged when its price is ≥75% below its recent median (median ≥ €20).
 - Items sold in several variants at different prices (for example "€9.99 – €24.99") are skipped, because their lowest price jumps between variants.

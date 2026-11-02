@@ -46,7 +46,7 @@ class CrawlConfig:
     cex_enabled: bool = True
     cex_max_lookups: int = 40
     cex_request_delay_seconds: float = 0.35
-    cex_min_cash_profit_eur: float = 15.0
+    cex_min_cash_profit_eur: float = 5.0
     cex_min_cash_profit_percent: float = 10.0
     cex_max_alerts_per_run: int = 5
     cex_scan_any_price: bool = True
@@ -109,6 +109,7 @@ class ProcessResult:
     cex_lookups: list[dict] = field(default_factory=list)
     cex_flips: list[dict] = field(default_factory=list)
     cex_arbitrage: list[dict] = field(default_factory=list)
+    cex_stats: dict = field(default_factory=dict)
 
 
 def load_config(path: Path) -> CrawlConfig:

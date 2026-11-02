@@ -158,14 +158,55 @@ function renderDeepDrops(deals) {
   }
 }
 
+function cexStatusLine(deals) {
+  const stats = deals.cex_stats || {};
+  const lookups = stats.lookups ?? (deals.cex_lookups || []).length;
+  const minEur = deals.cex_min_cash_profit_eur ?? 5;
+  const minPct = deals.cex_min_cash_profit_percent ?? 10;
+  if (!lookups && !stats.deep_candidates && !stats.any_price_candidates) {
+    return (
+      "No CeX data in this snapshot — run Actions → Scan and publish tracker (bestseller crawl must finish, ~20 min)."
+    );
+  }
+  if (!lookups) {
+    return (
+      `CeX was queued for ${stats.deep_candidates || 0} sale items and ${stats.any_price_candidates || 0} regular-price items, but no CeX match returned a price (API or title match).`
+    );
+  }
+  return `CeX checked ${lookups} title matches · margin ≥€${minEur} or ≥${minPct}% · ${stats.cash_flips || 0} on-sale flips · ${stats.arbitrage || 0} any-price flips.`;
+}
+
+function renderNearMargin(bodyId, tableId, rows) {
+  const body = document.getElementById(bodyId);
+  const table = document.getElementById(tableId);
+  if (!body || !table) return;
+  body.innerHTML = "";
+  if (!rows.length) {
+    table.hidden = true;
+    return;
+  }
+  table.hidden = false;
+  for (const row of rows) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>
+        <a href="${escapeHtml(row.url)}" target="_blank" rel="noopener">${escapeHtml(row.title || row.asin)}</a>
+        <div class="hint"><a href="${escapeHtml(row.cex_url)}" target="_blank" rel="noopener">CeX listing</a> · need €${Number(row.cex_min_profit_eur).toFixed(0)}</div>
+      </td>
+      <td class="price">${fmtEuro(row.price_eur)}</td>
+      <td class="price">${fmtEuro(row.cex_cash_eur)}</td>
+      <td class="price">€${Number(row.cex_cash_profit_eur).toFixed(2)}</td>`;
+    body.appendChild(tr);
+  }
+}
+
 function renderCex(deals) {
   if (!deals || !deals.generated_at) return;
-  const minEur = deals.cex_min_cash_profit_eur ?? 15;
-  const minPct = deals.cex_min_cash_profit_percent ?? 10;
+  const stats = deals.cex_stats || {};
+  const lookups = stats.lookups ?? (deals.cex_lookups || []).length;
   const summary = document.getElementById("cex-summary");
   if (summary) {
-    summary.textContent =
-      `CeX.ie cash trade-in vs Amazon (title match). Needs ≥€${minEur} or ≥${minPct}% profit after you buy on Amazon. Always confirm model and grade in store.`;
+    summary.textContent = cexStatusLine(deals);
   }
   const flips = deals.cex_flips || [];
   const table = document.getElementById("cex-table");
@@ -175,14 +216,22 @@ function renderCex(deals) {
   body.innerHTML = "";
   if (!flips.length) {
     if (table) table.hidden = true;
-    if (empty) empty.hidden = false;
-    return;
+    if (empty) {
+      empty.hidden = false;
+      empty.textContent =
+        lookups > 0
+          ? "No on-sale CeX flips met your margin this crawl (see close matches below if any)."
+          : "No CeX cash flips yet — wait for a full bestseller crawl (~20 min) after merging.";
+    }
+  } else {
+    if (empty) empty.hidden = true;
+    if (table) table.hidden = false;
+    for (const row of flips) {
+      appendCexRow(body, row, true);
+    }
   }
-  if (empty) empty.hidden = true;
-  if (table) table.hidden = false;
-  for (const row of flips) {
-    appendCexRow(body, row, true);
-  }
+  const near = (deals.cex_near_margin || []).filter((r) => r.drop_tier != null);
+  renderNearMargin("cex-near-body", "cex-near-table", near);
 }
 
 function appendCexRow(body, row, showDrop) {
@@ -204,13 +253,13 @@ function appendCexRow(body, row, showDrop) {
 
 function renderCexArbitrage(deals) {
   if (!deals || !deals.generated_at) return;
+  const rows = deals.cex_arbitrage || [];
   const summary = document.getElementById("cex-arb-summary");
   if (summary) {
     summary.textContent =
-      "Normal Amazon bestseller prices vs CeX cash trade-in (gaming/electronics keywords). " +
-      "Each row includes Amazon + CeX links when profit clears your margin — no price drop required.";
+      "Regular Amazon bestseller prices vs CeX cash trade-in (gaming/electronics keywords). " +
+      cexStatusLine(deals);
   }
-  const rows = deals.cex_arbitrage || [];
   const table = document.getElementById("cex-arb-table");
   const body = document.getElementById("cex-arb-body");
   const empty = document.getElementById("cex-arb-empty");
@@ -219,13 +268,15 @@ function renderCexArbitrage(deals) {
   if (!rows.length) {
     if (table) table.hidden = true;
     if (empty) empty.hidden = false;
-    return;
+  } else {
+    if (empty) empty.hidden = true;
+    if (table) table.hidden = false;
+    for (const row of rows) {
+      appendCexRow(body, row, false);
+    }
   }
-  if (empty) empty.hidden = true;
-  if (table) table.hidden = false;
-  for (const row of rows) {
-    appendCexRow(body, row, false);
-  }
+  const near = (deals.cex_near_margin || []).filter((r) => r.drop_tier == null);
+  renderNearMargin("cex-arb-near-body", "cex-arb-near-table", near);
 }
 
 function renderDeals(deals) {
