@@ -16,7 +16,7 @@ from typing import Any
 from app.services.bestsellers import CrawlResult
 
 CSV_COLUMNS = (
-    "section", "asin", "title", "url", "category", "rank", "price_eur",
+    "section", "asin", "title", "url", "category", "rank", "price_eur", "active",
     "first_seen_at", "last_seen_at", "verification_status", "last_checked_at",
     "seller_name", "seller_type", "cex_status", "cex_box_name", "cex_url",
     "cex_cash_eur", "cex_net_profit_eur", "cex_max_buy_eur",
@@ -69,6 +69,7 @@ def make_section_catalogue(
             "category": category,
             "rank": item.rank,
             "price_eur": price,
+            "active": True,
             "first_seen_at": prior.get("first_seen_at") or stamp,
             "last_seen_at": stamp,
             "verification_status": "pending" if price is not None else "no_price",
@@ -83,6 +84,23 @@ def make_section_catalogue(
                 if key in prior:
                     row[key] = prior[key]
         items.append(row)
+    # Preserve recently discovered listings that fall out of the bestseller
+    # chart, but do not spend Amazon/CeX requests on stale, unobserved prices.
+    current_asins = {row["asin"] for row in items}
+    for asin, prior in old.items():
+        if asin in current_asins:
+            continue
+        try:
+            last_seen = datetime.fromisoformat(prior.get("last_seen_at") or "")
+            seen_now = datetime.fromisoformat(stamp)
+            fresh_enough = (
+                last_seen.tzinfo is not None and seen_now.tzinfo is not None
+                and timedelta(0) <= seen_now - last_seen <= timedelta(days=30)
+            )
+        except (TypeError, ValueError):
+            fresh_enough = False
+        if fresh_enough:
+            items.append({**prior, "active": False})
     return {
         "section_id": section_id,
         "section_name": section_name,
@@ -106,7 +124,7 @@ def select_check_batch(
         return []
     items = [
         row for row in section.get("items") or []
-        if row.get("price_eur") is not None and row.get("asin")
+        if row.get("price_eur") is not None and row.get("asin") and row.get("active", True)
     ]
     oldest = sorted(items, key=lambda r: (bool(r.get("last_checked_at")), r.get("last_checked_at") or ""))
     by_asin = {row["asin"]: row for row in oldest}
@@ -176,17 +194,20 @@ def apply_batch_results(
 
 def catalogue_progress(section: dict, *, checked_this_run: int = 0) -> dict:
     items = section.get("items") or []
-    priced = [row for row in items if row.get("price_eur") is not None]
+    active = [row for row in items if row.get("active", True)]
+    priced = [row for row in active if row.get("price_eur") is not None]
     checked = [row for row in priced if row.get("last_checked_at")]
     return {
         "discovered": len(items),
+        "active": len(active),
+        "archived": len(items) - len(active),
         "priced": len(priced),
         "checked": len(checked),
         "remaining": len(priced) - len(checked),
         "verified": sum(row.get("verification_status") == "verified" for row in checked),
         "cex_attempted": sum(bool(row.get("cex_checked_at")) for row in checked),
         "cex_matched": sum(row.get("cex_status") == "matched" for row in checked),
-        "unpriced": len(items) - len(priced),
+        "unpriced": len(active) - len(priced),
         "checked_this_run": checked_this_run,
     }
 
