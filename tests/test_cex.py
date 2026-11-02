@@ -1,7 +1,7 @@
 import unittest
 
 from app.scraper.bestsellers import BestsellerItem
-from app.scraper.cex_ie import CexPrices, search_query_from_title
+from app.scraper.cex_ie import CexPrices, pick_best_box_hit, search_query_from_title, titles_match_for_trade_in
 from app.services.bestsellers import CrawlConfig, CrawlResult
 from app.services.cex_arbitrage import build_cex_row, required_cash_profit, select_any_price_candidates
 from app.services.drop_tiers import drop_tier, tiered_deep_drops
@@ -65,6 +65,31 @@ class TestSearchQuery(unittest.TestCase):
         q = search_query_from_title("Sony PS5 Console White - Amazon.ie Renewed")
         self.assertIn("Sony", q)
         self.assertNotIn("Amazon", q)
+
+
+class TestCexTitleMatch(unittest.TestCase):
+    def test_rejects_wrong_brand_headset(self):
+        amazon = "Ozeino Wireless Gaming Headset with Microphone for PS5"
+        cex = "SteelSeries Arctis 7 Wireless Gaming Headset"
+        self.assertFalse(titles_match_for_trade_in(amazon, cex))
+
+    def test_accepts_matching_brand(self):
+        amazon = "SteelSeries Arctis 7P Wireless Gaming Headset"
+        cex = "SteelSeries Arctis 7P Headset Black"
+        self.assertTrue(titles_match_for_trade_in(amazon, cex))
+
+    def test_picks_second_hit_when_first_is_wrong(self):
+        hits = [
+            {"boxId": "1", "boxName": "SteelSeries Arctis 7 Headset"},
+            {"boxId": "2", "boxName": "Ozeino Pro Wireless Gaming Headset"},
+        ]
+        picked = pick_best_box_hit("Ozeino Pro Wireless Gaming Headset USB", hits)
+        self.assertIsNotNone(picked)
+        self.assertEqual(picked["boxId"], "2")
+
+    def test_rejects_when_no_hit_matches(self):
+        hits = [{"boxId": "1", "boxName": "SteelSeries Arctis 7 Headset"}]
+        self.assertIsNone(pick_best_box_hit("Ozeino Wireless Gaming Headset", hits))
 
 
 class TestTieredDrops(unittest.TestCase):
