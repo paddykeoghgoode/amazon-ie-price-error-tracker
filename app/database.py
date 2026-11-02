@@ -1,3 +1,5 @@
+import math
+import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -57,6 +59,15 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS meta (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
+            );
+
+            -- A compact, stable reference that survives rolling 20-price pruning.
+            CREATE TABLE IF NOT EXISTS price_baselines (
+                product_id INTEGER PRIMARY KEY,
+                reference_eur REAL NOT NULL,
+                confirmed_at TEXT NOT NULL,
+                last_seen_at TEXT NOT NULL,
+                FOREIGN KEY (product_id) REFERENCES products(id)
             );
             """
         )
@@ -295,3 +306,104 @@ def median_historical_price(product_id: int, limit: int = 20) -> float | None:
     if len(prices) % 2:
         return prices[mid]
     return (prices[mid - 1] + prices[mid]) / 2
+
+
+def get_price_baseline(product_id: int) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT reference_eur, confirmed_at, last_seen_at "
+            "FROM price_baselines WHERE product_id = ?",
+            (product_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def save_price_baseline(
+    product_id: int, reference_eur: float, *, confirmed_at: str, last_seen_at: str
+) -> None:
+    with _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO price_baselines (product_id, reference_eur, confirmed_at, last_seen_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(product_id) DO UPDATE SET
+                reference_eur = excluded.reference_eur,
+                confirmed_at = excluded.confirmed_at,
+                last_seen_at = excluded.last_seen_at
+            """,
+            (product_id, reference_eur, confirmed_at, last_seen_at),
+        )
+
+
+def delete_price_baseline(product_id: int) -> None:
+    with _connect() as conn:
+        conn.execute("DELETE FROM price_baselines WHERE product_id = ?", (product_id,))
+
+
+def export_price_baselines(asins: set[str]) -> dict[str, list]:
+    """Compact Pages checkpoint: ASIN -> [reference EUR, last confirmed, last seen]."""
+    if not asins:
+        return {}
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT p.asin, b.reference_eur, b.confirmed_at, b.last_seen_at
+            FROM price_baselines b JOIN products p ON p.id = b.product_id
+            """
+        ).fetchall()
+    return {
+        row["asin"]: [round(float(row["reference_eur"]), 2), row["confirmed_at"], row["last_seen_at"]]
+        for row in rows if row["asin"] in asins
+    }
+
+
+def import_price_baselines(checkpoint: dict) -> int:
+    """Recover anchors when the Actions cache is absent; prefer newer published state.
+
+    Only public numeric price references are imported. No credentials or raw HTML.
+    """
+    if not isinstance(checkpoint, dict):
+        return 0
+    valid: list[tuple[str, float, str, str]] = []
+    for asin, row in checkpoint.items():
+        if not isinstance(asin, str) or not re.fullmatch(r"[A-Z0-9]{10}", asin):
+            continue
+        if not isinstance(row, list) or len(row) != 3:
+            continue
+        try:
+            price = float(row[0])
+            confirmed = datetime.fromisoformat(row[1])
+            seen = datetime.fromisoformat(row[2])
+            if (
+                not math.isfinite(price) or price <= 0 or
+                confirmed.tzinfo is None or seen.tzinfo is None or
+                confirmed > seen or seen > datetime.now(timezone.utc)
+            ):
+                continue
+        except (ValueError, TypeError, OverflowError):
+            continue
+        valid.append((asin, price, str(row[1]), str(row[2])))
+    if not valid:
+        return 0
+    with _connect() as conn:
+        conn.executemany(
+            """
+            INSERT INTO products (asin, url, created_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(asin) DO NOTHING
+            """,
+            [(asin, f"https://www.amazon.ie/dp/{asin}", _utc_now()) for asin, *_ in valid],
+        )
+        conn.executemany(
+            """
+            INSERT INTO price_baselines (product_id, reference_eur, confirmed_at, last_seen_at)
+            SELECT id, ?, ?, ? FROM products WHERE asin = ?
+            ON CONFLICT(product_id) DO UPDATE SET
+                reference_eur = excluded.reference_eur,
+                confirmed_at = excluded.confirmed_at,
+                last_seen_at = excluded.last_seen_at
+            WHERE excluded.last_seen_at > price_baselines.last_seen_at
+            """,
+            [(price, confirmed, seen, asin) for asin, price, confirmed, seen in valid],
+        )
+    return len(valid)

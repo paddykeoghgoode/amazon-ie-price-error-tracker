@@ -178,6 +178,13 @@ async def run(args: argparse.Namespace) -> None:
     base = load_config(args.config)
     if args.max_items is not None:
         base.max_items = args.max_items
+    # Published baseline checkpoints survive GitHub cache eviction. Import before scanning.
+    if args.merge_previous and args.merge_previous.exists():
+        previous = read_snapshot(args.merge_previous)
+        for section_data in (previous.get("sections") or {}).values():
+            db.import_price_baselines(section_data.get("price_baselines") or {})
+        # Also support a snapshot produced before sectioned checkpoints.
+        db.import_price_baselines(previous.get("price_baselines") or {})
     sections = load_sections(args.config)
     section_id = resolve_section_id(args, sections)
     notify = not args.no_notify

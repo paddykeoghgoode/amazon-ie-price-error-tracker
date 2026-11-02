@@ -40,6 +40,7 @@ class CrawlConfig:
     max_alerts_per_run: int = 15
     alert_cooldown_minutes: int = 1440
     history_per_product: int = 20
+    baseline_max_age_days: int = 30
     report_drop_percent: float = 30.0
     daily_summary_hour: int | None = 9
     deep_drop_tiers: list[float] = field(default_factory=lambda: [40.0, 50.0, 66.0])
@@ -135,6 +136,7 @@ def load_config(path: Path) -> CrawlConfig:
         max_alerts_per_run=int(raw.get("max_alerts_per_run", defaults.max_alerts_per_run)),
         alert_cooldown_minutes=int(raw.get("alert_cooldown_minutes", defaults.alert_cooldown_minutes)),
         history_per_product=int(raw.get("history_per_product", defaults.history_per_product)),
+        baseline_max_age_days=max(1, int(raw.get("baseline_max_age_days", defaults.baseline_max_age_days))),
         report_drop_percent=float(raw.get("report_drop_percent", defaults.report_drop_percent)),
         daily_summary_hour=raw.get("daily_summary_hour", defaults.daily_summary_hour),
         deep_drop_tiers=[float(x) for x in raw.get("deep_drop_tiers", defaults.deep_drop_tiers)],
@@ -261,15 +263,17 @@ def process_crawl(result: CrawlResult, config: CrawlConfig) -> ProcessResult:
             snap,
             known_title=item.title,
             cooldown_minutes=config.alert_cooldown_minutes,
+            baseline_max_age_days=config.baseline_max_age_days,
         )
         if alert:
             processed.alerts.append(alert)
 
-        median = db.median_historical_price(product_id)
-        if median is None:
+        anchor = db.get_price_baseline(product_id)
+        if not anchor:
             continue
+        reference_eur = float(anchor["reference_eur"])
         processed.with_history += 1
-        drop = round((1 - item.price_eur / median) * 100, 1) if median > 0 else 0.0
+        drop = round((1 - item.price_eur / reference_eur) * 100, 1) if reference_eur > 0 else 0.0
         if drop >= config.report_drop_percent:
             processed.drops.append(
                 {
@@ -279,7 +283,14 @@ def process_crawl(result: CrawlResult, config: CrawlConfig) -> ProcessResult:
                     "category": category,
                     "rank": item.rank,
                     "price_eur": item.price_eur,
-                    "median_eur": round(median, 2),
+                    "median_eur": round(reference_eur, 2),  # legacy dashboard key
+                    "reference_eur": round(reference_eur, 2),
+                    "reference_confirmed_at": anchor["confirmed_at"],
+                    "recent_prices": [
+                        [check["checked_at"], check["price_eur"]]
+                        for check in reversed(db.price_history(product_id, limit=12))
+                        if check["price_eur"] is not None
+                    ],
                     "drop_percent": drop,
                     "drop_tier": drop_tier(drop, config.deep_drop_tiers),
                 }

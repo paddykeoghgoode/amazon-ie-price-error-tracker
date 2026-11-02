@@ -33,7 +33,7 @@ Besides price-error alerts, the bot sends:
 
 Each scheduled run crawls **one section** from [`bestsellers.json`](bestsellers.json) (~5–8 minutes), **publishes the dashboard**, sends a **section summary on Telegram**, and rotates **gaming → home → lifestyle → general** every 30 minutes. Run **Actions → Scan and publish tracker** with section **all** when you want a full crawl (~20 minutes, with a publish after each section).
 
-- Bestseller pages don't show a "was" price, so each item is judged against **its own price history**. An item needs 3 crawls before it can be flagged. It is flagged when its price is ≥75% below its recent median (median ≥ €20).
+- Bestseller pages don't show a "was" price, so each item is judged against **its own price history**. It needs **three prior, consistent price observations** (within 20% of their median) before a stable reference can be established. On the fourth observation, a price ≥75% below that reference (reference ≥€20) can trigger an alert. The reference is kept separate from the newest price, so a prolonged sale cannot immediately erase the original drop.
 - Items sold in several variants at different prices (for example "€9.99 – €24.99") are skipped, because their lowest price jumps between variants.
 - One crawl sends at most 15 Telegram alerts, plus a single "…and N more" message. The same item won't alert again within 24 hours unless its price drops further.
 - The dashboard also lists **deep drops** at **40%, 50% and 66%** below each item's recent Amazon price (handy for electronics and games even when it's not a full "price error").
@@ -45,6 +45,14 @@ Run it locally:
 ```bash
 python -m scripts.crawl_bestsellers --max-items 500 --no-notify
 ```
+
+### Where previous prices live
+
+- Each ASIN's recent observations (price, timestamp, scraped list price) are written to the SQLite `price_checks` table in `data/bestsellers.db`. The newest **20 checks** are kept locally for bestsellers, while the separate `price_baselines` table holds the longer-lived reference price.
+- GitHub Actions stores the SQLite DB in its **Actions cache**. Caches are not durable archives. The best current baseline for every crawled ASIN is also checkpointed in the relevant section of the published `docs/deals.json` so another run can restore it if the cache disappears.
+- A new product needs three **prior** observations to establish its price reference; early drops cannot be reliably confirmed by Amazon history alone. The reference updates gently for normal-price movements, but does not follow a sharp price cut. If it has not been confirmed close to normal for 30 days, the system tries to re-establish a stable price reference or retires the stale reference.
+- For recent big drops, the output also includes up to twelve recent timestamped price observations and the reference confirmation time. Existing old prices not previously collected cannot be recovered.
+- The public dashboard only displays a subset of opportunities; `deals.json` contains the compact baseline checkpoint for the visited sections. This is a resilience measure rather than a long-term complete price-history service.
 
 ### CeX profitability assumptions
 
