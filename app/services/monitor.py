@@ -8,7 +8,7 @@ from app.config import settings
 from app import database as db
 from app.detector.price_error import evaluate_price, should_notify_again
 from app.notifier.telegram import format_price_alert, send_telegram_message, send_whatsapp_message
-from app.scraper.amazon_ie import ProductSnapshot, extract_asin, fetch_product, normalize_product_url, is_eligible_amazon_offer
+from app.scraper.amazon_ie import ProductSnapshot, extract_asin, fetch_product, normalize_product_url
 from app.services.price_history import observe_price_reference
 
 logger = logging.getLogger(__name__)
@@ -49,31 +49,30 @@ def record_and_detect(
         snap.currency,
     )
 
-    return detect_verified_price(
+    return detect_price_lead(
         product_id, snap, known_title=known_title,
         cooldown_minutes=cooldown_minutes,
     )
 
 
-def detect_verified_price(
+def detect_price_lead(
     product_id: int,
     snap: ProductSnapshot,
     *,
     known_title: str | None = None,
     cooldown_minutes: int | None = None,
 ) -> DetectedAlert | None:
-    """Create an alert only for a confirmed buy-box offer.
+    """Flag a suspected price error without checking Amazon's marketplace seller.
 
-    The bestseller crawler has already saved its price observation before it
-    verifies the product page. Calling record_and_detect again would duplicate
-    that price observation and distort price history/baselines.
+    The observed price can be from a bestseller card or product page. It is
+    never a confirmed checkout price; notifications explicitly say so.
     """
     verdict = evaluate_price(
         product_id=product_id,
         price_eur=snap.price_eur,
         list_price_eur=snap.list_price_eur,
     )
-    if not verdict.is_error or snap.price_eur is None or not is_eligible_amazon_offer(snap):
+    if not verdict.is_error or snap.price_eur is None:
         return None
     pending = db.last_alert_for_product(product_id)
     if (

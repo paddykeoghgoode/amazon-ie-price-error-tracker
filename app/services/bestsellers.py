@@ -347,17 +347,17 @@ async def send_cex_alerts(
         margin = float(row.get("cex_min_profit_eur") or 0)
         drop = row.get("drop_percent")
         if deep_drop and drop is not None:
-            headline = "💰 Possible CeX cash flip (Amazon on sale)\n\n"
+            headline = "💰 Possible CeX research lead (observed Amazon drop)\n\n"
             price_line = (
                 f"Amazon now: €{amazon:.2f} ({drop:g}% below its usual Amazon price)\n"
             )
         else:
-            headline = "💰 CeX cash profit (no Amazon sale needed)\n\n"
+            headline = "💰 Possible CeX research lead (no big drop)\n\n"
             price_line = f"Amazon now: €{amazon:.2f} (regular price — no big drop required)\n"
         match = row.get("match_confidence") or "title_only"
-        high = match in ("barcode_verified", "model_verified") and profit >= 25 and row.get("seller_verified")
+        high = match in ("barcode_verified", "model_verified") and profit >= 25
         if high:
-            headline = "🚨 HIGH PRIORITY verified CeX opportunity\n\n"
+            headline = "🚨 HIGH POTENTIAL CeX research lead (NOT checkout verified)\n\n"
         message = (
             f"{headline}{title}\n"
             f"{price_line}"
@@ -365,8 +365,9 @@ async def send_cex_alerts(
             f"(after configured costs/haircut; required profit ≥€{margin:.2f})\n"
             f"Max buy: €{float(row.get('cex_max_buy_eur') or 0):.2f} · break-even: €{float(row.get('cex_break_even_buy_eur') or 0):.2f}\n"
             f"ROI: {row.get('cex_net_roi_percent')}% · matching: {match}\n"
-            f"Seller: {row.get('seller_name')} ({row.get('seller_type')})\n"
-            f"Confirmed: {row.get('verified_at')} UTC\n"
+            f"Amazon price observed: {row.get('observed_at') or row.get('found_at') or 'latest section scan'}\n"
+            f"CeX quote checked: {row.get('cex_quote_checked_at') or 'unknown'}\n"
+            f"⚠️ RESEARCH ONLY: Amazon seller, condition, exact variant and checkout total are not checked. Confirm CeX grade/cash quote too.\n"
             f"CeX also sells similar for €{retail:.2f}\n\n"
             f"{row.get('url')}\n"
             f"{row.get('cex_url')}\n\n"
