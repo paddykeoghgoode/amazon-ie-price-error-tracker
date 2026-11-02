@@ -111,11 +111,12 @@ async def enrich_with_cex(
     try:
         for item in to_check:
             query = cex_ie.search_query_from_title(item.get("title"))
-            hits = await cex_ie.search_boxes(client, query, hits_per_page=3)
-            if not hits:
+            hits = await cex_ie.search_boxes(client, query, hits_per_page=5)
+            hit = cex_ie.pick_best_box_hit(item.get("title"), hits)
+            if not hit:
                 await asyncio.sleep(config.cex_request_delay_seconds)
                 continue
-            box_id = str(hits[0].get("boxId") or "")
+            box_id = str(hit.get("boxId") or "")
             prices = await cex_ie.fetch_box_prices(client, box_id)
             if not prices:
                 await asyncio.sleep(config.cex_request_delay_seconds)

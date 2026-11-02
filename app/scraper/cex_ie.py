@@ -28,6 +28,109 @@ _TITLE_NOISE = re.compile(
     r"with warranty|free delivery|amazon\.ie)\b",
     re.I,
 )
+_TOKEN = re.compile(r"[a-z0-9]+", re.I)
+
+# Words too generic to prove the same product.
+_GENERIC_TOKENS = frozenset(
+    {
+        "the",
+        "and",
+        "for",
+        "with",
+        "from",
+        "usb",
+        "wireless",
+        "wired",
+        "bluetooth",
+        "gaming",
+        "game",
+        "headset",
+        "headphones",
+        "earbuds",
+        "earphones",
+        "controller",
+        "console",
+        "edition",
+        "version",
+        "series",
+        "pro",
+        "max",
+        "plus",
+        "lite",
+        "mini",
+        "pack",
+        "set",
+        "kit",
+        "new",
+        "official",
+        "compatible",
+        "pc",
+        "ps4",
+        "ps5",
+        "xbox",
+        "nintendo",
+        "switch",
+        "iphone",
+        "ipad",
+        "android",
+        "windows",
+        "mac",
+        "rgb",
+        "noise",
+        "cancelling",
+        "canceling",
+        "microphone",
+        "mic",
+        "stereo",
+        "surround",
+        "digital",
+        "hdmi",
+        "led",
+        "oled",
+        "inch",
+        "inches",
+    }
+)
+
+_SKIP_LEADING_BRAND = frozenset({"amazon", "basics", "renewed", "certified"})
+
+# If both titles mention a brand from this set, they must share at least one.
+_KNOWN_BRANDS = frozenset(
+    {
+        "apple",
+        "samsung",
+        "sony",
+        "microsoft",
+        "nintendo",
+        "logitech",
+        "razer",
+        "steelseries",
+        "hyperx",
+        "corsair",
+        "astro",
+        "bose",
+        "jbl",
+        "beats",
+        "sennheiser",
+        "ozeino",
+        "trust",
+        "turtle",
+        "beach",
+        "asus",
+        "acer",
+        "lenovo",
+        "dell",
+        "hp",
+        "canon",
+        "nikon",
+        "gopro",
+        "meta",
+        "oculus",
+        "quest",
+        "playstation",
+        "xbox",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -52,6 +155,61 @@ def search_query_from_title(title: str | None) -> str:
     text = re.sub(r"[^\w\s&+\-/]", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text[:90]
+
+
+def _tokens(text: str) -> list[str]:
+    return [m.group(0).lower() for m in _TOKEN.finditer(text)]
+
+
+def _significant_tokens(text: str) -> set[str]:
+    return {t for t in _tokens(text) if len(t) >= 3 and t not in _GENERIC_TOKENS}
+
+
+def leading_brand(title: str | None) -> str | None:
+    """First non-generic token — usually the Amazon listing brand."""
+    if not title:
+        return None
+    for token in _tokens(title):
+        if token in _SKIP_LEADING_BRAND:
+            continue
+        if token in _GENERIC_TOKENS:
+            continue
+        if len(token) >= 3:
+            return token
+    return None
+
+
+def titles_match_for_trade_in(amazon_title: str | None, cex_box_name: str | None) -> bool:
+    """Reject Algolia hits that only share generic words (e.g. Ozeino headset → SteelSeries)."""
+    if not amazon_title or not cex_box_name:
+        return False
+    amazon_l = amazon_title.lower()
+    cex_l = cex_box_name.lower()
+    brand = leading_brand(amazon_title)
+    if brand and len(brand) >= 4 and brand not in _SKIP_LEADING_BRAND:
+        if brand not in cex_l:
+            return False
+
+    amazon_brands = _significant_tokens(amazon_l) & _KNOWN_BRANDS
+    cex_brands = _significant_tokens(cex_l) & _KNOWN_BRANDS
+    if amazon_brands and cex_brands and amazon_brands.isdisjoint(cex_brands):
+        return False
+
+    overlap = _significant_tokens(amazon_l) & _significant_tokens(cex_l)
+    if not overlap:
+        return False
+    # One distinctive shared token (model number, product line) is enough once brand checks pass.
+    if any(len(t) >= 5 for t in overlap):
+        return True
+    return len(overlap) >= 2
+
+
+def pick_best_box_hit(amazon_title: str | None, hits: list[dict]) -> dict | None:
+    for hit in hits:
+        name = hit.get("boxName") or hit.get("box_name") or ""
+        if titles_match_for_trade_in(amazon_title, str(name)):
+            return hit
+    return None
 
 
 async def search_boxes(client: httpx.AsyncClient, query: str, *, hits_per_page: int = 3) -> list[dict]:
