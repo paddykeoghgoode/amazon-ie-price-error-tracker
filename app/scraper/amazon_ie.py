@@ -4,6 +4,8 @@ import re
 import httpx
 from bs4 import BeautifulSoup
 
+from app.scraper.product_identity import amazon_identifiers
+
 AMAZON_IE_BASE = "https://www.amazon.ie"
 DEFAULT_HEADERS = {
     "User-Agent": (
@@ -28,6 +30,8 @@ class ProductSnapshot:
     seller_status: str = "unknown"
     fulfilment_status: str = "unknown"
     condition: str = "unknown"
+    barcode: str | None = None
+    model_number: str | None = None
 
 
 # Accept Amazon retail and explicitly Amazon-fulfilled marketplace offers.
@@ -228,6 +232,7 @@ def parse_product_html(html: str, asin: str, url: str) -> ProductSnapshot:
     availability = avail_el.get_text(" ", strip=True) if avail_el else None
 
     seller, fulfilment = _offer_from_buybox(soup)
+    barcode, model_number = amazon_identifiers(soup, asin)
     condition_text = " ".join(
         elem.get_text(" ", strip=True) for selector in ("#condition", "#condition-value", "#newAccordionRow")
         for elem in soup.select(selector)
@@ -245,6 +250,8 @@ def parse_product_html(html: str, asin: str, url: str) -> ProductSnapshot:
         seller_status=_seller_status(seller),
         fulfilment_status=fulfilment,
         condition=condition,
+        barcode=barcode,
+        model_number=model_number,
     )
 
 
