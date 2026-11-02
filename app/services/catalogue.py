@@ -20,11 +20,13 @@ CSV_COLUMNS = (
     "first_seen_at", "last_seen_at", "verification_status", "last_checked_at",
     "seller_name", "seller_type", "cex_status", "cex_box_name", "cex_url",
     "cex_cash_eur", "cex_net_profit_eur", "cex_max_buy_eur",
-    "match_confidence", "cex_checked_at",
+    "match_confidence", "cex_checked_at", "cex_quote_checked_at",
+    "cex_quote_source", "cex_quote_fresh_for_alert",
 )
 _CEX_FIELDS = (
     "cex_box_name", "cex_url", "cex_cash_eur", "cex_net_profit_eur",
     "cex_max_buy_eur", "match_confidence", "cex_checked_at",
+    "cex_quote_checked_at", "cex_quote_source", "cex_quote_fresh_for_alert",
 )
 _SELLER_FIELDS = ("seller_name", "seller_type", "fulfilment_status")
 _PRICE_EPS = 0.005
@@ -76,6 +78,15 @@ def make_section_catalogue(
             "last_checked_at": None,
             "cex_status": "not_checked" if price is not None else "not_applicable",
         }
+        # CeX box cash prices are independent of the current Amazon price.
+        # Only preserve this quote when the product identity (title) is unchanged.
+        if (prior.get("title") or "") == (item.title or ""):
+            if isinstance(prior.get("cex_quote_cache"), dict):
+                row["cex_quote_cache"] = prior["cex_quote_cache"]
+            # Duplicate notifications remain suppressed even if the observed
+            # Amazon price temporarily fluctuates; a deeper cut can still alert.
+            if isinstance(prior.get("last_cex_alert"), dict):
+                row["last_cex_alert"] = prior["last_cex_alert"]
         if same_price:
             for key in (
                 "verification_status", "last_checked_at", "cex_status",
@@ -153,6 +164,7 @@ def apply_batch_results(
     *,
     cex_enabled: bool,
     checked_at: str | None = None,
+    quote_cache: dict[str, dict] | None = None,
 ) -> dict:
     """Keep CeX research for ALL priced ASINs; distinguish unsafe leads.
 
@@ -167,7 +179,13 @@ def apply_batch_results(
         asin = item["asin"]
         row = rows[asin]
         row["last_checked_at"] = stamp
-        row["cex_checked_at"] = stamp if cex_enabled else None
+        cache_entry = (quote_cache or {}).get(asin) if quote_cache is not None else row.get("cex_quote_cache")
+        if isinstance(cache_entry, dict):
+            row["cex_quote_cache"] = cache_entry
+        # Timestamp reflects the *CeX API quote*, not the Amazon seller check.
+        row["cex_checked_at"] = cache_entry.get("checked_at") if (
+            cex_enabled and isinstance(cache_entry, dict) and cache_entry.get("status") != "error"
+        ) else None
         verified_item = eligible.get(asin)
         if verified_item:
             row["verification_status"] = "verified"
@@ -180,16 +198,34 @@ def apply_batch_results(
                 row.pop(key, None)
 
         matched = matches.get(asin)
+        if cex_enabled and matched and row.get("cex_checked_at") is None:
+            # Legacy clients may supply a direct CeX match without a quote
+            # cache. Do not silently regress their counted matches.
+            row["cex_checked_at"] = matched.get("cex_quote_checked_at") or stamp
         if cex_enabled and matched:
-            row["cex_status"] = "matched" if verified_item else "matched_unverified"
+            if not verified_item:
+                row["cex_status"] = "matched_unverified"
+            elif not matched.get("cex_quote_fresh_for_alert", True):
+                row["cex_status"] = "matched_stale_quote"
+            else:
+                row["cex_status"] = "matched"
             row["cex_box_name"] = matched.get("cex_title")
             row["cex_url"] = matched.get("cex_url")
             row["cex_cash_eur"] = matched.get("cex_cash_eur")
             row["cex_net_profit_eur"] = matched.get("cex_cash_profit_eur")
             row["cex_max_buy_eur"] = matched.get("cex_max_buy_eur")
             row["match_confidence"] = matched.get("match_confidence")
+            row["cex_quote_checked_at"] = matched.get("cex_quote_checked_at")
+            row["cex_quote_source"] = matched.get("cex_quote_source")
+            row["cex_quote_fresh_for_alert"] = matched.get("cex_quote_fresh_for_alert")
         else:
-            row["cex_status"] = "no_confirmed_match" if cex_enabled else "disabled"
+            status = (cache_entry or {}).get("status")
+            row["cex_status"] = (
+                "disabled" if not cex_enabled else
+                "no_confirmed_match" if status == "no_match" else
+                "provider_retry_later" if status == "error" else
+                "queued"
+            )
             for key in _CEX_FIELDS:
                 if key != "cex_checked_at":
                     row.pop(key, None)
@@ -210,8 +246,9 @@ def catalogue_progress(section: dict, *, checked_this_run: int = 0) -> dict:
         "remaining": len(priced) - len(checked),
         "verified": sum(row.get("verification_status") == "verified" for row in checked),
         "cex_attempted": sum(bool(row.get("cex_checked_at")) for row in checked),
-        "cex_matched": sum(row.get("cex_status") in ("matched", "matched_unverified") for row in checked),
+        "cex_matched": sum(row.get("cex_status") in ("matched", "matched_unverified", "matched_stale_quote") for row in checked),
         "cex_eligible_matched": sum(row.get("cex_status") == "matched" for row in checked),
+        "cex_cache_records": sum(isinstance(row.get("cex_quote_cache"), dict) for row in checked),
         "unpriced": len(active) - len(priced),
         "checked_this_run": checked_this_run,
     }

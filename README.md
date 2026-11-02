@@ -32,6 +32,19 @@ Besides price-error alerts, the bot sends:
 ## Bestseller scan (thousands of items, no manual adding)
 
 
+### CeX caching, profit alerts and seller risk
+
+Amazon bestseller discovery continues on the existing **30-minute rotating section workflow** (each section returns roughly every two hours). CeX is a **separate, much less frequent data source**:
+
+- A CeX product cash quote is stored in the published catalogue alongside its exact box ID and last successful quote time. Changing Amazon's observed price recalculates estimated resale profit using that cached quote; it **does not trigger another CeX search**.
+- Successful CeX matches are refreshed every **72 hours** by default; items with no match are searched again after **7 days**. Provider errors get **6 hours** of backoff, and live CeX searches are capped at **40 per section run**. HTTP 403/429/503 pauses further CeX calls in that run. Set these values in \`bestsellers.json\` and respect the provider's terms and rate limits.
+- A potential *seller-verified* profitable flip with a CeX quote older than **12 hours** triggers an isolated CeX SKU detail refresh where possible. If the fresh quote cannot be obtained, the cached value stays visible as **research only**, with a quote timestamp, **not** as a buying alert. A cached CeX price is never a guaranteed CeX trade-in payout.
+- A real Amazon bestseller price-error alert is created only **after** an Amazon product-page offer confirms the same price and an accepted Amazon/FBA seller, not merely from the cheaper bestseller-card price. Duplicate notifications are suppressed for 24 hours at the same or higher Amazon price; a deeper verified price cut can alert again.
+- **Used – Like New is currently excluded from automatic buying alerts.** The description does *not* guarantee CeX Grade B: CeX checks physical condition, box/accessories and functionality, and some categories use non-graded pricing or different console grades. It should be researched with a separate conservative Grade B/C scenario before inclusion.
+- Default profit calculation uses CeX **cash** (not voucher), a 10% payout reduction, a configurable delivery estimate and €5 additional expenses. It does not model every tax, grading or transport consequence. Buy only if the **checkout total** and the matching CeX SKU/grade still clear your desired margin. CeX may reduce trade-in values for multiple copies.
+
+This design reduces repeated CeX calls; it does **not** guarantee the CeX service will remain accessible, nor that Amazon will return accurate seller or product detail fields to an automated GitHub-hosted request.
+
 ### Full Amazon listing catalogue and progressive CeX checks
 
 The tracker now publishes **every discovered ASIN, title, Amazon URL, observed bestseller price, section and rank** to [catalogue.json](https://paddykeoghgoode.github.io/amazon-ie-price-error-tracker/catalogue.json) and [downloadable catalogue.csv](https://paddykeoghgoode.github.io/amazon-ie-price-error-tracker/catalogue.csv), not only the top 25/50 candidates. The dashboard has a searchable, paginated "All Amazon bestseller listings" table that loads this catalogue when requested.

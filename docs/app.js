@@ -179,7 +179,7 @@ function cexStatusLine(deals) {
       `CeX was queued for ${stats.deep_candidates || 0} sale items and ${stats.any_price_candidates || 0} regular-price items, but no CeX match returned a price (API or title match).`
     );
   }
-  return `CeX attempted on ${attempted} verified offers, matched ${lookups} products · margin ≥€${minEur} or ≥${minPct}% · ${stats.cash_flips || 0} sale flips · ${stats.arbitrage || 0} other flips. See full catalogue for pending checks.`;
+  return `CeX researched ${attempted} listings (cached or live); ${lookups} seller-verified CeX matches · margin ≥€${minEur} or ≥${minPct}% · ${stats.cash_flips || 0} sale flips · ${stats.arbitrage || 0} other flips. See full catalogue for pending checks.`;
 }
 
 function renderNearMargin(bodyId, tableId, rows) {
@@ -378,7 +378,7 @@ function renderCataloguePage() {
     if (section && row.section_id !== section) return false;
     if (activity === "active" && row.active === false) return false;
     if (activity === "archived" && row.active !== false) return false;
-    if (status === "matched" && !["matched", "matched_unverified"].includes(row.cex_status)) return false;
+    if (status === "matched" && !["matched", "matched_unverified", "matched_stale_quote"].includes(row.cex_status)) return false;
     if (status === "verified" && row.verification_status !== "verified") return false;
     if (status === "pending" && row.last_checked_at) return false;
     if (status === "rejected" && (!row.last_checked_at || row.verification_status === "verified")) return false;
@@ -399,9 +399,14 @@ function renderCataloguePage() {
           String(row.verification_status || "not checked").replaceAll("_", " ");
     let cex = String(row.cex_status || "not checked").replaceAll("_", " ");
     if (row.cex_status === "matched") {
-      cex = `Eligible listing: ${fmtEuro(row.cex_cash_eur)} CeX cash · estimated ${fmtEuro(row.cex_net_profit_eur)} net`;
+      cex = `Verified seller · estimated ${fmtEuro(row.cex_net_profit_eur)} net · CeX cash ${fmtEuro(row.cex_cash_eur)}`;
+    } else if (row.cex_status === "matched_stale_quote") {
+      cex = `RESEARCH ONLY — CeX quote too old for an alert. Last quote: ${fmtTime(row.cex_quote_checked_at)}`;
     } else if (row.cex_status === "matched_unverified") {
       cex = `RESEARCH ONLY — seller/price not verified. CeX quote: ${fmtEuro(row.cex_cash_eur)}. Not a buy signal.`;
+    }
+    if (row.cex_quote_checked_at) {
+      cex += ` · CeX quoted ${fmtTime(row.cex_quote_checked_at)}`;
     }
     const cexLink = row.cex_url ? `<div class="hint"><a href="${escapeHtml(row.cex_url)}" target="_blank" rel="noopener">CeX item</a></div>` : "";
     tr.innerHTML = `
@@ -450,7 +455,7 @@ async function loadCatalogue() {
 }
 
 document.getElementById("catalogue-load")?.addEventListener("click", loadCatalogue);
-for (const id of ["catalogue-search", "catalogue-section-filter", "catalogue-status-filter"]) {
+for (const id of ["catalogue-search", "catalogue-section-filter", "catalogue-status-filter", "catalogue-activity-filter"]) {
   document.getElementById(id)?.addEventListener("input", () => {
     cataloguePage = 0;
     renderCataloguePage();

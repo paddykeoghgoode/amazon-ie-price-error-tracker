@@ -49,6 +49,25 @@ def record_and_detect(
         snap.currency,
     )
 
+    return detect_verified_price(
+        product_id, snap, known_title=known_title,
+        cooldown_minutes=cooldown_minutes,
+    )
+
+
+def detect_verified_price(
+    product_id: int,
+    snap: ProductSnapshot,
+    *,
+    known_title: str | None = None,
+    cooldown_minutes: int | None = None,
+) -> DetectedAlert | None:
+    """Create an alert only for a confirmed buy-box offer.
+
+    The bestseller crawler has already saved its price observation before it
+    verifies the product page. Calling record_and_detect again would duplicate
+    that price observation and distort price history/baselines.
+    """
     verdict = evaluate_price(
         product_id=product_id,
         price_eur=snap.price_eur,
@@ -56,6 +75,21 @@ def record_and_detect(
     )
     if not verdict.is_error or snap.price_eur is None or not is_eligible_amazon_offer(snap):
         return None
+    pending = db.last_alert_for_product(product_id)
+    if (
+        pending
+        and not pending.get("notified_telegram")
+        and not pending.get("notified_whatsapp")
+        and abs(float(pending["price_eur"]) - snap.price_eur) < 0.01
+    ):
+        # Reuse the unsent alert ID. A temporary Telegram failure should not
+        # suppress all notifications until the next 24-hour cooldown.
+        message = format_price_alert(
+            title=snap.title or known_title, asin=snap.asin, url=snap.url,
+            price_eur=snap.price_eur, list_price_eur=snap.list_price_eur,
+            discount_percent=verdict.discount_percent, reason=verdict.reason,
+        )
+        return DetectedAlert(int(pending["id"]), snap.asin, verdict.discount_percent, message)
     if not should_notify_again(product_id, snap.price_eur, cooldown_minutes=cooldown_minutes):
         logger.info("Skipping duplicate alert for product %s", product_id)
         return None
@@ -86,13 +120,19 @@ async def send_notification(message: str) -> tuple[bool, bool]:
             await send_telegram_message(message)
             telegram_ok = True
         except Exception as exc:
-            logger.exception("Telegram notify failed: %s", exc)
+            # Telegram's API token is embedded in the request URL. An httpx
+            # exception message/traceback can expose it in Actions logs.
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            logger.error("Telegram notify failed (%s, HTTP status=%s); credentials were not logged",
+                         type(exc).__name__, status)
     if settings.whatsapp_enabled:
         try:
             await send_whatsapp_message(message)
             whatsapp_ok = True
         except Exception as exc:
-            logger.exception("WhatsApp notify failed: %s", exc)
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            logger.error("WhatsApp notify failed (%s, HTTP status=%s)",
+                         type(exc).__name__, status)
     if not settings.telegram_enabled and not settings.whatsapp_enabled:
         logger.warning(
             "Price error detected but no notifier configured — set Telegram or Twilio WhatsApp env vars"

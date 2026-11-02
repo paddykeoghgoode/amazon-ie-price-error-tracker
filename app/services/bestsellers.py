@@ -51,7 +51,12 @@ class CrawlConfig:
     catalogue_time_budget_seconds: int = 480
     cex_enabled: bool = True
     cex_max_lookups: int = 40
-    cex_request_delay_seconds: float = 0.35
+    cex_request_delay_seconds: float = 0.75
+    cex_live_lookups_per_run: int = 40
+    cex_quote_ttl_hours: int = 72
+    cex_no_match_ttl_hours: int = 168
+    cex_error_retry_hours: int = 6
+    cex_alert_quote_max_age_hours: int = 12
     cex_min_cash_profit_eur: float = 5.0
     cex_min_cash_profit_percent: float = 10.0
     cex_extra_cost_eur: float = 0.0
@@ -155,9 +160,14 @@ def load_config(path: Path) -> CrawlConfig:
         catalogue_time_budget_seconds=max(60, int(raw.get('catalogue_time_budget_seconds', defaults.catalogue_time_budget_seconds))),
         cex_enabled=bool(raw.get("cex_enabled", defaults.cex_enabled)),
         cex_max_lookups=int(raw.get("cex_max_lookups", defaults.cex_max_lookups)),
-        cex_request_delay_seconds=float(
+        cex_request_delay_seconds=max(0.25, float(
             raw.get("cex_request_delay_seconds", defaults.cex_request_delay_seconds)
-        ),
+        )),
+        cex_live_lookups_per_run=max(1, int(raw.get("cex_live_lookups_per_run", defaults.cex_live_lookups_per_run))),
+        cex_quote_ttl_hours=max(1, int(raw.get("cex_quote_ttl_hours", defaults.cex_quote_ttl_hours))),
+        cex_no_match_ttl_hours=max(1, int(raw.get("cex_no_match_ttl_hours", defaults.cex_no_match_ttl_hours))),
+        cex_error_retry_hours=max(1, int(raw.get("cex_error_retry_hours", defaults.cex_error_retry_hours))),
+        cex_alert_quote_max_age_hours=max(1, int(raw.get("cex_alert_quote_max_age_hours", defaults.cex_alert_quote_max_age_hours))),
         cex_min_cash_profit_eur=float(
             raw.get("cex_min_cash_profit_eur", defaults.cex_min_cash_profit_eur)
         ),
@@ -322,10 +332,13 @@ async def send_cex_alerts(
     dashboard_url: str,
     deep_drop: bool = True,
     max_alerts: int | None = None,
+    should_send: Callable[[dict], bool] | None = None,
+    on_sent: Callable[[dict], None] | None = None,
 ) -> int:
     cap = max_alerts if max_alerts is not None else config.cex_max_alerts_per_run
     sent = 0
-    for row in flips[:cap]:
+    eligible = [row for row in flips if should_send is None or should_send(row)]
+    for row in eligible[:cap]:
         title = row.get("title") or row.get("asin") or "Item"
         amazon = float(row.get("price_eur") or 0)
         cash = float(row.get("cex_cash_eur") or 0)
@@ -362,6 +375,8 @@ async def send_cex_alerts(
         telegram_ok, whatsapp_ok = await send_notification(message)
         if telegram_ok or whatsapp_ok:
             sent += 1
+            if on_sent is not None:
+                on_sent(row)
     return sent
 
 
@@ -451,6 +466,7 @@ async def verify_candidates(
                 continue
             passed.append({
                 **candidate,
+                "verified_title": snap.title,
                 "seller_name": snap.seller_name,
                 "seller_type": eligible_offer_type(snap),
                 "fulfilment_status": snap.fulfilment_status,

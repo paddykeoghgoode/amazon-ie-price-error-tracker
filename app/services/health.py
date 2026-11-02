@@ -65,7 +65,7 @@ async def send_health_messages(
             "✅ Amazon.ie price tracker is connected.\n\n"
             f"This crawl checked {len(result.items):,} bestsellers across {len(result.categories)} lists. "
             "Each item needs 3 crawls of price history before it can be flagged, so alerts can start "
-            "about an hour from now. You'll get a message here as soon as a price looks like an error.\n\n"
+            "after several hours of rotating section scans. A seller-verified product page is also required before an alert.\n\n"
             f"{dashboard_url}"
         )
         if await _send(message):

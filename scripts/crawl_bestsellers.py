@@ -5,6 +5,7 @@ import asyncio
 import logging
 import os
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import httpx
@@ -18,7 +19,7 @@ from app.bestseller_sections import (
 )
 from app.config import settings
 from app.scraper.amazon_ie import ProductSnapshot
-from app.services.monitor import record_and_detect
+from app.services.monitor import detect_verified_price
 from app.deals import export_deals, merge_section_deals, render_deals_markdown
 from app.services.bestsellers import (
     crawl,
@@ -160,6 +161,14 @@ async def crawl_section(
     research_lookups: list[dict] = []  # all CeX matches, including seller-unverified
     flips: list[dict] = []
     checked_batch: list[dict] = []
+    # The public section catalogue is the durable cache, not the ephemeral
+    # GitHub Actions process. Reuse quotes even when Amazon's item price changes.
+    quote_cache: dict[str, dict] = {
+        row["asin"]: row["cex_quote_cache"]
+        for row in section_catalogue["items"]
+        if row.get("asin") and isinstance(row.get("cex_quote_cache"), dict)
+    }
+    cex_state: dict = {}
     verification_stats = {
         "attempted": 0, "amazon_verified": 0, "rejected_or_unknown": 0,
         "rejection_reasons": {}, "sample_failures": [],
@@ -190,6 +199,8 @@ async def crawl_section(
             all_matches, all_flips = await enrich_with_cex(
                 research_candidates, config, client=client,
                 max_lookups=len(research_candidates),
+                cache=quote_cache,
+                run_state=cex_state,
             )
             verified_matches = [
                 row for row in all_matches if row["asin"] in verified_group
@@ -227,6 +238,24 @@ async def crawl_section(
     ]
     processed.verified_asins = set(verified_by_asin)
     processed.verification_stats = verification_stats
+    # process_crawl() already recorded the initial bestseller price. Now that
+    # Amazon/FBA seller AND exact offered price are confirmed, evaluate that
+    # observation for a real price-error alert without writing it a second time.
+    for row in verified:
+        product_id = db.add_product(row["asin"], row["url"], row.get("verified_title") or row.get("title"))
+        snap = ProductSnapshot(
+            asin=row["asin"], url=row["url"], title=row.get("verified_title") or row.get("title"),
+            price_eur=row["price_eur"], list_price_eur=None, currency="EUR",
+            availability="In stock", seller_name=row.get("seller_name"),
+            seller_status="amazon" if row.get("seller_type") == "amazon_retail" else "third_party",
+            fulfilment_status=row.get("fulfilment_status") or "unknown",
+        )
+        alert = detect_verified_price(
+            product_id, snap, known_title=row.get("title"),
+            cooldown_minutes=config.alert_cooldown_minutes,
+        )
+        if alert:
+            processed.alerts.append(alert)
     logger.info(
         "[%s] Amazon verification: %s/%s products examined, %s",
         section_id, len(checked_batch),
@@ -248,6 +277,7 @@ async def crawl_section(
         outcomes,
         research_lookups,
         cex_enabled=config.cex_enabled,
+        quote_cache=quote_cache,
     )
     section_catalogue["checked_this_run"] = len(checked_batch)
     processed.catalogue_stats = catalogue_progress(
@@ -267,15 +297,20 @@ async def crawl_section(
     processed.cex_stats = {
         "deep_candidates": sum((row.get("drop_percent") or 0) >= 30 for row in verified),
         "any_price_candidates": sum((row.get("drop_percent") or 0) < 30 for row in verified),
-        "attempted": len(checked_batch) if config.cex_enabled else 0,
+        "attempted": cex_state.get("live_lookups", 0) + cex_state.get("cache_hits", 0),
+        "live_lookups": cex_state.get("live_lookups", 0),
+        "cache_hits": cex_state.get("cache_hits", 0),
+        "deferred": cex_state.get("deferred", 0),
+        "errors": cex_state.get("errors", 0),
+        "rate_limited": bool(cex_state.get("rate_limited", False)),
         "provisional_matches": len(research_lookups) - len(lookups),
         "lookups": len(processed.cex_lookups),
         "cash_flips": len(processed.cex_flips),
         "arbitrage": len(processed.cex_arbitrage),
     }
     logger.info(
-        "[%s] Catalogue: %s; CeX attempted for %s checked listings; %s eligible matches; %s provisional matches; %s profitable verified matches",
-        section_id, processed.catalogue_stats, len(checked_batch),
+        "[%s] Catalogue: %s; CeX cache: %s; eligible matches: %s; provisional: %s; profitable: %s",
+        section_id, processed.catalogue_stats, cex_state,
         len(lookups), len(research_lookups) - len(lookups), len(flips),
     )
 
@@ -290,22 +325,54 @@ async def crawl_section(
         section_id=section_id,
         section_name=section_name,
     )
+    # Keep a buy-opportunity alert fingerprint across Actions runs, and only
+    # mark it after the notifier confirms delivery. A deeper confirmed drop may
+    # alert again; repeatedly rechecking the same price should not spam Telegram.
+    catalogue_rows = {row["asin"]: row for row in section_catalogue["items"]}
+    def should_send_cex(row: dict) -> bool:
+        if not row.get("seller_verified") or not row.get("cex_quote_fresh_for_alert"):
+            return False
+        previous = (catalogue_rows.get(row.get("asin")) or {}).get("last_cex_alert") or {}
+        try:
+            last_at = datetime.fromisoformat(previous.get("sent_at") or "")
+            age = datetime.now(timezone.utc) - last_at
+        except (TypeError, ValueError):
+            return True
+        return (
+            age >= timedelta(hours=24)
+            or float(row.get("price_eur") or 0) < float(previous.get("price_eur") or 0) - 0.01
+        )
+
+    def mark_cex_sent(row: dict) -> None:
+        target = catalogue_rows.get(row.get("asin"))
+        if target is not None:
+            target["last_cex_alert"] = {
+                "price_eur": row.get("price_eur"),
+                "sent_at": datetime.now(timezone.utc).isoformat(),
+                "cex_cash_eur": row.get("cex_cash_eur"),
+            }
+
     if notify:
         if processed.alerts:
             await send_alerts(processed.alerts, config, details_url=dashboard_url)
         if processed.cex_flips:
-            await send_cex_alerts(processed.cex_flips, config, dashboard_url=dashboard_url, deep_drop=True)
+            await send_cex_alerts(
+                processed.cex_flips, config, dashboard_url=dashboard_url, deep_drop=True,
+                should_send=should_send_cex, on_sent=mark_cex_sent,
+            )
         if processed.cex_arbitrage:
             await send_cex_alerts(
                 processed.cex_arbitrage,
-                config,
-                dashboard_url=dashboard_url,
-                deep_drop=False,
-                max_alerts=config.cex_any_price_max_alerts_per_run,
+                config, dashboard_url=dashboard_url,
+                deep_drop=False, max_alerts=config.cex_any_price_max_alerts_per_run,
+                should_send=should_send_cex, on_sent=mark_cex_sent,
             )
         if not args.skip_health:
             await send_health_messages(result, processed, config, dashboard_url=dashboard_url)
         await send_section_summary(section_name, payload, dashboard_url)
+    # export_deals was created before the async notifications. Refresh delivery
+    # flags after sends so Pages doesn't say "Telegram pending" for sent alerts.
+    payload["alerts"] = db.recent_alerts(limit=50)
     return payload, section_catalogue
 
 

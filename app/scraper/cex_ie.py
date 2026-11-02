@@ -284,7 +284,7 @@ def pick_best_box_hit(amazon_title: str | None, hits: list[dict]) -> dict | None
     return None
 
 
-async def search_boxes(client: httpx.AsyncClient, query: str, *, hits_per_page: int = 3) -> list[dict]:
+async def search_boxes(client: httpx.AsyncClient, query: str, *, hits_per_page: int = 3, strict: bool = False) -> list[dict]:
     if not query.strip():
         return []
     url = f"https://search.webuy.io/1/indexes/{ALGOLIA_INDEX}/query"
@@ -311,13 +311,20 @@ async def search_boxes(client: httpx.AsyncClient, query: str, *, hits_per_page: 
     try:
         resp = await client.post(url, json=body, headers=headers, timeout=20.0)
         resp.raise_for_status()
-        return resp.json().get("hits") or []
+        payload = resp.json()
+        if not isinstance(payload, dict) or not isinstance(payload.get("hits"), list):
+            if strict:
+                raise ValueError("Unexpected CeX search response; not a confirmed empty result")
+            return []
+        return payload["hits"]
     except httpx.HTTPError as exc:
         logger.warning("CeX search failed for %r: %s", query[:60], exc)
+        if strict:
+            raise
         return []
 
 
-async def fetch_box_prices(client: httpx.AsyncClient, box_id: str) -> CexPrices | None:
+async def fetch_box_prices(client: httpx.AsyncClient, box_id: str, *, strict: bool = False) -> CexPrices | None:
     url = f"{WSS_BASE}/boxes/{box_id}/detail"
     try:
         resp = await client.get(url, params={"platformId": PLATFORM_ID}, headers=CEX_HEADERS, timeout=20.0)
@@ -325,11 +332,19 @@ async def fetch_box_prices(client: httpx.AsyncClient, box_id: str) -> CexPrices 
         payload = resp.json()
     except httpx.HTTPError as exc:
         logger.warning("CeX box detail failed for %s: %s", box_id, exc)
+        if strict:
+            raise
         return None
 
-    if payload.get("response", {}).get("ack") != "Success":
+    if not isinstance(payload, dict) or not isinstance(payload.get("response"), dict):
+        if strict:
+            raise ValueError("Unexpected CeX box detail response")
         return None
-    details = payload["response"]["data"].get("boxDetails") or []
+    if payload["response"].get("ack") != "Success":
+        if strict:
+            raise ValueError("CeX box details not acknowledged")
+        return None
+    details = (payload["response"].get("data") or {}).get("boxDetails") or []
     if not details:
         return None
     box = details[0]
