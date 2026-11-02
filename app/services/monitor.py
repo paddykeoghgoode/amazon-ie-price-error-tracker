@@ -75,6 +75,21 @@ def detect_verified_price(
     )
     if not verdict.is_error or snap.price_eur is None or not is_eligible_amazon_offer(snap):
         return None
+    pending = db.last_alert_for_product(product_id)
+    if (
+        pending
+        and not pending.get("notified_telegram")
+        and not pending.get("notified_whatsapp")
+        and abs(float(pending["price_eur"]) - snap.price_eur) < 0.01
+    ):
+        # Reuse the unsent alert ID. A temporary Telegram failure should not
+        # suppress all notifications until the next 24-hour cooldown.
+        message = format_price_alert(
+            title=snap.title or known_title, asin=snap.asin, url=snap.url,
+            price_eur=snap.price_eur, list_price_eur=snap.list_price_eur,
+            discount_percent=verdict.discount_percent, reason=verdict.reason,
+        )
+        return DetectedAlert(int(pending["id"]), snap.asin, verdict.discount_percent, message)
     if not should_notify_again(product_id, snap.price_eur, cooldown_minutes=cooldown_minutes):
         logger.info("Skipping duplicate alert for product %s", product_id)
         return None
