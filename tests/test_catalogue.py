@@ -86,6 +86,28 @@ class TestCatalogue(unittest.TestCase):
         self.assertEqual(catalogue_progress(section)["cex_attempted"], 1)
         self.assertEqual(catalogue_progress(section)["cex_matched"], 1)
 
+    def test_unverified_amazon_listing_can_have_provisional_cex_research(self):
+        section = make_section_catalogue(
+            crawl({"A000000001": 60}), None, section_id="gaming", section_name="Gaming"
+        )
+        batch = select_check_batch(section, limit=20)
+        speculative = [{
+            "asin": "A000000001", "cex_title": "Sony Headphones",
+            "cex_url": "https://ie.webuy.com/product-detail?id=123",
+            "cex_cash_eur": 85, "cex_cash_profit_eur": 18,
+            "cex_max_buy_eur": 70, "match_confidence": "title_only",
+        }]
+        apply_batch_results(
+            section, batch, [], {"A000000001": "seller_not_detected"},
+            speculative, cex_enabled=True,
+        )
+        item = section["items"][0]
+        self.assertEqual(item["verification_status"], "seller_not_detected")
+        self.assertEqual(item["cex_status"], "matched_unverified")
+        self.assertEqual(catalogue_progress(section)["cex_attempted"], 1)
+        self.assertEqual(catalogue_progress(section)["cex_matched"], 1)
+        self.assertEqual(catalogue_progress(section)["cex_eligible_matched"], 0)
+
     def test_price_change_invalidates_prior_seller_and_cex_verification(self):
         first = make_section_catalogue(
             crawl({"A000000001": 40}), None, section_id="gaming", section_name="Gaming",
