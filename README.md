@@ -37,7 +37,7 @@ Each scheduled run crawls **one section** from [`bestsellers.json`](bestsellers.
 - Items sold in several variants at different prices (for example "€9.99 – €24.99") are skipped, because their lowest price jumps between variants.
 - One crawl sends at most 15 Telegram alerts, plus a single "…and N more" message. The same item won't alert again within 24 hours unless its price drops further.
 - The dashboard also lists **deep drops** at **40%, 50% and 66%** below each item's recent Amazon price (handy for electronics and games even when it's not a full "price error").
-- For those deep drops, the crawler looks up a **CeX.ie** match and estimates **cash trade-in** profit after your margin (`cex_min_cash_profit_eur` / `cex_min_cash_profit_percent` in [`bestsellers.json`](bestsellers.json)). CeX matching is by product title — always confirm model and grade before you buy. Set `"cex_enabled": false` to turn CeX lookups off.
+- For those deep drops, the crawler looks up a **CeX.ie** match and estimates **cash trade-in** profit after configured costs and profit thresholds (`cex_min_cash_profit_eur` / `cex_min_cash_profit_percent` in [`bestsellers.json`](bestsellers.json)). Matching rejects obvious model, storage, platform, edition and pack-size mismatches, and validates the CeX box-detail title again. **Still verify exact SKU, region, condition, accessories and grade manually before buying.** Set `"cex_enabled": false` to turn CeX lookups off.
 - It also scans **regular-price** gaming/electronics bestsellers (`cex_scan_any_price`) and lists items where CeX cash trade-in still clears your margin **without** an Amazon sale (`cex_arbitrage` on the dashboard). Tune keywords with `cex_priority_keywords`. Category paths are the part of an Amazon.ie bestseller URL after `amazon.ie`, for example `/gp/bestsellers/home/94816616031` for Coffee Machines.
 
 Run it locally:
@@ -45,6 +45,22 @@ Run it locally:
 ```bash
 python -m scripts.crawl_bestsellers --max-items 500 --no-notify
 ```
+
+### CeX profitability assumptions
+
+CeX's quoted cash figure is **not guaranteed**: inspection, condition, grading, accessories, quote changes, trade-in limits and stock can alter the outcome. This tracker does **not** place orders or confirm CeX will accept an item.
+
+The estimate uses:
+
+```text
+Expected cash = quoted CeX cash × (1 − payout haircut % / 100)
+Estimated net cash profit = expected cash − Amazon purchase price − extra costs
+Required profit = max(minimum EUR profit, Amazon price × minimum profit % / 100)
+```
+
+The defaults in `bestsellers.json` now use `cex_extra_cost_eur: 5` and `cex_payout_haircut_percent: 10`, as example buffers for delivery/travel/packing and a lower trade-in payout. **Tune these to your own actual costs; they are not CeX fees.** Voucher value is not cash and should not be treated as a cash flip. Profit estimates exclude possible tax liabilities, return costs and other unexpected expenses.
+
+A listing match is still heuristic. Check the exact variant, whether the Amazon listing is physical and new, Ireland delivery and final checkout total, CeX's current cash quote and store acceptance conditions before spending money.
 
 ## Your own watch list
 
