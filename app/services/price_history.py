@@ -10,7 +10,11 @@ from statistics import median
 from app import database as db
 
 STABILITY_BAND = 0.20
-NORMAL_BAND = 0.25
+# Keep modest price reductions visible for the full discount window. Without
+# an asymmetric band, a repeated 10-25% sale gradually drags the reference
+# downward, concealing a real discount even while the price stays unchanged.
+NORMAL_DOWN_BAND = 0.08
+NORMAL_UP_BAND = 0.25
 INITIAL_LOOKBACK_DAYS = 14
 
 
@@ -48,7 +52,8 @@ def observe_price_reference(
     """Update price anchor BEFORE saving the new price check.
 
     Need 3 *previous* stable observations before trusting an Amazon-only drop.
-    Prices >25% away never pull the normal price toward a suspected error.
+    Discounts of ~10% or more do not pull the normal price downward. Large
+    upward spikes likewise do not pull the reference upward.
     After 30 days without a normal-price confirmation, a stable recent level can
     become the new reference (or the stale reference is removed).
     """
@@ -77,7 +82,7 @@ def observe_price_reference(
             )
             return fresh
 
-        if reference * (1 - NORMAL_BAND) <= price_eur <= reference * (1 + NORMAL_BAND):
+        if reference * (1 - NORMAL_DOWN_BAND) <= price_eur <= reference * (1 + NORMAL_UP_BAND):
             # Mild normal-price movement adapts slowly, not to isolated spikes/dips.
             reference = round(reference * 0.9 + price_eur * 0.1, 2)
             confirmed_at_iso = now_iso
