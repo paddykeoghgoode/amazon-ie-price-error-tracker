@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Amazon.ie Price Error Tracker</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <h1>Amazon.ie price errors</h1>
+    <p class="tagline">Watch products — get Telegram (or WhatsApp) alerts when a listing looks mispriced.</p>
+    <div id="status" class="status"></div>
+  </header>
+
+  <section class="card">
+    <h2>Add product</h2>
+    <form id="add-form">
+      <input type="url" id="product-url" placeholder="https://www.amazon.ie/dp/B0… or ASIN" required />
+      <button type="submit">Watch</button>
+    </form>
+    <p class="hint">Configure <code>TELEGRAM_BOT_TOKEN</code> and <code>TELEGRAM_CHAT_ID</code> in <code>.env</code> for instant alerts.</p>
+  </section>
+
+  <section class="card">
+    <h2>Watched products</h2>
+    <div id="products-empty" class="empty">No products yet.</div>
+    <table id="products-table" hidden>
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>ASIN</th>
+          <th>Monitoring</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="products-body"></tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>Recent alerts</h2>
+    <div id="alerts-empty" class="empty">No alerts yet — they appear when a price looks like an error.</div>
+    <ul id="alerts-list" class="alerts" hidden></ul>
+  </section>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

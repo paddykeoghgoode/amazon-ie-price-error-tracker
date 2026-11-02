@@ -1,0 +1,17 @@
+name: Watch Amazon.ie product
+description: Add a listing to the GitHub Pages price-error tracker
+title: "Watch: "
+labels: ["watch"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Paste an Amazon.ie product URL or 10-character ASIN.
+        The next tracker scan (or a manual **Actions → Scan and publish tracker → Run workflow**) will pick it up.
+  - type: input
+    id: url
+    attributes:
+      label: Amazon.ie URL or ASIN
+      placeholder: https://www.amazon.ie/dp/B0XXXXXXXX
+    validations:
+      required: true

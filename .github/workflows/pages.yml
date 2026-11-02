@@ -1,0 +1,101 @@
+name: Scan and publish tracker
+
+on:
+  schedule:
+    # GitHub cron is often delayed a few minutes; this is as close as Pages can get to "immediate".
+    - cron: "*/20 * * * *"
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - cursor/scaffold-price-error-tracker-61ca
+    paths-ignore:
+      - "TRACKER.md"
+      - "docs/data.json"
+  issues:
+    types: [opened, edited, labeled, unlabeled, closed, reopened]
+
+permissions:
+  contents: write
+  issues: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-tracker
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    outputs:
+      pages_ready: ${{ steps.configure-pages.outcome }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore SQLite cache
+        uses: actions/cache@v4
+        with:
+          path: data/tracker.db
+          key: tracker-db-v1-${{ github.run_id }}
+          restore-keys: |
+            tracker-db-v1-
+
+      - name: Scan watchlist
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_WHATSAPP_FROM: ${{ secrets.TWILIO_WHATSAPP_FROM }}
+          TWILIO_WHATSAPP_TO: ${{ secrets.TWILIO_WHATSAPP_TO }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REQUEST_DELAY_SECONDS: "2"
+        run: |
+          python -m scripts.scan \
+            --watchlist watchlist.json \
+            --previous docs/data.json \
+            --output docs/data.json \
+            --markdown TRACKER.md
+
+      - name: Commit tracker snapshot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add TRACKER.md docs/data.json
+          if git diff --cached --quiet; then
+            echo "No tracker snapshot changes"
+          else
+            git commit -m "Update tracker snapshot [skip ci]"
+            git push
+          fi
+
+      - id: configure-pages
+        continue-on-error: true
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - id: upload-pages
+        if: steps.configure-pages.outcome == 'success'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+  deploy:
+    needs: scan
+    if: needs.scan.outputs.pages_ready == 'success'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
