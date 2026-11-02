@@ -113,6 +113,7 @@ jobs:
           cp incoming/watchlist-data.json docs/data.json
           curl -fsSL "$PAGES_URL/deals.json?t=$(date +%s)" -o docs/deals.json || true
           test -s docs/deals.json || echo '{}' > docs/deals.json
+          curl -fsSL "$PAGES_URL/hotlist.json?t=$(date +%s)" -o docs/hotlist.json || echo '{}' > docs/hotlist.json
           ls -la docs
 
       - id: deployment
@@ -219,6 +220,7 @@ jobs:
           rm docs/deals.previous.json
           curl -fsSL "$PAGES_URL/data.json?t=$(date +%s)" -o docs/data.json.new \
             && mv docs/data.json.new docs/data.json || true
+          curl -fsSL "$PAGES_URL/hotlist.json?t=$(date +%s)" -o docs/hotlist.json || echo '{}' > docs/hotlist.json
           ls -la docs
 
       - id: deployment
@@ -294,6 +296,7 @@ jobs:
           python -m scripts.merge_deals --previous docs/deals.previous.json --incoming site/deals.json --output docs/deals.json
           rm docs/deals.previous.json
           curl -fsSL "$PAGES_URL/data.json?t=$(date +%s)" -o docs/data.json || true
+          curl -fsSL "$PAGES_URL/hotlist.json?t=$(date +%s)" -o docs/hotlist.json || echo '{}' > docs/hotlist.json
           ls -la docs
 
       - id: deployment
