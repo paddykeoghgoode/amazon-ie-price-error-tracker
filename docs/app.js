@@ -34,6 +34,214 @@ function fmtEuro(value) {
   return `€${Number(value).toFixed(2)}`;
 }
 
+// Tab navigation is client-only; all scan data continues updating every 90s.
+const TRACKER_TAB_IDS = ["overview", "amazon-drops", "cex", "listings", "watchlist"];
+
+function activateDashboardTab(id, { updateHash = false, focus = false } = {}) {
+  const selected = TRACKER_TAB_IDS.includes(id) ? id : "overview";
+  for (const tabId of TRACKER_TAB_IDS) {
+    const tab = document.getElementById("tab-" + tabId);
+    const panel = document.getElementById("panel-" + tabId);
+    if (!tab || !panel) continue;
+    const active = tabId === selected;
+    tab.setAttribute("aria-selected", String(active));
+    tab.tabIndex = active ? 0 : -1;
+    panel.hidden = !active;
+    if (active && focus) tab.focus();
+  }
+  if (updateHash && window.location.hash !== "#" + selected) {
+    window.location.hash = selected;
+  }
+}
+
+function setupDashboardTabs() {
+  for (const [index, id] of TRACKER_TAB_IDS.entries()) {
+    const tab = document.getElementById("tab-" + id);
+    if (!tab) continue;
+    tab.addEventListener("click", () => activateDashboardTab(id, { updateHash: true }));
+    tab.addEventListener("keydown", (event) => {
+      let next = null;
+      if (event.key === "ArrowRight") next = TRACKER_TAB_IDS[(index + 1) % TRACKER_TAB_IDS.length];
+      if (event.key === "ArrowLeft") next = TRACKER_TAB_IDS[(index + TRACKER_TAB_IDS.length - 1) % TRACKER_TAB_IDS.length];
+      if (event.key === "Home") next = TRACKER_TAB_IDS[0];
+      if (event.key === "End") next = TRACKER_TAB_IDS[TRACKER_TAB_IDS.length - 1];
+      if (next != null) {
+        event.preventDefault();
+        activateDashboardTab(next, { updateHash: true, focus: true });
+      }
+    });
+  }
+  const fromHash = () => activateDashboardTab(window.location.hash.slice(1));
+  window.addEventListener("hashchange", fromHash);
+  fromHash();
+}
+
+const GENERAL_DROPS_PER_PAGE = 40;
+let generalDropRows = [];
+let generalDropPage = 0;
+let generalDropCoverage = { total: 0, updated: 0 };
+
+function extractGeneralDrops(deals) {
+  // Each section publishes independently. Old sections can still display the
+  // legacy >=30% drops until they complete a new >=10% scan.
+  const sections = Object.entries(deals.sections || {});
+  const rows = [];
+  let updated = 0;
+  if (sections.length) {
+    for (const [sectionId, section] of sections) {
+      const isNew = Array.isArray(section.general_drops);
+      if (isNew) updated++;
+      for (const drop of (isNew ? section.general_drops : section.drops) || []) {
+        rows.push({
+          ...drop, section_id: sectionId,
+          section_name: section.section_name || sectionId,
+          last_scanned_at: section.generated_at || deals.generated_at,
+          legacy_only: !isNew,
+        });
+      }
+    }
+  } else {
+    const modern = Array.isArray(deals.general_drops);
+    for (const drop of (modern ? deals.general_drops : deals.drops) || []) {
+      rows.push({
+        ...drop, section_id: drop.section_id || "default",
+        section_name: drop.section_name || "All sections",
+        last_scanned_at: deals.generated_at,
+        legacy_only: !modern,
+      });
+    }
+    updated = modern ? 1 : 0;
+  }
+
+  const latest = new Map();
+  for (const row of rows) {
+    const reference = Number(row.reference_eur ?? row.median_eur);
+    const price = Number(row.price_eur);
+    const key = String(row.asin || "");
+    if (!key || !Number.isFinite(price) || !Number.isFinite(reference) ||
+        price <= 0 || reference <= price) continue;
+    const pct = Math.round((100 * (reference - price) / reference) * 10) / 10;
+    if (pct <= 0) continue;
+    const normalized = {
+      ...row,
+      reference_eur: reference, price_eur: price,
+      savings_eur: Math.round((reference - price) * 100) / 100,
+      drop_percent: pct,
+      found_at: row.found_at || row.last_scanned_at,
+    };
+    const previous = latest.get(key);
+    if (!previous || String(normalized.last_scanned_at || "") > String(previous.last_scanned_at || "")) {
+      latest.set(key, normalized);
+    }
+  }
+  return { rows: [...latest.values()], coverage: { total: sections.length || 1, updated } };
+}
+
+function renderGeneralDropsPage() {
+  const table = document.getElementById("general-drops-table");
+  const body = document.getElementById("general-drops-body");
+  const summary = document.getElementById("general-drops-summary");
+  const empty = document.getElementById("general-drops-empty");
+  const pagination = document.getElementById("general-drops-pagination");
+  if (!table || !body || !summary) return;
+  const min = Number(document.getElementById("drop-min")?.value || 10);
+  const section = document.getElementById("drop-section")?.value || "";
+  const sort = document.getElementById("drop-sort")?.value || "percentage";
+  const q = (document.getElementById("drop-search")?.value || "").toLowerCase().trim();
+  const selected = generalDropRows.filter((r) => {
+    if (r.drop_percent < min || (section && r.section_id !== section)) return false;
+    return !q || [r.title, r.asin, r.category, r.section_name]
+      .some((v) => String(v || "").toLowerCase().includes(q));
+  });
+  if (sort === "savings") {
+    selected.sort((a, b) => b.savings_eur - a.savings_eur || b.drop_percent - a.drop_percent);
+  } else if (sort === "recent") {
+    selected.sort((a, b) => String(b.found_at || "").localeCompare(String(a.found_at || "")));
+  } else {
+    selected.sort((a, b) => b.drop_percent - a.drop_percent || b.savings_eur - a.savings_eur);
+  }
+  const pages = Math.max(1, Math.ceil(selected.length / GENERAL_DROPS_PER_PAGE));
+  generalDropPage = Math.max(0, Math.min(generalDropPage, pages - 1));
+  const start = generalDropPage * GENERAL_DROPS_PER_PAGE;
+  const visible = selected.slice(start, start + GENERAL_DROPS_PER_PAGE);
+  body.innerHTML = "";
+  for (const drop of visible) {
+    const tr = document.createElement("tr");
+    const stale = sectionAgeHours(drop.last_scanned_at);
+    const staleText = stale != null && stale > 3 ? " · section overdue" : "";
+    const url = /^https:\/\/(?:www\.)?amazon\.ie\//i.test(String(drop.url || ""))
+      ? String(drop.url) : "https://www.amazon.ie/";
+    tr.innerHTML = `
+      <td><a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(drop.title || drop.asin)}</a>
+        <div class="hint">${escapeHtml(drop.asin)} · ${escapeHtml(drop.category || "")}</div></td>
+      <td>${escapeHtml(drop.section_name || drop.section_id || "")}</td>
+      <td class="was">${fmtEuro(drop.reference_eur)}</td>
+      <td class="price">${fmtEuro(drop.price_eur)}</td>
+      <td class="saving-eur">−${fmtEuro(drop.savings_eur)}</td>
+      <td><span class="drop-percent">−${escapeHtml(drop.drop_percent.toFixed(1))}%</span></td>
+      <td><span class="time">${fmtTime(drop.found_at)}</span>
+        <div class="hint">Scanned ${fmtTime(drop.last_scanned_at)}${escapeHtml(staleText)}</div></td>`;
+    body.appendChild(tr);
+  }
+  table.hidden = !selected.length;
+  empty.hidden = Boolean(selected.length);
+  const legacy = generalDropCoverage.updated < generalDropCoverage.total;
+  const migration = legacy
+    ? ` · ${generalDropCoverage.total - generalDropCoverage.updated} section(s) still publishing older ≥30% results`
+    : "";
+  summary.textContent =
+    `${selected.length.toLocaleString("en-IE")} products with ≥${min}% observed reduction · ` +
+    `showing ${selected.length ? start + 1 : 0}–${start + visible.length}${migration}. ` +
+    "These figures are based on the tracker’s historical reference, not an advertised RRP.";
+  const count = document.getElementById("general-drops-count");
+  if (count) count.textContent = `${selected.length.toLocaleString("en-IE")} matches`;
+  if (pagination) pagination.hidden = selected.length <= GENERAL_DROPS_PER_PAGE;
+  const pageText = document.getElementById("general-drops-page");
+  if (pageText) pageText.textContent = `Page ${generalDropPage + 1} of ${pages}`;
+  document.getElementById("general-drops-prev").disabled = generalDropPage === 0;
+  document.getElementById("general-drops-next").disabled = generalDropPage >= pages - 1;
+}
+
+function renderGeneralDrops(deals) {
+  if (!deals || !deals.generated_at) return;
+  const data = extractGeneralDrops(deals);
+  generalDropRows = data.rows;
+  generalDropCoverage = data.coverage;
+  const filter = document.getElementById("drop-section");
+  if (filter) {
+    const previouslySelected = filter.value;
+    const sections = Object.entries(deals.sections || {});
+    filter.replaceChildren(new Option("All sections", ""));
+    for (const [id, section] of sections) {
+      filter.add(new Option(section.section_name || id, id));
+    }
+    if ([...filter.options].some((option) => option.value === previouslySelected)) {
+      filter.value = previouslySelected;
+    }
+  }
+  renderGeneralDropsPage();
+}
+
+function setupGeneralDropControls() {
+  for (const id of ["drop-min", "drop-section", "drop-sort", "drop-search"]) {
+    document.getElementById(id)?.addEventListener("input", () => {
+      generalDropPage = 0;
+      renderGeneralDropsPage();
+    });
+  }
+  document.getElementById("general-drops-prev")?.addEventListener("click", () => {
+    generalDropPage = Math.max(0, generalDropPage - 1);
+    renderGeneralDropsPage();
+  });
+  document.getElementById("general-drops-next")?.addEventListener("click", () => {
+    generalDropPage++;
+    renderGeneralDropsPage();
+  });
+}
+
+setupDashboardTabs();
+setupGeneralDropControls();
+
 function statusBadge(product) {
   if (product.status === "price_error") {
     return `<span class="badge error">Price error</span>`;
@@ -503,6 +711,7 @@ function renderDeals(deals) {
       `${Number(progress.cex_attempted || 0).toLocaleString("en-IE")} CeX attempts, ` +
       `${Number(progress.cex_matched || 0).toLocaleString("en-IE")} confirmed CeX matches.`;
   }
+  renderGeneralDrops(deals);
   renderDeepDrops(deals);
   renderCex(deals);
   renderCexArbitrage(deals);
