@@ -107,6 +107,11 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
         for key in stats:
             stats[key] += int(st.get(key) or 0)
 
+    # Preserve when a deal was first detected, not just when the section reran.
+    for collection in (drops, cex_flips, cex_arbitrage):
+        for row in collection:
+            if not row.get("found_at"):
+                row["found_at"] = incoming.get("generated_at")
     drops = sorted(_dedupe_by_asin(drops), key=lambda r: r.get("drop_percent") or 0, reverse=True)
     cex_flips = sorted(
         _dedupe_by_asin(cex_flips), key=lambda r: r.get("cex_cash_profit_eur") or 0, reverse=True
@@ -186,7 +191,7 @@ def export_deals(
         "new_alerts": len(processed.alerts),
         "verification_stats": processed.verification_stats,
         "scan_status": "blocked" if result.blocked else ("partial" if result.errors else "completed"),
-        "drops": processed.drops[:max_drops],
+        "drops": [{**row, "found_at": datetime.now(timezone.utc).isoformat()} for row in processed.drops[:max_drops]],
         "alerts": db.recent_alerts(limit=50),
         "deep_drop_tiers": [int(t) for t in tiers],
         "deep_drops": tiered_deep_drops(processed.drops, tiers),
@@ -194,8 +199,8 @@ def export_deals(
         "cex_min_cash_profit_eur": config.cex_min_cash_profit_eur if config else 5.0,
         "cex_min_cash_profit_percent": config.cex_min_cash_profit_percent if config else 10.0,
         "cex_lookups": processed.cex_lookups[:30],
-        "cex_flips": processed.cex_flips[:20],
-        "cex_arbitrage": processed.cex_arbitrage[:30],
+        "cex_flips": [{**row, "found_at": row.get("verified_at")} for row in processed.cex_flips[:20]],
+        "cex_arbitrage": [{**row, "found_at": row.get("verified_at")} for row in processed.cex_arbitrage[:30]],
         "cex_near_margin": sorted(
             [
                 row
