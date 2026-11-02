@@ -9,7 +9,7 @@ from pathlib import Path
 import httpx
 
 from app import database as db
-from app.scraper.amazon_ie import AMAZON_IE_BASE, ProductSnapshot
+from app.scraper.amazon_ie import AMAZON_IE_BASE, ProductSnapshot, is_amazon_direct_offer, fetch_product
 from app.scraper.bestsellers import BestsellerItem, normalize_category_path, parse_bestseller_page
 from app.services.drop_tiers import drop_tier
 from app.services.monitor import DetectedAlert, notify_alert, record_and_detect, send_notification
@@ -44,6 +44,7 @@ class CrawlConfig:
     report_drop_percent: float = 30.0
     daily_summary_hour: int | None = 9
     deep_drop_tiers: list[float] = field(default_factory=lambda: [40.0, 50.0, 66.0])
+    verify_max_candidates: int = 35
     cex_enabled: bool = True
     cex_max_lookups: int = 40
     cex_request_delay_seconds: float = 0.35
@@ -113,6 +114,8 @@ class ProcessResult:
     cex_flips: list[dict] = field(default_factory=list)
     cex_arbitrage: list[dict] = field(default_factory=list)
     cex_stats: dict = field(default_factory=dict)
+    verified_asins: set[str] = field(default_factory=set)
+    verification_stats: dict = field(default_factory=dict)
 
 
 def load_config(path: Path) -> CrawlConfig:
@@ -140,6 +143,7 @@ def load_config(path: Path) -> CrawlConfig:
         report_drop_percent=float(raw.get("report_drop_percent", defaults.report_drop_percent)),
         daily_summary_hour=raw.get("daily_summary_hour", defaults.daily_summary_hour),
         deep_drop_tiers=[float(x) for x in raw.get("deep_drop_tiers", defaults.deep_drop_tiers)],
+        verify_max_candidates=max(0, int(raw.get('verify_max_candidates', defaults.verify_max_candidates))),
         cex_enabled=bool(raw.get("cex_enabled", defaults.cex_enabled)),
         cex_max_lookups=int(raw.get("cex_max_lookups", defaults.cex_max_lookups)),
         cex_request_delay_seconds=float(
@@ -242,7 +246,7 @@ async def crawl(fetch: Fetcher, config: CrawlConfig) -> CrawlResult:
     return result
 
 
-def process_crawl(result: CrawlResult, config: CrawlConfig) -> ProcessResult:
+def process_crawl(result: CrawlResult, config: CrawlConfig, *, allow_alerts: bool = False) -> ProcessResult:
     processed = ProcessResult()
     for asin, (item, category) in result.items.items():
         if item.price_eur is None:
@@ -265,7 +269,7 @@ def process_crawl(result: CrawlResult, config: CrawlConfig) -> ProcessResult:
             cooldown_minutes=config.alert_cooldown_minutes,
             baseline_max_age_days=config.baseline_max_age_days,
         )
-        if alert:
+        if alert and allow_alerts:
             processed.alerts.append(alert)
 
         anchor = db.get_price_baseline(product_id)
@@ -355,3 +359,27 @@ async def send_alerts(
             lines.append(details_url)
         await send_notification("\n".join(lines))
     return min(len(ranked), config.max_alerts_per_run)
+
+
+async def verify_candidates(client: httpx.AsyncClient, candidates: list[dict], *, limit: int) -> tuple[list[dict], dict]:
+    """Confirm exact ASIN's Amazon-owned offer before publishing or contacting CeX."""
+    passed = []
+    stats = {"attempted": 0, "amazon_verified": 0, "rejected_or_unknown": 0}
+    seen = set()
+    for candidate in candidates:
+        asin = candidate.get("asin")
+        if not asin or asin in seen or stats["attempted"] >= limit:
+            continue
+        seen.add(asin)
+        stats["attempted"] += 1
+        try:
+            snap = await fetch_product(client, asin)
+            expected = float(candidate.get("price_eur") or 0)
+            if not is_amazon_direct_offer(snap) or not expected or abs(float(snap.price_eur) - expected) > 0.02:
+                stats["rejected_or_unknown"] += 1
+                continue
+            passed.append({**candidate, "seller_name": snap.seller_name, "seller_verified": True, "verified_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()})
+            stats["amazon_verified"] += 1
+        except (httpx.HTTPError, ValueError, TypeError):
+            stats["rejected_or_unknown"] += 1
+    return passed, stats
