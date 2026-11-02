@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import logging
 import os
+import time
 from pathlib import Path
 
 import httpx
@@ -151,49 +152,89 @@ async def crawl_section(
         for row in batch
     ]
     outcomes: dict[str, str] = {}
-    async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=30.0) as client:
-        verified, verification_stats = await verify_candidates(
-            client, candidates,
-            limit=len(candidates),
-            on_result=lambda asin, status: outcomes.__setitem__(asin, status),
-        )
-        verified_by_asin = {row["asin"]: row for row in verified}
-        processed.drops = [
-            {**drop_by_asin[asin], **row}
-            for asin, row in verified_by_asin.items() if asin in drop_by_asin
-        ]
-        processed.verified_asins = set(verified_by_asin)
-        processed.verification_stats = verification_stats
-        logger.info(
-            "[%s] Amazon verification batch: %s of %s priced items, %s",
-            section_id, len(candidates),
-            len([r for r in section_catalogue["items"] if r["price_eur"] is not None]),
-            verification_stats,
-        )
-        if verification_stats["attempted"] >= 10 and not verification_stats["amazon_verified"]:
-            logger.warning(
-                "[%s] No verified offers from %s checks. Rejection reasons: %s; samples: %s",
-                section_id, verification_stats["attempted"],
-                verification_stats.get("rejection_reasons"),
-                verification_stats.get("sample_failures"),
+    verified: list[dict] = []
+    lookups: list[dict] = []
+    flips: list[dict] = []
+    checked_batch: list[dict] = []
+    verification_stats = {
+        "attempted": 0, "amazon_verified": 0, "rejected_or_unknown": 0,
+        "rejection_reasons": {}, "sample_failures": [],
+    }
+    started = time.monotonic()
+    # Commit progress in short groups; stop safely after the configured budget
+    # rather than letting Actions kill the whole job after a slow Amazon/CeX page.
+    async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=15.0) as client:
+        for offset in range(0, len(candidates), 20):
+            if offset and time.monotonic() - started >= config.catalogue_time_budget_seconds:
+                logger.warning("[%s] Batch time budget reached, unexamined ASINs remain queued", section_id)
+                break
+            group = candidates[offset:offset + 20]
+            part_verified, part_stats = await verify_candidates(
+                client,
+                group,
+                limit=len(group),
+                delay_seconds=config.request_delay_seconds,
+                on_result=lambda asin, status: outcomes.__setitem__(asin, status),
             )
-
-        # Every Amazon/FBA-verified offer gets a CeX lookup, not only games or
-        # keyword-selected expensive items. A missing CeX match is recorded.
-        lookups, flips = await enrich_with_cex(
-            verified, config, client=client, max_lookups=len(verified)
+            # Do not silently discard products on CeX title mismatch; those
+            # attempts are still accounted for in the public catalogue.
+            part_lookups, part_flips = await enrich_with_cex(
+                part_verified, config, client=client, max_lookups=len(part_verified)
+            )
+            checked_batch.extend(group)
+            verified.extend(part_verified)
+            lookups.extend(part_lookups)
+            flips.extend(part_flips)
+            for key in ("attempted", "amazon_verified", "rejected_or_unknown"):
+                verification_stats[key] += int(part_stats.get(key) or 0)
+            for reason, count in (part_stats.get("rejection_reasons") or {}).items():
+                reasons = verification_stats["rejection_reasons"]
+                reasons[reason] = reasons.get(reason, 0) + count
+            remaining_samples = 5 - len(verification_stats["sample_failures"])
+            if remaining_samples > 0:
+                verification_stats["sample_failures"].extend(
+                    (part_stats.get("sample_failures") or [])[:remaining_samples]
+                )
+            logger.info(
+                "[%s] Verified %s/%s in current progressive batch; %s CeX matches",
+                section_id, verification_stats["amazon_verified"], len(checked_batch), len(lookups),
+            )
+            failures = part_stats.get("rejection_reasons") or {}
+            if failures.get("amazon_http_429", 0) >= 2:
+                logger.warning("[%s] Amazon is throttling; leaving remaining ASINs queued", section_id)
+                break
+    verified_by_asin = {row["asin"]: row for row in verified}
+    processed.drops = [
+        {**drop_by_asin[asin], **row}
+        for asin, row in verified_by_asin.items() if asin in drop_by_asin
+    ]
+    processed.verified_asins = set(verified_by_asin)
+    processed.verification_stats = verification_stats
+    logger.info(
+        "[%s] Amazon verification: %s/%s products examined, %s",
+        section_id, len(checked_batch),
+        len([r for r in section_catalogue["items"] if r["price_eur"] is not None]),
+        verification_stats,
+    )
+    if verification_stats["attempted"] >= 10 and not verification_stats["amazon_verified"]:
+        logger.warning(
+            "[%s] No verified offers from %s checks. Rejection reasons: %s; samples: %s",
+            section_id, verification_stats["attempted"],
+            verification_stats.get("rejection_reasons"),
+            verification_stats.get("sample_failures"),
         )
+
     apply_batch_results(
         section_catalogue,
-        batch,
+        checked_batch,
         verified,
         outcomes,
         lookups,
         cex_enabled=config.cex_enabled,
     )
-    section_catalogue["checked_this_run"] = len(batch)
+    section_catalogue["checked_this_run"] = len(checked_batch)
     processed.catalogue_stats = catalogue_progress(
-        section_catalogue, checked_this_run=len(batch)
+        section_catalogue, checked_this_run=len(checked_batch)
     )
     processed.cex_lookups = lookups
     processed.cex_flips = sorted(
