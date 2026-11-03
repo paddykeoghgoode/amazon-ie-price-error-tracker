@@ -204,16 +204,16 @@ function renderScanActivity(runs, detailsById, failure) {
 
     const known = detailsById.get(run.id);
     const progress = known ? trackerStepProgress(known.jobs, run.status) : null;
-    if (progress && (run.status !== "completed" || run.conclusion === "success")) {
+    if (progress && run.status !== "completed") {
       const line = document.createElement("div");
       line.className = "scan-progress-line";
       const bar = document.createElement("progress");
       bar.max = 100;
-      bar.value = run.status === "completed" ? 100 : progress.percentage;
+      bar.value = progress.percentage;
       bar.setAttribute("aria-label", "Completed known GitHub workflow steps");
       line.appendChild(bar);
       line.appendChild(trackerText("strong",
-        (run.status === "completed" ? 100 : progress.percentage) + "%"));
+        progress.percentage + "%"));
       panel.appendChild(line);
       panel.appendChild(trackerText("p",
         progress.completedSteps + " of " + progress.totalSteps +
