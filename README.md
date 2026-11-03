@@ -181,7 +181,13 @@ and links to GitHub instead of showing a false number.
 
 The dashboard checks recent workflow runs about every **2½ minutes**, but
 fetches the heavier per-run job details no more often than every **4 minutes**,
-for at most two active runs. This is deliberate to avoid exceeding the
+for at most two active runs. **No browser refresh is required.** The bar and
+numeric label animate smoothly over 900ms from the last GitHub-reported
+percentage to a new, higher reported percentage. They stay still between
+actual reports (rather than fabricating constant progress). If GitHub adds
+more steps and the reported percentage decreases, the display moves to that
+lower value without a misleading backwards animation. A user's OS-level
+reduced-motion setting disables the animation. This is deliberate to avoid exceeding the
 unauthenticated GitHub API rate limit. If GitHub rate-limits the browser,
 the panel keeps the last fetched state and reports that the status may be
 delayed. Scheduled scans and publishing continue independently.

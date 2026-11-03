@@ -297,19 +297,24 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .scan-run-step { margin: 0.3rem 0; color: #c2d5ed; font-size: 0.85rem; }
 .scan-progress-line { display: flex; align-items: center; gap: 0.75rem; }
 .scan-progress-line strong { min-width: 3rem; text-align: right; font-variant-numeric: tabular-nums; }
-.scan-progress-line progress {
+.scan-progress-track {
   width: 100%;
   flex: 1;
   min-width: 0;
   height: 0.85rem;
-  appearance: none;
   border-radius: 999px;
   overflow: hidden;
   background: #2b3648;
 }
-.scan-progress-line progress::-webkit-progress-bar { background: #2b3648; border-radius: 999px; }
-.scan-progress-line progress::-webkit-progress-value { background: var(--accent); border-radius: 999px; }
-.scan-progress-line progress::-moz-progress-bar { background: var(--accent); border-radius: 999px; }
+.scan-progress-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: var(--accent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .scan-progress-fill { transition: none; }
+}
 .scan-activity-disclaimer { border-top: 1px solid #37475c; padding-top: 0.7rem; }
 .scan-run .badge.running { color: #ffd29a; background: rgba(255,153,0,0.16); }
 .scan-run .badge.queued { color: #becce1; background: rgba(153,172,198,0.15); }
