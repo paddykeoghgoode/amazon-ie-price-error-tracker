@@ -144,15 +144,17 @@ def _matches_expected(product: dict, expected_model: str | None, expected_barcod
     """Confirm EAN or exact model without title-only approximate matching."""
     if not expected_model and not expected_barcode:
         return "identity_required"
-    barcodes = _ids(product, ("gtin", "gtin8", "gtin12", "gtin13", "gtin14", "ean", "gtin13"))
-    if expected_barcode and barcodes:
-        if expected_barcode not in {clean_barcode(v) for v in barcodes}:
-            return "barcode_mismatch"
-        return "barcode_confirmed"
+    barcodes = _ids(product, ("gtin", "gtin8", "gtin12", "gtin13", "gtin14", "ean"))
+    if expected_barcode and barcodes and expected_barcode not in {clean_barcode(v) for v in barcodes}:
+        return "barcode_mismatch"
     declared_models = _ids(product, ("mpn", "model"))
     normalized = {clean_model(x) for x in declared_models}
-    if expected_model and normalized:
-        return "model_confirmed" if expected_model in normalized else "model_mismatch"
+    if expected_model and normalized and expected_model not in normalized:
+        return "model_mismatch"
+    if expected_barcode and barcodes:
+        return "barcode_confirmed"
+    if expected_model and expected_model in normalized:
+        return "model_confirmed"
     # A verified model token embedded in the retailer's actual Product name is
     # acceptable. A different colour/version code is never a fuzzy match.
     title = str(product.get("name") or "")
