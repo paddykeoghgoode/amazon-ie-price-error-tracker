@@ -155,6 +155,11 @@ def _matches_expected(product: dict, expected_model: str | None, expected_barcod
         return "barcode_confirmed"
     if expected_model and expected_model in normalized:
         return "model_confirmed"
+    # Some Irish shops use their manufacturer model code in Product.sku
+    # rather than Product.mpn; count only an exact SKU match, never a fuzzy one.
+    sku_models = {clean_model(x) for x in _ids(product, ("sku",))}
+    if expected_model and expected_model in sku_models:
+        return "model_confirmed"
     # A verified model token embedded in the retailer's actual Product name is
     # acceptable. A different colour/version code is never a fuzzy match.
     title = str(product.get("name") or "")
