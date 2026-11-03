@@ -7,6 +7,7 @@ const require = createRequire(import.meta.url);
 const {
   trackerWorkflowRun, trackerWorkflowName, trackerStatus,
   trackerStepProgress, selectedActivityRuns, trackerSafeRunUrl,
+  trackerProgressTransition, trackerTweenPercent,
 } = require("../docs/scan-activity.js");
 
 test("only tracker and fast priority runs are shown, not test suite or arbitrary workflows", () => {
@@ -91,4 +92,45 @@ test("overview contains the activity panel, disclaimer and JS loader", () => {
   assert.match(html, /id="scan-activity-summary"/);
   assert.match(html, /percentage of Amazon products scanned/);
   assert.match(html, /<script src="scan-activity.js"><\/script>/);
+});
+
+
+test("animation only moves upwards on newly reported GitHub percentages", () => {
+  assert.deepEqual(trackerProgressTransition(undefined, 35),
+    { from: 0, to: 35, animate: true });
+  assert.deepEqual(trackerProgressTransition(35, 50),
+    { from: 35, to: 50, animate: true });
+  assert.deepEqual(trackerProgressTransition(50, 50),
+    { from: 50, to: 50, animate: false });
+  // A matrix job can appear later, increasing the denominator and lowering
+  // the reported percent. Show the actual lower percent without moving back.
+  assert.deepEqual(trackerProgressTransition(70, 40),
+    { from: 40, to: 40, animate: false });
+  assert.deepEqual(trackerProgressTransition(99, 100),
+    { from: 99, to: 100, animate: true });
+});
+
+test("progress easing starts at the previous confirmed value and ends at the new one", () => {
+  assert.equal(trackerTweenPercent(35, 70, 0), 35);
+  assert.equal(trackerTweenPercent(35, 70, 1), 70);
+  assert.equal(trackerTweenPercent(35, 70, 0.5), 66);
+  assert.equal(trackerTweenPercent(35, 70, -5), 35);
+  assert.equal(trackerTweenPercent(35, 70, 25), 70);
+  assert.ok(trackerTweenPercent(35, 70, 0.25) <
+            trackerTweenPercent(35, 70, 0.75));
+});
+
+test("dashboard animates accessible progress bars without artificial background creep", () => {
+  const js = fs.readFileSync("docs/scan-activity.js", "utf8");
+  const css = fs.readFileSync("docs/style.css", "utf8");
+  const html = fs.readFileSync("docs/index.html", "utf8");
+  assert.match(js, /setInterval\(updateScanActivity, SCAN_ACTIVITY_POLL_MS\)/);
+  assert.match(js, /window\.requestAnimationFrame/);
+  assert.match(js, /prefers-reduced-motion: reduce/);
+  assert.match(js, /bar\.setAttribute\("role", "progressbar"\)/);
+  assert.match(js, /bar\.setAttribute\("aria-valuenow", String\(reportedPercentage\)\)/);
+  assert.match(js, /completedOk && oldValue === undefined \? 100 : oldValue/);
+  assert.match(css, /\.scan-progress-track/);
+  assert.match(css, /\.scan-progress-fill/);
+  assert.match(html, /animates when GitHub reports an increase/);
 });
