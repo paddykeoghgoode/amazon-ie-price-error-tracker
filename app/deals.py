@@ -21,6 +21,7 @@ _SECTION_STORE_KEYS = (
     "errors",
     "blocked",
     "drops",
+    "general_drops",
     "deep_drops",
     "deep_drop_tiers",
     "cex_flips",
@@ -51,6 +52,19 @@ def _dedupe_by_asin(rows: list[dict]) -> list[dict]:
         if asin:
             out[str(asin)] = row
     return list(out.values())
+
+
+def _latest_scanned_by_asin(rows: list[dict]) -> list[dict]:
+    """Use the newest *section observation* when an ASIN appears more than once."""
+    latest: dict[str, dict] = {}
+    for row in rows:
+        asin = str(row.get("asin") or "")
+        if not asin:
+            continue
+        previous = latest.get(asin)
+        if previous is None or str(row.get("last_scanned_at") or "") >= str(previous.get("last_scanned_at") or ""):
+            latest[asin] = row
+    return list(latest.values())
 
 
 def _merge_deep_drops(sections: dict[str, dict]) -> dict[str, list[dict]]:
@@ -87,7 +101,7 @@ def _unverified_research_rows(rows: list[dict]) -> list[dict]:
 def _disable_seller_claims(section: dict) -> dict:
     snap = {**section, "seller_verification_enabled": False,
             "verification_stats": {"status": "disabled"}}
-    for kind in ("drops", "cex_flips", "cex_arbitrage", "cex_near_margin", "cex_lookups"):
+    for kind in ("drops", "general_drops", "cex_flips", "cex_arbitrage", "cex_near_margin", "cex_lookups"):
         if kind in snap:
             snap[kind] = _unverified_research_rows(snap[kind] or [])
     if "deep_drops" in snap:
@@ -118,7 +132,7 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
     # Keep the first sighting time for the same ASIN and listing price while
     # a section is rescanned; a changed price is a new finding.
     old_section = ((previous or {}).get("sections") or {}).get(section_id) or {}
-    for kind in ("drops", "cex_flips", "cex_arbitrage"):
+    for kind in ("drops", "general_drops", "cex_flips", "cex_arbitrage"):
         previous_findings = {
             (row.get("asin"), row.get("price_eur")): row.get("found_at")
             for row in old_section.get(kind) or []
@@ -129,6 +143,7 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
                 row["found_at"] = original
 
     drops: list[dict] = []
+    general_drops: list[dict] = []
     premium_drops: list[dict] = []
     rapid_drops: list[dict] = []
     cex_flips: list[dict] = []
@@ -148,6 +163,7 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
 
     for snap in sections.values():
         drops.extend(snap.get("drops") or [])
+        general_drops.extend(snap.get("general_drops") or [])
         premium_drops.extend(snap.get("premium_drops") or [])
         rapid_drops.extend(snap.get("rapid_drops") or [])
         cex_flips.extend(snap.get("cex_flips") or [])
@@ -168,11 +184,16 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
             stats[key] += int(st.get(key) or 0)
 
     # Preserve when a deal was first detected, not just when the section reran.
-    for collection in (drops, cex_flips, cex_arbitrage):
+    for collection in (drops, general_drops, cex_flips, cex_arbitrage):
         for row in collection:
             if not row.get("found_at"):
                 row["found_at"] = incoming.get("generated_at")
     drops = sorted(_dedupe_by_asin(drops), key=lambda r: r.get("drop_percent") or 0, reverse=True)
+    general_drops = sorted(
+        _latest_scanned_by_asin(general_drops),
+        key=lambda r: (r.get("drop_percent") or 0, r.get("savings_eur") or 0),
+        reverse=True,
+    )
     premium_drops = sorted(_dedupe_by_asin(premium_drops), key=lambda r: r.get("drop_percent") or 0, reverse=True)
     rapid_drops = sorted(_dedupe_by_asin(rapid_drops), key=lambda r: r.get("drop_percent") or 0, reverse=True)
     cex_flips = sorted(
@@ -208,6 +229,8 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
         "errors": errors,
         "blocked": blocked,
         "drops": drops[:50],
+        "general_drops": general_drops,
+        "general_drop_percent": incoming.get("general_drop_percent", base.get("general_drop_percent", 10)),
         "premium_drops": premium_drops[:30],
         "rapid_drops": rapid_drops[:30],
         "premium_min_price_eur": incoming.get("premium_min_price_eur", base.get("premium_min_price_eur", 100)),
@@ -264,6 +287,15 @@ def export_deals(
         "catalogue_stats": processed.catalogue_stats,
         "scan_status": "blocked" if result.blocked else ("partial" if result.errors else "completed"),
         "drops": [{**row, "found_at": datetime.now(timezone.utc).isoformat()} for row in processed.drops[:max_drops]],
+        "general_drop_percent": config.general_drop_percent if config else 10.0,
+        "general_drops": [
+            {
+                **row,
+                "found_at": datetime.now(timezone.utc).isoformat(),
+                "last_scanned_at": datetime.now(timezone.utc).isoformat(),
+            }
+            for row in processed.general_drops
+        ],
         "premium_drops": [
             {**row, "found_at": datetime.now(timezone.utc).isoformat()} for row in processed.premium_drops[:30]
         ],

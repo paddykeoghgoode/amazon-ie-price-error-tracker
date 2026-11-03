@@ -110,7 +110,216 @@ a { color: var(--accent); }
 .alerts .price { color: var(--danger); }
 .alerts .time { color: var(--muted); font-size: 0.8rem; }
 
+
+/* Five responsive views keep the large tracker usable on phones and desktop. */
+.dashboard-nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg);
+  padding: 0.8rem 0 0.55rem;
+  border-bottom: 1px solid #2d3a4d;
+}
+.tab-list {
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  overscroll-behavior-x: contain;
+}
+.tab-button {
+  flex: 0 0 auto;
+  background: transparent;
+  border: 1px solid #344358;
+  color: var(--text);
+  white-space: nowrap;
+  font-size: 0.88rem;
+  padding: 0.68rem 0.9rem;
+  border-radius: 9px;
+}
+.tab-button:hover { background: #223047; }
+.tab-button[aria-selected="true"] {
+  color: #10151b;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible {
+  outline: 2px solid #8fc8ff;
+  outline-offset: 3px;
+}
+[role="tabpanel"][hidden] { display: none !important; }
+
+.drops-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.drops-heading h2 { margin-bottom: 0.4rem; }
+.drops-heading .hint { margin-top: 0; }
+.drop-count {
+  color: var(--accent);
+  border: 1px solid #3d4b5d;
+  border-radius: 999px;
+  padding: 0.38rem 0.7rem;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.drop-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin: 1.2rem 0 0.8rem;
+}
+.drop-control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.38rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.drop-control input, .drop-control select {
+  background: #0f1419;
+  color: var(--text);
+  border: 1px solid #38485b;
+  border-radius: 8px;
+  min-width: 0;
+  padding: 0.65rem;
+  font: inherit;
+  font-size: 0.87rem;
+}
+.drop-control.search-control { grid-column: 1 / -1; }
+.drop-percent { color: var(--ok); font-weight: 700; white-space: nowrap; }
+.saving-eur { color: #b7ebce; font-weight: 700; white-space: nowrap; }
+#general-drops-table { min-width: 800px; }
+#general-drops-table thead th { white-space: nowrap; }
+#general-drops-table .time { font-size: 0.85rem; white-space: nowrap; }
+.pagination-controls {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.9rem;
+  font-size: 0.85rem;
+}
+.pagination-button {
+  padding: 0.45rem 0.75rem;
+  background: transparent;
+  border: 1px solid #42526a;
+  color: var(--text);
+}
+.pagination-button:hover:not(:disabled) { border-color: var(--accent); }
+.pagination-button:disabled { opacity: 0.45; cursor: not-allowed; }
+
 @media (max-width: 640px) {
   body { padding: 1rem; }
   header h1 { font-size: 1.5rem; }
+  .tab-button { padding: 0.58rem 0.75rem; font-size: 0.84rem; }
+  .drop-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .drops-heading { flex-wrap: wrap; }
+}
+
+/* Watchlist's optional exact-product competitor research. */
+.retail-setup {
+  margin: 1.15rem 0;
+  border: 1px solid #40506a;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+}
+.retail-setup summary { cursor: pointer; font-weight: 650; color: var(--text); }
+.retail-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+.retail-inputs label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.retail-inputs .span-all { grid-column: 1 / -1; }
+.retail-inputs input, .retail-inputs textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.7rem;
+  border: 1px solid #45526a;
+  border-radius: 8px;
+  color: var(--text);
+  background: #0e141d;
+  font: inherit;
+}
+.retail-product {
+  border-top: 1px solid #3a4658;
+  padding: 1rem 0;
+}
+.retail-product h3 { margin-top: 0; }
+.retail-product .retail-status-note { font-weight: 650; color: #a8c6e7; }
+.retail-offer-table { min-width: 610px; }
+.retail-offer-table td { vertical-align: top; }
+@media (max-width: 640px) {
+  .retail-inputs { grid-template-columns: 1fr; }
+}
+
+
+/* Live GitHub Actions progress. Percentages are steps, not product counts. */
+.scan-activity-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.scan-activity-head h2 { margin-bottom: 0.4rem; }
+.scan-activity-head .hint { margin: 0 0 0.7rem; }
+.scan-activity-head > a { font-size: 0.85rem; flex: 0 0 auto; }
+.scan-activity-list { display: grid; gap: 0.7rem; }
+.scan-run {
+  border: 1px solid #39495f;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  background: #151e2c;
+  min-width: 0;
+}
+.scan-run-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.scan-run-head > a { font-weight: 650; }
+.scan-run-head .badge { margin-left: auto; }
+.scan-run-subtitle { margin: 0.55rem 0 0.4rem; color: var(--muted); font-size: 0.85rem; }
+.scan-run-step { margin: 0.3rem 0; color: #c2d5ed; font-size: 0.85rem; }
+.scan-progress-line { display: flex; align-items: center; gap: 0.75rem; }
+.scan-progress-line strong { min-width: 3rem; text-align: right; font-variant-numeric: tabular-nums; }
+.scan-progress-track {
+  width: 100%;
+  flex: 1;
+  min-width: 0;
+  height: 0.85rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #2b3648;
+}
+.scan-progress-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: var(--accent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .scan-progress-fill { transition: none; }
+}
+.scan-activity-disclaimer { border-top: 1px solid #37475c; padding-top: 0.7rem; }
+.scan-run .badge.running { color: #ffd29a; background: rgba(255,153,0,0.16); }
+.scan-run .badge.queued { color: #becce1; background: rgba(153,172,198,0.15); }
+.scan-run .badge.failed { color: #ff9a9c; background: rgba(255,77,79,0.17); }
+@media (max-width: 640px) {
+  .scan-run { padding: 0.75rem; }
+  .scan-run-head .badge { margin-left: 0; }
 }

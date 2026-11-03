@@ -1,5 +1,5 @@
 {
-  "_comment": "Rotating Amazon sections continue discovering thousands of prices. CeX quote cache survives via catalogue.json (72h positive, 7d no-match, 6h retry on error); up to 40 new CeX lookups per section scan and no requests after CeX 429. Only quote-verified offers <=12h old can trigger buying alerts.",
+  "_comment": "Broad discovery automatically queues the next rotating bestseller section after publishing; hourly frequency depends on run duration. Watchlist and priority-drop checks remain every 10 minutes. CeX quotes cached 72h matched / 7d no-match / 6h provider backoff; lower live CeX calls to 10 per broad scan because cycles now occur more often.",
   "max_items": 12000,
   "max_requests": 800,
   "pages_per_category": 2,
@@ -193,13 +193,14 @@
     "/gp/bestsellers/gift-cards"
   ],
   "catalogue_checks_per_run": 120,
-  "catalogue_time_budget_seconds": 480,
-  "cex_live_lookups_per_run": 40,
+  "catalogue_time_budget_seconds": 360,
+  "cex_live_lookups_per_run": 10,
   "cex_quote_ttl_hours": 72,
   "cex_no_match_ttl_hours": 168,
   "cex_error_retry_hours": 6,
   "cex_alert_quote_max_age_hours": 12,
   "cex_request_delay_seconds": 0.75,
+  "general_drop_percent": 10,
   "premium_min_price_eur": 100,
   "premium_history_drop_percent": 45,
   "rapid_drop_min_price_eur": 80,

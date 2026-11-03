@@ -6,8 +6,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        Paste an Amazon.ie product URL or 10-character ASIN.
-        The next tracker scan (or a manual **Actions → Scan and publish tracker → Run workflow**) will pick it up.
+        Paste an Amazon.ie product URL, amzn.eu short link, or 10-character ASIN.
+        Submit this issue once. The tracker resolves supported short links, checks the listing on the next watchlist scan, and shows the result on the Watchlist tab.
+        GitHub issues are the submission method because GitHub Pages cannot write directly to the repository.
   - type: input
     id: url
     attributes:
@@ -15,3 +16,17 @@ body:
       placeholder: https://www.amazon.ie/dp/B0XXXXXXXX
     validations:
       required: true
+  - type: textarea
+    id: comparison
+    attributes:
+      label: Optional Irish retailer comparison details
+      description: Add the exact model/EAN, direct product links from retailers, and a sourced RRP if you have one. Leave blank if you're only tracking Amazon.
+      placeholder: |
+        Model: SES875BTR2GUK1
+        EAN: 9312432032056
+        Compare: https://www.currys.ie/products/EXAMPLE
+        Compare: https://www.harveynorman.ie/EXAMPLE
+        RRP: 599.99
+        RRP source: https://www.sageappliances.com/eu/example
+    validations:
+      required: false

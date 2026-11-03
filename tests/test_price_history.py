@@ -41,6 +41,13 @@ class TestDurablePriceReference(unittest.TestCase):
         self.assertAlmostEqual(db.get_price_baseline(self.pid)["reference_eur"], 200, places=1)
         self.assertEqual(len(db.price_history(self.pid, 100)), 29)
 
+    def test_general_ten_percent_discount_does_not_erase_its_own_reference(self):
+        for _ in range(4):
+            self.tick(100.00)
+        for _ in range(16):
+            self.tick(85.00)
+        self.assertEqual(db.get_price_baseline(self.pid)["reference_eur"], 100.00)
+
     def test_unstable_history_does_not_create_reference(self):
         self.tick(200)
         self.tick(50)

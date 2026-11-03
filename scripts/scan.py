@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import asyncio
 import json
 import logging
 import os
+import re
 from pathlib import Path
 
 import httpx
@@ -12,7 +14,14 @@ import httpx
 from app.config import settings
 from app import database as db
 from app.scraper.amazon_ie import extract_asin
+from app.services.watch_links import (
+    public_issue_url, resolve_amazon_shortlink, safe_amazon_url,
+    shortlinks_in_text,
+)
 from app.services.monitor import add_watch_url, run_once, send_notification
+from app.services.retail_compare import (
+    clean_model, compare_watchlist, parse_retail_spec, trusted_retailer_url,
+)
 from app.snapshot import (
     export_snapshot,
     import_snapshot,
@@ -43,6 +52,68 @@ def load_watchlist(path: Path) -> list[str]:
     return urls
 
 
+def load_watchlist_specs(path: Path) -> dict[str, dict]:
+    """Optional exact model, RRP and merchant product links in watchlist.json."""
+    if not path.exists():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    specs = {}
+    for item in payload.get("products") or []:
+        if not isinstance(item, dict):
+            continue
+        asin = extract_asin(str(item.get("url") or item.get("asin") or ""))
+        if asin:
+            specs[asin] = parse_retail_spec(item)
+    return specs
+
+
+def parse_issue_retail_spec(body: str) -> dict:
+    """Explicit Compare: direct retailer URL lines. No retailer search guessing."""
+    spec: dict = {"retailer_urls": []}
+    for line in (body or "").splitlines():
+        match = re.match(r"^\s*(?:compare|retailer)\s*:\s*(https://\S+)", line, re.I)
+        if match:
+            url = match.group(1).rstrip(").,;")
+            if trusted_retailer_url(url):
+                spec["retailer_urls"].append(url)
+            continue
+        model = re.match(r"^\s*(?:model|mpn)\s*:\s*(\S+)", line, re.I)
+        if model:
+            spec["model"] = clean_model(model.group(1))
+            continue
+        ean = re.match(r"^\s*(?:ean|barcode|gtin)\s*:\s*(\d{8,14})\s*$", line, re.I)
+        if ean:
+            spec["barcode"] = ean.group(1)
+            continue
+        rrp = re.match(r"^\s*rrp(?:\s+eur)?\s*:\s*€?\s*([\d,.]+)", line, re.I)
+        if rrp:
+            spec["rrp_eur"] = rrp.group(1)
+            continue
+        source = re.match(r"^\s*rrp\s+source\s*:\s*(https://\S+)", line, re.I)
+        if source:
+            spec["rrp_source"] = source.group(1).rstrip(").,;")
+    return parse_retail_spec(spec)
+
+
+def combine_retail_specs(base: dict[str, dict], issues: list[dict]) -> dict[str, dict]:
+    combined = {asin: parse_retail_spec(spec) for asin, spec in base.items()}
+    for issue in issues:
+        asin = issue.get("asin")
+        if not asin:
+            continue
+        fields = issue.get("retail_spec") or {}
+        old = combined.get(asin) or parse_retail_spec({})
+        merged = {**old}
+        for field in ("model", "barcode", "rrp_eur", "rrp_source"):
+            if fields.get(field) is not None:
+                merged[field] = fields[field]
+        merged["retailer_urls"] = list(dict.fromkeys(
+            (old.get("retailer_urls") or []) + (fields.get("retailer_urls") or [])
+        ))
+        combined[asin] = parse_retail_spec(merged)
+    return combined
+
+
 def extract_asins_from_text(*parts: str | None) -> list[str]:
     found: list[str] = []
     seen: set[str] = set()
@@ -65,10 +136,23 @@ def extract_asins_from_text(*parts: str | None) -> list[str]:
 def _is_watch_issue(issue: dict) -> bool:
     title = (issue.get("title") or "").strip().lower()
     labels = {str(lbl.get("name", "")).lower() for lbl in (issue.get("labels") or []) if isinstance(lbl, dict)}
-    return "watch" in labels or title.startswith("watch")
+    return "watch" in labels or title.startswith("watch:")
 
 
-async def fetch_watch_issue_urls(repo: str, token: str) -> list[str]:
+def _issue_fingerprint(issue: dict) -> str:
+    """Cache shortened-link resolution until the user actually edits the issue."""
+    source = f"{issue.get('title') or ''}\0{issue.get('body') or ''}"
+    return hashlib.sha256(source.encode("utf-8")).hexdigest()
+
+
+async def fetch_watch_issue_urls(
+    repo: str,
+    token: str,
+    *,
+    previous_submissions: list[dict] | None = None,
+    submissions: list[dict] | None = None,
+) -> list[str]:
+    """Collect open issues, resolving amzn.eu on an unauthenticated client."""
     if not repo:
         return []
     headers = {
@@ -77,33 +161,157 @@ async def fetch_watch_issue_urls(repo: str, token: str) -> list[str]:
     }
     if token:
         headers["Authorization"] = f"Bearer {token}"
+    remembered = {
+        int(item["issue_number"]): item
+        for item in (previous_submissions or [])
+        if isinstance(item, dict) and str(item.get("issue_number") or "").isdigit()
+    }
     urls: list[str] = []
     api = f"https://api.github.com/repos/{repo}/issues"
-    async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
+    async with (
+        httpx.AsyncClient(timeout=30.0, headers=headers) as github_client,
+        httpx.AsyncClient(timeout=15.0) as amazon_client,
+    ):
         page = 1
         while page <= 5:
-            resp = await client.get(
-                api,
-                params={"state": "open", "per_page": 100, "page": page},
+            resp = await github_client.get(
+                api, params={"state": "open", "per_page": 100, "page": page},
             )
             if resp.status_code == 404:
                 logger.warning("GitHub repo %s not found when listing watch issues", repo)
                 break
             resp.raise_for_status()
             issues = resp.json()
-            if not issues:
+            if not isinstance(issues, list) or not issues:
                 break
             for issue in issues:
-                if issue.get("pull_request"):
+                if issue.get("pull_request") or not _is_watch_issue(issue):
                     continue
-                if not _is_watch_issue(issue):
-                    continue
-                asins = extract_asins_from_text(issue.get("title"), issue.get("body"))
+                number = int(issue["number"])
+                title, body = issue.get("title") or "", issue.get("body") or ""
+                fingerprint = _issue_fingerprint(issue)
+                asins = extract_asins_from_text(title, body)
+                shortlinks = shortlinks_in_text(title, body)
+                if not asins:
+                    previous = remembered.get(number) or {}
+                    previously_resolved = previous.get("asin")
+                    if (
+                        previous.get("source_fingerprint") == fingerprint
+                        and previously_resolved
+                        and extract_asin(str(previously_resolved)) == previously_resolved
+                    ):
+                        asins = [previously_resolved]
+                    else:
+                        for link in shortlinks[:3]:
+                            asin = await resolve_amazon_shortlink(amazon_client, link)
+                            if asin and asin not in asins:
+                                asins.append(asin)
+                        if not asins and shortlinks:
+                            logger.warning(
+                                "Shortened Amazon URL in issue #%s could not be resolved", number,
+                            )
                 urls.extend(asins)
+                if submissions is not None:
+                    submissions.append({
+                        "issue_number": number,
+                        "issue_url": public_issue_url(repo, number),
+                        "asin": asins[0] if asins else None,
+                        "source_fingerprint": fingerprint,
+                        "status": "pending_scan" if asins else "link_unresolved",
+                        "retail_spec": parse_issue_retail_spec(body) if asins else {},
+                    })
             if len(issues) < 100:
                 break
             page += 1
-    return urls
+    return list(dict.fromkeys(urls))
+
+
+async def resolve_watchlist_entries(urls: list[str]) -> list[str]:
+    """watchlist.json can contain short links as well as full URLs and ASINs."""
+    resolved: list[str] = []
+    async with httpx.AsyncClient(timeout=15.0) as amazon_client:
+        for original in urls:
+            asin = extract_asin(original)
+            if not asin:
+                for link in shortlinks_in_text(original)[:1]:
+                    asin = await resolve_amazon_shortlink(amazon_client, link)
+                    if asin:
+                        break
+            if asin:
+                resolved.append(asin)
+            else:
+                logger.warning("Skipping unknown watchlist entry; use an Amazon URL or ASIN")
+    return list(dict.fromkeys(resolved))
+
+
+async def comment_on_new_watch_issue(
+    repo: str, token: str, submissions: list[dict],
+) -> None:
+    """Confirm a new or edited issue; scheduled scans never comment again."""
+    if not token or os.environ.get("GITHUB_EVENT_NAME") != "issues":
+        return
+    event_path = os.environ.get("GITHUB_EVENT_PATH")
+    if not event_path:
+        return
+    try:
+        event = json.loads(Path(event_path).read_text(encoding="utf-8"))
+        if event.get("action") not in {"opened", "edited", "reopened"}:
+            return
+        number = int(event["issue"]["number"])
+    except (OSError, TypeError, ValueError, KeyError, json.JSONDecodeError):
+        return
+    request = next((x for x in submissions if x.get("issue_number") == number), None)
+    if not request:
+        return
+    asin = request.get("asin")
+    if asin:
+        message = (
+            f"✅ Tracking request processed: **{asin}** — {safe_amazon_url(asin)}\n\n"
+            "The watchlist scans this product on future runs. Its current "
+            "price or any Amazon fetch error will appear in the "
+            f"[Watchlist dashboard](https://{repo.split('/')[0]}.github.io/{repo.split('/')[1]}/#watchlist). "
+            "Seller, condition and checkout price are not verified."
+        )
+    else:
+        message = (
+            "⚠️ I couldn't identify an Amazon product from this request. "
+            "Please edit the issue with a full Amazon product URL "
+            "(https://www.amazon.ie/dp/ASIN) or its 10-character ASIN. "
+            "Short links can occasionally be blocked by Amazon; the next "
+            "watchlist scan will retry them."
+        )
+    try:
+        async with httpx.AsyncClient(timeout=15.0, headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }) as client:
+            result = await client.post(
+                f"https://api.github.com/repos/{repo}/issues/{number}/comments",
+                json={"body": message},
+            )
+            result.raise_for_status()
+    except httpx.HTTPError as exc:
+        logger.warning("Could not acknowledge watch issue #%s (%s)", number, type(exc).__name__)
+
+
+def annotate_watch_submissions(submissions: list[dict], snapshot: dict) -> list[dict]:
+    products = {p.get("asin"): p for p in snapshot.get("products") or []}
+    for item in submissions:
+        asin = item.get("asin")
+        if not asin:
+            continue
+        product = products.get(asin)
+        if not product:
+            item["status"] = "pending_scan"
+        elif product.get("status") == "fetch_error":
+            item["status"] = "fetch_error"
+        elif product.get("price_eur") is not None:
+            item["status"] = "tracking"
+        else:
+            item["status"] = "price_unavailable"
+        item["checked_at"] = product.get("checked_at") if product else None
+    return submissions
 
 
 def add_all(urls: list[str]) -> None:
@@ -153,16 +361,26 @@ def main() -> None:
     args = parse_args()
     db.init_db()
 
-    if args.previous and args.previous.exists() and not db.list_products():
+    previous = read_snapshot(args.previous) if args.previous and args.previous.exists() else {}
+    if previous and not db.list_products():
         logger.info("Importing previous snapshot from %s", args.previous)
-        import_snapshot(read_snapshot(args.previous))
+        import_snapshot(previous)
 
     env_repo = os.environ.get("GITHUB_REPOSITORY")
     repo = env_repo or "paddykeoghgoode/amazon-ie-price-error-tracker"
     token = os.environ.get("GITHUB_TOKEN", "")
     watch_urls = load_watchlist(args.watchlist)
-    issue_urls = asyncio.run(fetch_watch_issue_urls(repo, token)) if env_repo else []
-    add_all(watch_urls + issue_urls)
+    issue_submissions: list[dict] = []
+    issue_urls = (
+        asyncio.run(fetch_watch_issue_urls(
+            repo, token, previous_submissions=previous.get("watch_submissions") or [],
+            submissions=issue_submissions,
+        ))
+        if env_repo else []
+    )
+    configured_asins = asyncio.run(resolve_watchlist_entries(watch_urls))
+    retail_specs = combine_retail_specs(load_watchlist_specs(args.watchlist), issue_submissions)
+    add_all(configured_asins + issue_urls)
     logger.info(
         "Watching %s product(s) (watchlist=%s issues=%s telegram=%s)",
         len(db.list_products(enabled_only=True)),
@@ -171,13 +389,26 @@ def main() -> None:
         settings.telegram_enabled,
     )
 
-    if not args.skip_fetch:
-        asyncio.run(run_once())
-
+    product_metadata = asyncio.run(run_once()) if not args.skip_fetch else {}
     payload = export_snapshot(github_repo=repo)
+    for product in payload["products"]:
+        props = product_metadata.get(product["asin"]) or {}
+        if props.get("model_number"):
+            product["model_number"] = props["model_number"]
+        if props.get("barcode"):
+            product["barcode"] = props["barcode"]
+    # Retailer pages are fetched only when the user supplies exact product
+    # URLs. Their cached prices survive the frequent (10-minute) Amazon scans.
+    asyncio.run(compare_watchlist(
+        payload["products"], retail_specs, previous,
+        max_requests=12 if not args.skip_fetch else 0,
+    ))
+    payload["watch_submissions"] = annotate_watch_submissions(issue_submissions, payload)
+    write_snapshot(args.output, payload)
     if not args.skip_fetch and not args.no_summary:
         asyncio.run(send_watchlist_summary(payload))
-    write_snapshot(args.output, payload)
+    if env_repo:
+        asyncio.run(comment_on_new_watch_issue(repo, token, issue_submissions))
     if args.markdown:
         args.markdown.write_text(render_tracker_markdown(payload), encoding="utf-8")
     logger.info("Wrote snapshot to %s", args.output)

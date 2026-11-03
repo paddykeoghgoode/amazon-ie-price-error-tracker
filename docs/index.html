@@ -16,89 +16,149 @@
     <p class="hint"><strong>Research leads only:</strong> seller verification is disabled. Check the exact Amazon seller, condition, variant, checkout total and CeX trade-in grade before buying anything.</p>
   </header>
 
+  <nav class="dashboard-nav" aria-label="Tracker views">
+    <div class="tab-list" role="tablist" aria-label="Tracker views">
+      <button type="button" class="tab-button" role="tab" id="tab-overview" aria-controls="panel-overview" aria-selected="true" tabindex="0" data-tab="overview">Overview</button>
+      <button type="button" class="tab-button" role="tab" id="tab-amazon-drops" aria-controls="panel-amazon-drops" aria-selected="false" tabindex="-1" data-tab="amazon-drops">Amazon Drops</button>
+      <button type="button" class="tab-button" role="tab" id="tab-cex" aria-controls="panel-cex" aria-selected="false" tabindex="-1" data-tab="cex">CeX Opportunities</button>
+      <button type="button" class="tab-button" role="tab" id="tab-listings" aria-controls="panel-listings" aria-selected="false" tabindex="-1" data-tab="listings">All Listings</button>
+      <button type="button" class="tab-button" role="tab" id="tab-watchlist" aria-controls="panel-watchlist" aria-selected="false" tabindex="-1" data-tab="watchlist">Watchlist</button>
+    </div>
+  </nav>
+  <main id="tracker-main">
+    <div role="tabpanel" id="panel-overview" aria-labelledby="tab-overview">
+  <section class="card scan-activity" aria-labelledby="scan-activity-title">
+    <div class="scan-activity-head">
+      <div>
+        <h2 id="scan-activity-title">Live scan activity</h2>
+        <p class="hint">GitHub Actions status for the bestseller, watchlist and fast price-drop checks.</p>
+      </div>
+      <a href="https://github.com/paddykeoghgoode/amazon-ie-price-error-tracker/actions" target="_blank" rel="noopener">View all runs</a>
+    </div>
+    <p id="scan-activity-summary" role="status" aria-live="polite" class="hint">Checking GitHub Actions…</p>
+    <div id="scan-activity-runs" class="scan-activity-list" aria-label="Recent tracker workflow runs"></div>
+    <p class="hint scan-activity-disclaimer">The bar <strong>animates when GitHub reports an increase</strong>, without needing to reload this page. Percentage means <strong>GitHub Actions workflow steps completed</strong>, <strong>not</strong> the percentage of Amazon products scanned. It holds steady during a long scan step. Run status refreshes about every 2½ minutes; detailed steps refresh about every 4 minutes to respect GitHub's API limits.</p>
+  </section>
   <section class="card">
     <h2>Section scan progress</h2>
     <p class="hint">Each block publishes independently. Times are Ireland time. Seller verification is disabled; Amazon prices are observed from bestseller pages. CeX work is bounded and cached.</p>
-    <div class="table-wrap"><table id="section-table" hidden><thead><tr><th>Section</th><th>Last scanned</th><th>Status</th><th>Items</th><th>Seller checks</th><th>CeX queue checked</th><th>CeX live / cached</th><th>Finds</th></tr></thead><tbody id="section-body"></tbody></table></div>
+    <div class="table-wrap"><table id="section-table" hidden><thead><tr><th>Section</th><th>Last scanned</th><th>Status</th><th>Items</th><th>Seller checks</th><th>CeX queue checked</th><th>CeX live / cached</th><th>Amazon drops</th><th>Finds</th></tr></thead><tbody id="section-body"></tbody></table></div>
     <p id="section-empty" class="empty">No section scans published yet.</p>
   </section>
   <section class="card">
-    <h2>All Amazon bestseller listings</h2>
-    <p class="hint">All ASINs discovered in each section, not just the 25 highest-ranked candidates. CeX research continues in batches and retains progress between scans. <strong>Seller/checkout details are not checked</strong>; matches are not buy recommendations.</p>
-    <p class="hint"><a href="catalogue.csv" download>Download complete listing CSV</a> · <a href="catalogue.json" target="_blank" rel="noopener">View raw JSON</a></p>
-    <div id="catalogue-overview" class="hint">The catalogue will populate after the next section scan publishes.</div>
-    <div class="catalogue-controls" style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0">
-      <button type="button" id="catalogue-load">Browse listings</button>
-      <input id="catalogue-search" type="search" placeholder="Search title, ASIN, category…" aria-label="Search listings" style="flex:1;min-width:220px"/>
-      <select id="catalogue-section-filter" aria-label="Filter section"><option value="">All sections</option></select>
-      <select id="catalogue-activity-filter" aria-label="Filter current listings">
-        <option value="active">Currently listed</option>
-        <option value="all">Current and recently archived</option>
-        <option value="archived">Recently archived</option>
-      </select>
-      <select id="catalogue-status-filter" aria-label="Filter status">
-        <option value="">All CeX research statuses</option>
-        <option value="pending">Awaiting CeX research</option>
-        <option value="matched">CeX research match</option>
-        <option value="no_match">No CeX match</option>
-      </select>
-    </div>
-    <p id="catalogue-info" class="hint" role="status">Click Browse listings to load the full current inventory.</p>
+    <h2>Bestseller scan</h2>
+    <p id="deals-summary" class="hint">No bestseller crawl has run yet.</p>
+    <ul id="deals-alerts" class="alerts" hidden></ul>
     <div class="table-wrap">
-      <table id="catalogue-table" hidden>
-        <thead><tr><th>Amazon listing</th><th>Section</th><th>Amazon price</th><th>Seller check</th><th>CeX research</th><th>Last CeX research</th></tr></thead>
-        <tbody id="catalogue-body"></tbody>
-      </table>
-    </div>
-    <div style="display:flex;gap:10px;align-items:center;margin-top:12px">
-      <button type="button" id="catalogue-prev" disabled>Previous</button>
-      <button type="button" id="catalogue-next" disabled>Next</button>
-    </div>
-  </section>
-  <section class="card">
-    <h2>Add a product</h2>
-    <form id="add-form">
-      <input id="product-url" type="text" placeholder="https://www.amazon.ie/dp/B0… or ASIN" required />
-      <button type="submit">Track on GitHub</button>
-    </form>
-    <p class="hint">
-      This opens a <code>watch</code> issue. The next scan (every 30 minutes, or run it now from
-      <a id="actions-link" href="https://github.com/paddykeoghgoode/amazon-ie-price-error-tracker/actions/workflows/pages.yml">Actions</a>)
-      updates this page and can text you on Telegram.
-    </p>
-  </section>
-
-  <section class="card">
-    <h2>Watched products</h2>
-    <div id="products-empty" class="empty">Nothing on the watch list yet. Add an Amazon.ie URL above.</div>
-    <div class="table-wrap">
-      <table id="products-table" hidden>
+      <table id="deals-table" hidden>
         <thead>
           <tr>
             <th>Product</th>
             <th>Now</th>
-            <th>Was</th>
-            <th>Status</th>
-            <th>Checked</th>
+            <th>Usual</th>
+            <th>Drop</th>
           </tr>
         </thead>
-        <tbody id="products-body"></tbody>
+        <tbody id="deals-body"></tbody>
       </table>
     </div>
   </section>
-
   <section class="card">
     <h2>Price-error alerts</h2>
     <div id="alerts-empty" class="empty">No suspected errors yet. They show up here as soon as a scan flags one.</div>
     <ul id="alerts-list" class="alerts" hidden></ul>
   </section>
+    </div>
+    <div role="tabpanel" id="panel-amazon-drops" aria-labelledby="tab-amazon-drops" hidden>
 
+  <section class="card">
+    <h2>High-ticket &amp; rapid drops</h2>
+    <p class="hint">Expensive items (≥€100) with ≥45% off their reference, or ≥€80 items that fell ≥20% since the last scan. Includes Movers &amp; Shakers / Most Wished feeds, not only bestseller charts.</p>
+    <div class="table-wrap">
+      <table id="premium-table" hidden>
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Now</th>
+            <th>Reference</th>
+            <th>Drop</th>
+            <th>Kind</th>
+          </tr>
+        </thead>
+        <tbody id="premium-body"></tbody>
+      </table>
+    </div>
+    <p id="premium-empty" class="empty">No high-ticket or rapid drops in the latest published scans yet.</p>
+  </section>
+
+  <section class="card amazon-drops-card">
+    <div class="drops-heading">
+      <div>
+        <h2>Amazon Price Drops</h2>
+        <p class="hint">All monitored categories, independently of CeX. Reductions are measured against a stable historical Amazon price—not a manufacturer's RRP.</p>
+      </div>
+      <span class="drop-count" id="general-drops-count">Loading…</span>
+    </div>
+    <p class="hint">Research only: bestseller-card prices, sellers, variants and final checkout totals have not been verified. Each product needs at least three earlier consistent price observations to establish a reference.</p>
+    <div class="drop-controls">
+      <label class="drop-control">Minimum reduction
+        <select id="drop-min" aria-label="Minimum percentage reduction">
+          <option value="10" selected>10% or more</option>
+          <option value="15">15% or more</option>
+          <option value="20">20% or more</option>
+          <option value="30">30% or more</option>
+          <option value="40">40% or more</option>
+          <option value="50">50% or more</option>
+          <option value="75">75% or more</option>
+        </select>
+      </label>
+      <label class="drop-control">Section
+        <select id="drop-section" aria-label="Filter Amazon section">
+          <option value="">All sections</option>
+        </select>
+      </label>
+      <label class="drop-control">Sort by
+        <select id="drop-sort" aria-label="Sort price drops">
+          <option value="percentage">Largest % drop</option>
+          <option value="savings">Biggest € saving</option>
+          <option value="recent">Recently found</option>
+        </select>
+      </label>
+      <label class="drop-control search-control">Search
+        <input type="search" id="drop-search" placeholder="Product, category, ASIN…" aria-label="Search Amazon price drops" />
+      </label>
+    </div>
+    <p id="general-drops-summary" class="hint" role="status">Loading price drop history…</p>
+    <div class="table-wrap">
+      <table id="general-drops-table" hidden>
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Section</th>
+            <th>Historical reference</th>
+            <th>Amazon now</th>
+            <th>Saving</th>
+            <th>Drop</th>
+            <th>Found / last scan</th>
+          </tr>
+        </thead>
+        <tbody id="general-drops-body"></tbody>
+      </table>
+    </div>
+    <p id="general-drops-empty" class="empty">No price drops with established history yet. Scans will populate this automatically.</p>
+    <div class="pagination-controls" id="general-drops-pagination" hidden>
+      <button type="button" class="pagination-button" id="general-drops-prev">Previous</button>
+      <span id="general-drops-page" aria-live="polite">Page 1</span>
+      <button type="button" class="pagination-button" id="general-drops-next">Next</button>
+    </div>
+  </section>
   <section class="card">
     <h2>Deep drops (40% / 50% / 66%)</h2>
     <p id="deep-summary" class="hint">Big drops vs each item’s recent Amazon price — often worth a look for electronics and games.</p>
     <div id="deep-sections"></div>
   </section>
-
+    </div>
+    <div role="tabpanel" id="panel-cex" aria-labelledby="tab-cex" hidden>
   <section class="card">
     <h2>CeX cash trade-in</h2>
     <p id="cex-summary" class="hint">Estimates net profit from CeX cash trade-in after configured costs and payout haircut. Verify the exact model, grade, checkout cost and quote.</p>
@@ -131,7 +191,6 @@
       </table>
     </div>
   </section>
-
   <section class="card">
     <h2>CeX profit (no Amazon sale)</h2>
     <p id="cex-arb-summary" class="hint">
@@ -166,45 +225,115 @@
       </table>
     </div>
   </section>
-
+    </div>
+    <div role="tabpanel" id="panel-listings" aria-labelledby="tab-listings" hidden>
   <section class="card">
-    <h2>High-ticket &amp; rapid drops</h2>
-    <p class="hint">Expensive items (≥€100) with ≥45% off their reference, or ≥€80 items that fell ≥20% since the last scan. Includes Movers &amp; Shakers / Most Wished feeds, not only bestseller charts.</p>
+    <h2>All Amazon bestseller listings</h2>
+    <p class="hint">All ASINs discovered in each section, not just the 25 highest-ranked candidates. CeX research continues in batches and retains progress between scans. <strong>Seller/checkout details are not checked</strong>; matches are not buy recommendations.</p>
+    <p class="hint"><a href="catalogue.csv" download>Download complete listing CSV</a> · <a href="catalogue.json" target="_blank" rel="noopener">View raw JSON</a></p>
+    <div id="catalogue-overview" class="hint">The catalogue will populate after the next section scan publishes.</div>
+    <div class="catalogue-controls" style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0">
+      <button type="button" id="catalogue-load">Browse listings</button>
+      <input id="catalogue-search" type="search" placeholder="Search title, ASIN, category…" aria-label="Search listings" style="flex:1;min-width:220px"/>
+      <select id="catalogue-section-filter" aria-label="Filter section"><option value="">All sections</option></select>
+      <select id="catalogue-activity-filter" aria-label="Filter current listings">
+        <option value="active">Currently listed</option>
+        <option value="all">Current and recently archived</option>
+        <option value="archived">Recently archived</option>
+      </select>
+      <select id="catalogue-status-filter" aria-label="Filter status">
+        <option value="">All CeX research statuses</option>
+        <option value="pending">Awaiting CeX research</option>
+        <option value="matched">CeX research match</option>
+        <option value="no_match">No CeX match</option>
+      </select>
+    </div>
+    <p id="catalogue-info" class="hint" role="status">Click Browse listings to load the full current inventory.</p>
     <div class="table-wrap">
-      <table id="premium-table" hidden>
+      <table id="catalogue-table" hidden>
+        <thead><tr><th>Amazon listing</th><th>Section</th><th>Amazon price</th><th>Seller check</th><th>CeX research</th><th>Last CeX research</th></tr></thead>
+        <tbody id="catalogue-body"></tbody>
+      </table>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:12px">
+      <button type="button" id="catalogue-prev" disabled>Previous</button>
+      <button type="button" id="catalogue-next" disabled>Next</button>
+    </div>
+  </section>
+    </div>
+    <div role="tabpanel" id="panel-watchlist" aria-labelledby="tab-watchlist" hidden>
+  <section class="card">
+    <h2>Add a product to your watchlist</h2>
+    <form id="add-form">
+      <input id="product-url" type="text" placeholder="Amazon.ie link, amzn.eu short link or ASIN" aria-label="Product URL or ASIN" required />
+      <button type="submit">Add via GitHub</button>
+    </form>
+    <details class="retail-setup">
+      <summary>Add Irish retailer price comparisons and RRP (optional)</summary>
+      <p class="hint">For accurate comparisons, provide the exact manufacturer model or barcode and links to the <strong>specific product pages</strong> at Currys, Harvey Norman, DID, ElectroCity, Peter Murphy or other supported Irish shops. The tracker refreshes those listings automatically about every 12 hours.</p>
+      <div class="retail-inputs">
+        <label for="watch-model">Model / MPN
+          <input id="watch-model" type="text" placeholder="e.g. SES875BTR2GUK1" maxlength="56" form="add-form"/>
+        </label>
+        <label for="watch-ean">EAN barcode
+          <input id="watch-ean" type="text" placeholder="Optional 8–14 digits" form="add-form"/>
+        </label>
+        <label for="watch-rrp">Manufacturer RRP (€)
+          <input id="watch-rrp" type="number" min="0.01" step="0.01" placeholder="Optional; not an Amazon was-price" form="add-form"/>
+        </label>
+        <label for="watch-rrp-source">RRP source
+          <input id="watch-rrp-source" type="url" placeholder="https://manufacturer.com/product/..." form="add-form"/>
+        </label>
+        <label for="watch-retailers" class="span-all">Retailer product links (one HTTPS URL per line)
+          <textarea id="watch-retailers" rows="4" placeholder="https://www.currys.ie/products/...
+https://www.harveynorman.ie/..." form="add-form"></textarea>
+        </label>
+      </div>
+      <p class="hint">The RRP is labelled as supplied by you until independently verified. A shop's crossed-out “was” price is not necessarily its RRP. Delivery charges and checkout prices must still be checked.</p>
+    </details>
+    <p class="hint">
+      GitHub will open a prefilled issue. <strong>Tap Create Issue once</strong> to submit it; the tracker then resolves the product and scans it automatically.
+      This is needed because GitHub Pages cannot store new watchlist entries directly. Check the request status below or run the
+      <a id="actions-link" href="https://github.com/paddykeoghgoode/amazon-ie-price-error-tracker/actions/workflows/pages.yml">watchlist workflow</a> manually.
+    </p>
+  </section>
+  <section class="card">
+    <h2>Watchlist requests</h2>
+    <p class="hint">Open GitHub issues are processed automatically. If a short link cannot be resolved, edit the same issue with the full Amazon.ie URL or ASIN; you don't need to create a second issue.</p>
+    <p id="watch-requests-empty" class="empty">No watchlist requests have been processed yet.</p>
+    <div class="table-wrap">
+      <table id="watch-requests-table" hidden>
+        <thead><tr><th>Request</th><th>Product</th><th>Processing status</th><th>Last checked</th></tr></thead>
+        <tbody id="watch-requests-body"></tbody>
+      </table>
+    </div>
+  </section>
+  <section class="card">
+    <h2>Retail Price Comparison</h2>
+    <p class="hint">Automatic comparisons for <strong>watched products with retailer links</strong>. Prices are checked periodically, not every 10-minute Amazon scan. Only exact barcode/model matches with in-stock offers count toward the lowest observed item price.</p>
+    <p class="hint">This is <strong>not</strong> a guarantee of the lowest price in Ireland. Shipping, codes, different variants and the final checkout price may change the comparison. You can add more retailer URLs by editing the existing Watch issue or <code>watchlist.json</code>.</p>
+    <div id="retail-comparison-results"><p class="empty">No retailer comparisons configured yet. Expand the optional fields above when adding a product, or edit a Watch issue with Model and Compare links.</p></div>
+  </section>
+  <section class="card">
+    <h2>Watched products</h2>
+    <div id="products-empty" class="empty">Nothing on the watch list yet. Add an Amazon.ie URL above.</div>
+    <div class="table-wrap">
+      <table id="products-table" hidden>
         <thead>
           <tr>
             <th>Product</th>
             <th>Now</th>
-            <th>Reference</th>
-            <th>Drop</th>
-            <th>Kind</th>
+            <th>Was</th>
+            <th>Status</th>
+            <th>Checked</th>
           </tr>
         </thead>
-        <tbody id="premium-body"></tbody>
-      </table>
-    </div>
-    <p id="premium-empty" class="empty">No high-ticket or rapid drops in the latest published scans yet.</p>
-  </section>
-
-  <section class="card">
-    <h2>Bestseller scan</h2>
-    <p id="deals-summary" class="hint">No bestseller crawl has run yet.</p>
-    <ul id="deals-alerts" class="alerts" hidden></ul>
-    <div class="table-wrap">
-      <table id="deals-table" hidden>
-        <thead>
-          <tr>
-            <th>Product</th>
-            <th>Now</th>
-            <th>Usual</th>
-            <th>Drop</th>
-          </tr>
-        </thead>
-        <tbody id="deals-body"></tbody>
+        <tbody id="products-body"></tbody>
       </table>
     </div>
   </section>
+    </div>
+  </main>
 
   <footer>
     <a id="repo-link" href="https://github.com/paddykeoghgoode/amazon-ie-price-error-tracker">Source on GitHub</a>
@@ -212,5 +341,6 @@
   </footer>
 
   <script src="app.js"></script>
+  <script src="scan-activity.js"></script>
 </body>
 </html>

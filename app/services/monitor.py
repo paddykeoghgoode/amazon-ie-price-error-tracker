@@ -146,7 +146,7 @@ async def notify_alert(alert: DetectedAlert) -> None:
         logger.info("Alert sent for %s", alert.asin)
 
 
-async def check_product(client: httpx.AsyncClient, product: dict) -> None:
+async def check_product(client: httpx.AsyncClient, product: dict) -> ProductSnapshot | None:
     product_id = int(product["id"])
     url = product["url"]
     try:
@@ -159,14 +159,22 @@ async def check_product(client: httpx.AsyncClient, product: dict) -> None:
     alert = record_and_detect(product_id, snap, known_title=product.get("title"))
     if alert:
         await notify_alert(alert)
+    return snap
 
 
-async def run_once() -> None:
+async def run_once() -> dict[str, dict]:
     async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=30.0) as client:
         products = db.list_products(enabled_only=True)
+        metadata: dict[str, dict] = {}
         for product in products:
-            await check_product(client, product)
+            snap = await check_product(client, product)
+            if snap is not None:
+                metadata[product["asin"]] = {
+                    "model_number": snap.model_number,
+                    "barcode": snap.barcode,
+                }
             await asyncio.sleep(settings.request_delay_seconds)
+        return metadata
 
 
 async def run_monitor_loop(stop_event: asyncio.Event | None = None) -> None:
