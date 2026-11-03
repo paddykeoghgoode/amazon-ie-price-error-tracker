@@ -119,6 +119,10 @@ class TestRetailerParser(unittest.TestCase):
         self.assertEqual(supplied["rrp_eur"], 599.99)
         self.assertEqual(supplied["rrp_source"], "https://www.sageappliances.com/eu/product")
         self.assertIsNone(parse_retail_spec({"rrp_eur": -50})["rrp_eur"])
+        self.assertEqual(parse_retail_spec({"rrp_eur": "€599,99"})["rrp_eur"], 599.99)
+        self.assertEqual(parse_retail_spec({"rrp_eur": "€1.299,99"})["rrp_eur"], 1299.99)
+        self.assertEqual(parse_retail_spec({"rrp_eur": "€1,299.99"})["rrp_eur"], 1299.99)
+        self.assertIsNone(parse_retail_spec({"rrp_source": "https://["})["rrp_source"])
 
     def test_compare_issue_parses_direct_links_and_preserves_user_supplied_rrp(self):
         body = ("https://www.amazon.ie/dp/B0AAA11111\n"
