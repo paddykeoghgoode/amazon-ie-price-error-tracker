@@ -264,7 +264,11 @@ function renderScanActivity(runs, detailsById, failure) {
 
     const known = detailsById.get(run.id);
     const progress = known ? trackerStepProgress(known.jobs, run.status) : null;
-    if (progress && run.status !== "completed") {
+    const completedOk = run.status === "completed" && run.conclusion === "success";
+    // Successful completion is a real 100% milestone, even when GitHub
+    // stops exposing the earlier per-step details.
+    const reportedPercentage = completedOk ? 100 : progress?.percentage;
+    if ((progress && run.status !== "completed") || completedOk) {
       const line = document.createElement("div");
       line.className = "scan-progress-line";
       const bar = document.createElement("div");
@@ -273,14 +277,15 @@ function renderScanActivity(runs, detailsById, failure) {
       bar.setAttribute("aria-label", "Completed known GitHub workflow steps");
       bar.setAttribute("aria-valuemin", "0");
       bar.setAttribute("aria-valuemax", "100");
-      bar.setAttribute("aria-valuenow", String(progress.percentage));
-      bar.setAttribute("aria-valuetext",
-        progress.completedSteps + " of " + progress.totalSteps + " reported steps complete");
+      bar.setAttribute("aria-valuenow", String(reportedPercentage));
+      bar.setAttribute("aria-valuetext", completedOk
+        ? "Workflow completed successfully"
+        : progress.completedSteps + " of " + progress.totalSteps + " reported steps complete");
       const fill = document.createElement("div");
       fill.className = "scan-progress-fill";
       fill.setAttribute("aria-hidden", "true");
       bar.appendChild(fill);
-      const percentageLabel = trackerText("strong", progress.percentage + "%");
+      const percentageLabel = trackerText("strong", reportedPercentage + "%");
       line.appendChild(bar);
       line.appendChild(percentageLabel);
       panel.appendChild(line);
@@ -288,22 +293,26 @@ function renderScanActivity(runs, detailsById, failure) {
       // The new value is the only destination: no invented in-between scan work.
       const oldValue = lastReported.get(String(run.id));
       panel._animateProgress = () => animateTrackerBar(
-        fill, percentageLabel, oldValue, progress.percentage
+        fill, percentageLabel,
+        completedOk && oldValue === undefined ? 100 : oldValue,
+        reportedPercentage
       );
-      panel.appendChild(trackerText("p",
-        progress.completedSteps + " of " + progress.totalSteps +
-        " reported steps completed · " + progress.completedJobs + " of " +
-        progress.knownJobs + " jobs finished",
-        "hint"
-      ));
-      if (progress.currentStage) {
-        panel.appendChild(trackerText("p", progress.currentStage, "scan-run-step"));
+      if (completedOk) {
+        panel.appendChild(trackerText("p",
+          "Workflow completed successfully. This is not an Amazon product count.",
+          "scan-run-step"
+        ));
+      } else {
+        panel.appendChild(trackerText("p",
+          progress.completedSteps + " of " + progress.totalSteps +
+          " reported steps completed · " + progress.completedJobs + " of " +
+          progress.knownJobs + " jobs finished",
+          "hint"
+        ));
+        if (progress.currentStage) {
+          panel.appendChild(trackerText("p", progress.currentStage, "scan-run-step"));
+        }
       }
-    } else if (run.status === "completed" && run.conclusion === "success") {
-      panel.appendChild(trackerText("p",
-        "Workflow completed (100%). Item-level scan progress is not available.",
-        "scan-run-step"
-      ));
     } else if (run.status === "completed") {
       panel.appendChild(trackerText("p",
         "Workflow finished: " + (run.conclusion || "unknown") +
