@@ -3,30 +3,60 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Amazon.ie price error tracker</title>
+  <title>Resale Radar · Amazon.ie</title>
+  <meta name="theme-color" content="#101825" />
+  <meta name="description" content="High-value Amazon.ie price drops and potential CeX cash resale margins. Research leads, not confirmed checkout offers." />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header>
-    <p class="eyebrow">Amazon.ie · GitHub Pages</p>
-    <h1>Price error tracker</h1>
-    <p class="tagline">Watched listings, latest prices, and suspected misprices. Telegram fires when a scan finds a likely error.</p>
+    <div class="brand-row">
+      <div class="brand-icon" aria-hidden="true">€</div>
+      <div>
+        <p class="eyebrow">Amazon.ie · CeX cash research · Ireland</p>
+        <h1>Resale <span class="brand-accent">Radar</span></h1>
+      </div>
+      <a class="header-action" href="https://github.com/paddykeoghgoode/amazon-ie-price-error-tracker/actions" target="_blank" rel="noopener">Scan history</a>
+    </div>
+    <p class="tagline">Big price reductions, realistic cash resale margins and fewer interruptions.</p>
     <div id="status" class="status warn">Loading latest scan…</div>
-    <p class="hint"><strong>Research leads only:</strong> seller verification is disabled. Check the exact Amazon seller, condition, variant, checkout total and CeX trade-in grade before buying anything.</p>
+    <p class="hint"><strong>Research leads only:</strong> seller verification is disabled. Values are research estimates, not guaranteed profit. Check seller, condition, exact model, delivered checkout and CeX cash quote before buying.</p>
   </header>
 
   <nav class="dashboard-nav" aria-label="Tracker views">
     <div class="tab-list" role="tablist" aria-label="Tracker views">
-      <button type="button" class="tab-button" role="tab" id="tab-overview" aria-controls="panel-overview" aria-selected="true" tabindex="0" data-tab="overview">Overview</button>
+      <button type="button" class="tab-button" role="tab" id="tab-overview" aria-controls="panel-overview" aria-selected="true" tabindex="0" data-tab="overview">Top Deals</button>
       <button type="button" class="tab-button" role="tab" id="tab-amazon-drops" aria-controls="panel-amazon-drops" aria-selected="false" tabindex="-1" data-tab="amazon-drops">Amazon Drops</button>
-      <button type="button" class="tab-button" role="tab" id="tab-cex" aria-controls="panel-cex" aria-selected="false" tabindex="-1" data-tab="cex">CeX Opportunities</button>
+      <button type="button" class="tab-button" role="tab" id="tab-cex" aria-controls="panel-cex" aria-selected="false" tabindex="-1" data-tab="cex">CeX Resale</button>
       <button type="button" class="tab-button" role="tab" id="tab-listings" aria-controls="panel-listings" aria-selected="false" tabindex="-1" data-tab="listings">All Listings</button>
       <button type="button" class="tab-button" role="tab" id="tab-watchlist" aria-controls="panel-watchlist" aria-selected="false" tabindex="-1" data-tab="watchlist">Watchlist</button>
     </div>
   </nav>
   <main id="tracker-main">
     <div role="tabpanel" id="panel-overview" aria-labelledby="tab-overview">
+  <section class="opportunity-radar" aria-labelledby="radar-title">
+    <div class="radar-header">
+      <div>
+        <p class="eyebrow">PRIORITY SHORTLIST</p>
+        <h2 id="radar-title">Worth checking right now</h2>
+        <p class="hint">High-value historical reductions and strongly matched CeX cash-margin estimates. Smaller findings remain available in the tabs.</p>
+      </div>
+      <span class="radar-live"><span class="status-dot" aria-hidden="true"></span> Research leads</span>
+    </div>
+    <div class="radar-metrics" aria-label="Opportunity summary">
+      <div class="radar-metric"><span>High-value price drops</span><strong id="radar-drop-count">—</strong></div>
+      <div class="radar-metric"><span>Strong CeX cash margins</span><strong id="radar-cex-count">—</strong></div>
+      <div class="radar-metric"><span>Last published</span><strong class="radar-time" id="radar-last-published">—</strong></div>
+    </div>
+    <div id="radar-cards" class="radar-grid" aria-live="polite">
+      <p class="empty">Checking published price history and CeX quotes…</p>
+    </div>
+    <div class="radar-footer">
+      <p class="hint" id="radar-policy">Telegram is reserved for high-value price-error or model-matched resale leads.</p>
+      <div class="radar-links"><a href="#amazon-drops">Explore all Amazon drops</a><a href="#cex">Explore CeX research</a></div>
+    </div>
+  </section>
   <section class="card scan-activity" aria-labelledby="scan-activity-title">
     <div class="scan-activity-head">
       <div>
@@ -40,13 +70,13 @@
     <p class="hint scan-activity-disclaimer">The bar <strong>animates when GitHub reports an increase</strong>, without needing to reload this page. Percentage means <strong>GitHub Actions workflow steps completed</strong>, <strong>not</strong> the percentage of Amazon products scanned. It holds steady during a long scan step. Run status refreshes about every 2½ minutes; detailed steps refresh about every 4 minutes to respect GitHub's API limits.</p>
   </section>
   <section class="card">
-    <h2>Section scan progress</h2>
+    <h2>Scan coverage by section</h2>
     <p class="hint">Each block publishes independently. Times are Ireland time. Seller verification is disabled; Amazon prices are observed from bestseller pages. CeX work is bounded and cached.</p>
-    <div class="table-wrap"><table id="section-table" hidden><thead><tr><th>Section</th><th>Last scanned</th><th>Status</th><th>Items</th><th>Seller checks</th><th>CeX queue checked</th><th>CeX live / cached</th><th>Amazon drops</th><th>Finds</th></tr></thead><tbody id="section-body"></tbody></table></div>
+    <div class="table-wrap"><table id="section-table" hidden><thead><tr><th>Section</th><th>Last scanned</th><th>Status</th><th>Items</th><th>CeX queue checked</th><th>CeX live / cached</th><th>Amazon drops</th><th>Finds</th></tr></thead><tbody id="section-body"></tbody></table></div>
     <p id="section-empty" class="empty">No section scans published yet.</p>
   </section>
   <section class="card">
-    <h2>Bestseller scan</h2>
+    <h2>Suspected price errors · research log</h2>
     <p id="deals-summary" class="hint">No bestseller crawl has run yet.</p>
     <ul id="deals-alerts" class="alerts" hidden></ul>
     <div class="table-wrap">
@@ -342,5 +372,6 @@ https://www.harveynorman.ie/..." form="add-form"></textarea>
 
   <script src="app.js"></script>
   <script src="scan-activity.js"></script>
+  <script src="opportunities.js"></script>
 </body>
 </html>
