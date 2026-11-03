@@ -29,6 +29,7 @@ from app.services.bestsellers import (
     send_notification,
 )
 from app.services.cex_arbitrage import enrich_with_cex
+from app.services.health import send_health_messages
 from app.services.premium_drops import spot_check_list_prices
 from app.services.monitor import BROWSER_HEADERS
 from app.services.catalogue import (
