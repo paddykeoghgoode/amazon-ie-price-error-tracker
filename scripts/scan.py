@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from pathlib import Path
 
 import httpx
@@ -18,6 +19,9 @@ from app.services.watch_links import (
     shortlinks_in_text,
 )
 from app.services.monitor import add_watch_url, run_once, send_notification
+from app.services.retail_compare import (
+    clean_model, compare_watchlist, parse_retail_spec, trusted_retailer_url,
+)
 from app.snapshot import (
     export_snapshot,
     import_snapshot,
@@ -46,6 +50,68 @@ def load_watchlist(path: Path) -> list[str]:
             if value:
                 urls.append(str(value))
     return urls
+
+
+def load_watchlist_specs(path: Path) -> dict[str, dict]:
+    """Optional exact model, RRP and merchant product links in watchlist.json."""
+    if not path.exists():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    specs = {}
+    for item in payload.get("products") or []:
+        if not isinstance(item, dict):
+            continue
+        asin = extract_asin(str(item.get("url") or item.get("asin") or ""))
+        if asin:
+            specs[asin] = parse_retail_spec(item)
+    return specs
+
+
+def parse_issue_retail_spec(body: str) -> dict:
+    """Explicit Compare: direct retailer URL lines. No retailer search guessing."""
+    spec: dict = {"retailer_urls": []}
+    for line in (body or "").splitlines():
+        match = re.match(r"^\s*(?:compare|retailer)\s*:\s*(https://\S+)", line, re.I)
+        if match:
+            url = match.group(1).rstrip(").,;")
+            if trusted_retailer_url(url):
+                spec["retailer_urls"].append(url)
+            continue
+        model = re.match(r"^\s*(?:model|mpn)\s*:\s*(\S+)", line, re.I)
+        if model:
+            spec["model"] = clean_model(model.group(1))
+            continue
+        ean = re.match(r"^\s*(?:ean|barcode|gtin)\s*:\s*(\d{8,14})\s*$", line, re.I)
+        if ean:
+            spec["barcode"] = ean.group(1)
+            continue
+        rrp = re.match(r"^\s*rrp(?:\s+eur)?\s*:\s*€?\s*([\d,.]+)", line, re.I)
+        if rrp:
+            spec["rrp_eur"] = rrp.group(1)
+            continue
+        source = re.match(r"^\s*rrp\s+source\s*:\s*(https://\S+)", line, re.I)
+        if source:
+            spec["rrp_source"] = source.group(1).rstrip(").,;")
+    return parse_retail_spec(spec)
+
+
+def combine_retail_specs(base: dict[str, dict], issues: list[dict]) -> dict[str, dict]:
+    combined = {asin: parse_retail_spec(spec) for asin, spec in base.items()}
+    for issue in issues:
+        asin = issue.get("asin")
+        if not asin:
+            continue
+        fields = issue.get("retail_spec") or {}
+        old = combined.get(asin) or parse_retail_spec({})
+        merged = {**old}
+        for field in ("model", "barcode", "rrp_eur", "rrp_source"):
+            if fields.get(field) is not None:
+                merged[field] = fields[field]
+        merged["retailer_urls"] = list(dict.fromkeys(
+            (old.get("retailer_urls") or []) + (fields.get("retailer_urls") or [])
+        ))
+        combined[asin] = parse_retail_spec(merged)
+    return combined
 
 
 def extract_asins_from_text(*parts: str | None) -> list[str]:
@@ -152,6 +218,7 @@ async def fetch_watch_issue_urls(
                         "asin": asins[0] if asins else None,
                         "source_fingerprint": fingerprint,
                         "status": "pending_scan" if asins else "link_unresolved",
+                        "retail_spec": parse_issue_retail_spec(body) if asins else {},
                     })
             if len(issues) < 100:
                 break
@@ -312,6 +379,7 @@ def main() -> None:
         if env_repo else []
     )
     configured_asins = asyncio.run(resolve_watchlist_entries(watch_urls))
+    retail_specs = combine_retail_specs(load_watchlist_specs(args.watchlist), issue_submissions)
     add_all(configured_asins + issue_urls)
     logger.info(
         "Watching %s product(s) (watchlist=%s issues=%s telegram=%s)",
@@ -321,10 +389,20 @@ def main() -> None:
         settings.telegram_enabled,
     )
 
-    if not args.skip_fetch:
-        asyncio.run(run_once())
-
+    product_metadata = asyncio.run(run_once()) if not args.skip_fetch else {}
     payload = export_snapshot(github_repo=repo)
+    for product in payload["products"]:
+        props = product_metadata.get(product["asin"]) or {}
+        if props.get("model_number"):
+            product["model_number"] = props["model_number"]
+        if props.get("barcode"):
+            product["barcode"] = props["barcode"]
+    # Retailer pages are fetched only when the user supplies exact product
+    # URLs. Their cached prices survive the frequent (10-minute) Amazon scans.
+    asyncio.run(compare_watchlist(
+        payload["products"], retail_specs, previous,
+        max_requests=12 if not args.skip_fetch else 0,
+    ))
     payload["watch_submissions"] = annotate_watch_submissions(issue_submissions, payload)
     write_snapshot(args.output, payload)
     if not args.skip_fetch and not args.no_summary:
