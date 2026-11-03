@@ -236,6 +236,29 @@
       <input id="product-url" type="text" placeholder="Amazon.ie link, amzn.eu short link or ASIN" aria-label="Product URL or ASIN" required />
       <button type="submit">Add via GitHub</button>
     </form>
+    <details class="retail-setup">
+      <summary>Add Irish retailer price comparisons and RRP (optional)</summary>
+      <p class="hint">For accurate comparisons, provide the exact manufacturer model or barcode and links to the <strong>specific product pages</strong> at Currys, Harvey Norman, DID, ElectroCity, Peter Murphy or other supported Irish shops. The tracker refreshes those listings automatically about every 12 hours.</p>
+      <div class="retail-inputs">
+        <label for="watch-model">Model / MPN
+          <input id="watch-model" type="text" placeholder="e.g. SES875BTR2GUK1" maxlength="56" form="add-form"/>
+        </label>
+        <label for="watch-ean">EAN barcode
+          <input id="watch-ean" type="text" placeholder="Optional 8–14 digits" form="add-form"/>
+        </label>
+        <label for="watch-rrp">Manufacturer RRP (€)
+          <input id="watch-rrp" type="number" min="0.01" step="0.01" placeholder="Optional; not an Amazon was-price" form="add-form"/>
+        </label>
+        <label for="watch-rrp-source">RRP source
+          <input id="watch-rrp-source" type="url" placeholder="https://manufacturer.com/product/..." form="add-form"/>
+        </label>
+        <label for="watch-retailers" class="span-all">Retailer product links (one HTTPS URL per line)
+          <textarea id="watch-retailers" rows="4" placeholder="https://www.currys.ie/products/...
+https://www.harveynorman.ie/..." form="add-form"></textarea>
+        </label>
+      </div>
+      <p class="hint">The RRP is labelled as supplied by you until independently verified. A shop's crossed-out “was” price is not necessarily its RRP. Delivery charges and checkout prices must still be checked.</p>
+    </details>
     <p class="hint">
       GitHub will open a prefilled issue. <strong>Tap Create Issue once</strong> to submit it; the tracker then resolves the product and scans it automatically.
       This is needed because GitHub Pages cannot store new watchlist entries directly. Check the request status below or run the
@@ -252,6 +275,12 @@
         <tbody id="watch-requests-body"></tbody>
       </table>
     </div>
+  </section>
+  <section class="card">
+    <h2>Retail Price Comparison</h2>
+    <p class="hint">Automatic comparisons for <strong>watched products with retailer links</strong>. Prices are checked periodically, not every 10-minute Amazon scan. Only exact barcode/model matches with in-stock offers count toward the lowest observed item price.</p>
+    <p class="hint">This is <strong>not</strong> a guarantee of the lowest price in Ireland. Shipping, codes, different variants and the final checkout price may change the comparison. You can add more retailer URLs by editing the existing Watch issue or <code>watchlist.json</code>.</p>
+    <div id="retail-comparison-results"><p class="empty">No retailer comparisons configured yet. Expand the optional fields above when adding a product, or edit a Watch issue with Model and Compare links.</p></div>
   </section>
   <section class="card">
     <h2>Watched products</h2>

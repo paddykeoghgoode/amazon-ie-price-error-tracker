@@ -263,6 +263,119 @@ async function loadData() {
   return res.json();
 }
 
+function renderRetailComparisons(products) {
+  const root = document.getElementById("retail-comparison-results");
+  if (!root) return;
+  root.innerHTML = "";
+  if (!products.length) {
+    root.innerHTML = '<p class="empty">Add an Amazon product to the Watchlist first.</p>';
+    return;
+  }
+  const statusLabels = {
+    matched: "Exact model/barcode · in stock",
+    stock_unknown: "Exact model/barcode · stock unconfirmed",
+    out_of_stock: "Exact model/barcode · out of stock",
+    price_unavailable: "Price not available", ambiguous_variants: "Multiple variants/prices",
+    barcode_mismatch: "Wrong barcode — excluded", model_mismatch: "Wrong model — excluded",
+    model_not_confirmed: "Model not confirmed — excluded",
+    identity_required: "Model or barcode required",
+    no_product_metadata: "Retailer does not expose usable product data",
+    rate_limited: "Shop blocked automated request",
+    fetch_error: "Shop could not be reached", http_error: "Page unavailable",
+    pending_refresh: "Awaiting next comparison scan", unsafe_redirect: "Unsafe redirect rejected",
+    page_too_large: "Page too large", too_many_redirects: "Too many redirects",
+    not_html: "Not a product HTML page",
+  };
+  for (const product of products) {
+    const cmp = product.retail_comparison || {};
+    const offers = cmp.offers || [];
+    const section = document.createElement("section");
+    section.className = "retail-product";
+    const amazonPrice = product.price_eur;
+    const suppliedRrp = cmp.rrp_eur;
+    const source = typeof cmp.rrp_source === "string" && /^https:\/\//i.test(cmp.rrp_source)
+      ? ' · <a href="' + escapeHtml(cmp.rrp_source) + '" target="_blank" rel="noopener">RRP source</a>' : "";
+    const savings = suppliedRrp != null && amazonPrice != null && Number(amazonPrice) < Number(suppliedRrp)
+      ? Math.round((Number(suppliedRrp) - Number(amazonPrice)) * 100) / 100 : null;
+    const discount = savings != null && Number(suppliedRrp) > 0
+      ? (savings / Number(suppliedRrp) * 100).toFixed(1) : null;
+    const amazonLink = /^https:\/\/www\.amazon\.ie\/dp\/[A-Z0-9]{10}$/i.test(product.url || "")
+      ? product.url : "https://www.amazon.ie/";
+    section.innerHTML = '<h3><a target="_blank" rel="noopener" href="' + escapeHtml(amazonLink) + '">' +
+      escapeHtml(product.title || product.asin || "Watched product") + '</a></h3>' +
+      '<p class="hint">ASIN: ' + escapeHtml(product.asin || "") +
+      ' · Model: ' + escapeHtml(cmp.model || product.model_number || "not confirmed") +
+      ' · EAN: ' + escapeHtml(cmp.barcode || "not available") + '</p>' +
+      '<p><strong>Amazon observed: ' + fmtEuro(amazonPrice) + '</strong>' +
+      ' · Lowest checked in-stock retailer: <strong>' +
+      fmtEuro(cmp.lowest_checked_retailer_price_eur) + '</strong>' +
+      (cmp.lowest_checked_retailer ? ' (' + escapeHtml(cmp.lowest_checked_retailer) + ')' : '') + '</p>' +
+      '<p class="hint">Manufacturer RRP (user supplied): ' + fmtEuro(suppliedRrp) + source +
+      (savings != null ? ' · Amazon vs supplied RRP: −' + fmtEuro(savings) +
+        ' (−' + discount + '%)' : '') +
+      ' · Amazon advertised “was”: ' + fmtEuro(product.list_price_eur) +
+      ' (not treated as manufacturer RRP).</p>';
+    const exactModel = cmp.model || product.model_number || "";
+    if (exactModel) {
+      const find = document.createElement("p");
+      find.className = "hint";
+      const search = "https://www.google.com/search?q=" +
+        encodeURIComponent('"' + exactModel + '" site:.ie price');
+      find.innerHTML = '<a target="_blank" rel="noopener" href="' +
+        escapeHtml(search) + '">Find more Irish retailer product links for this exact model</a>' +
+        ' · Copy specific shop URLs into your existing Watch issue.';
+      section.appendChild(find);
+    }
+    const note = document.createElement("p");
+    note.className = "hint retail-status-note";
+    const delta = cmp.amazon_minus_lowest_retail_eur;
+    if (delta != null && amazonPrice != null) {
+      note.textContent = Number(delta) > 0
+        ? "Amazon's observed item price is " + fmtEuro(delta) +
+          " MORE than the lowest checked in-stock retailer price."
+        : Number(delta) < 0
+          ? "Amazon's observed item price is " + fmtEuro(-Number(delta)) +
+            " LESS than the lowest checked in-stock retailer price."
+          : "Amazon and the lowest checked retailer have the same observed item price.";
+    } else if (offers.length) {
+      note.textContent = "No exactly matched, in-stock competitor has a usable price yet.";
+    } else {
+      note.textContent = "Add Model: and Compare: retailer product URLs to the existing Watch issue to enable automatic cross-shop research.";
+    }
+    section.appendChild(note);
+    if (offers.length) {
+      const wrap = document.createElement("div");
+      wrap.className = "table-wrap";
+      const table = document.createElement("table");
+      table.className = "retail-offer-table";
+      table.innerHTML = "<thead><tr><th>Retailer</th><th>Observed item price</th>" +
+                        "<th>Match / availability</th><th>Checked</th></tr></thead>";
+      const tbody = document.createElement("tbody");
+      for (const offer of offers) {
+        const row = document.createElement("tr");
+        const href = typeof offer.url === "string" && /^https:\/\//i.test(offer.url)
+          ? offer.url : null;
+        const label = escapeHtml(offer.retailer || "Retailer");
+        row.innerHTML = '<td>' +
+          (href ? '<a href="' + escapeHtml(href) + '" target="_blank" rel="noopener">' +
+                  label + '</a>' : label) +
+          '</td><td class="price">' + fmtEuro(offer.price_eur) +
+          '</td><td>' + escapeHtml(statusLabels[offer.status] || offer.status || "Unknown") +
+          '</td><td class="time">' + fmtTime(offer.checked_at) + '</td>';
+        tbody.appendChild(row);
+      }
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+      section.appendChild(wrap);
+    }
+    const warning = document.createElement("p");
+    warning.className = "hint";
+    warning.textContent = "Item prices only: delivery, vouchers, final checkout and stock may differ. These are sampled retailers, not all shops in Ireland.";
+    section.appendChild(warning);
+    root.appendChild(section);
+  }
+}
+
 function render(data) {
   const repo = data.github_repo || "paddykeoghgoode/amazon-ie-price-error-tracker";
   document.getElementById("repo-link").href = `https://github.com/${repo}`;
@@ -303,6 +416,8 @@ function render(data) {
       body.appendChild(tr);
     }
   }
+
+  renderRetailComparisons(products);
 
   // The site itself is static. This table makes the GitHub issue -> ASIN ->
   // watchlist workflow visible without requiring anyone to inspect Actions logs.
@@ -389,9 +504,56 @@ function render(data) {
       }
     }
     input.setCustomValidity("");
-    const issueUrl =
-      `https://github.com/${repo}/issues/new` +
-      `?labels=watch&title=${encodeURIComponent("Watch: " + url)}&body=${encodeURIComponent(url)}`;
+    const model = (document.getElementById("watch-model")?.value || "").trim().toUpperCase();
+    const barcode = (document.getElementById("watch-ean")?.value || "").trim();
+    const rrp = (document.getElementById("watch-rrp")?.value || "").trim();
+    const source = (document.getElementById("watch-rrp-source")?.value || "").trim();
+    const links = (document.getElementById("watch-retailers")?.value || "")
+      .split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+    if (model && !/^[A-Z0-9][A-Z0-9._-]{3,55}$/.test(model)) {
+      alert("Model/MPN must be a code of 4–56 letters or digits.");
+      return;
+    }
+    if (barcode && !/^\d{8,14}$/.test(barcode)) {
+      alert("EAN must be 8–14 digits.");
+      return;
+    }
+    if (rrp && !(Number(rrp) > 0)) {
+      alert("RRP must be a positive euro amount.");
+      return;
+    }
+    if (source && !/^https:\/\//i.test(source)) {
+      alert("Use an HTTPS link for the RRP source.");
+      return;
+    }
+    const approved = new Set([
+      "currys.ie", "harveynorman.ie", "did.ie", "electrocity.ie",
+      "petermurphyelectrical.ie", "euronics.ie", "expert.ie", "joyces.ie",
+      "arnotts.ie", "keanscm.ie", "irwinelectrical.ie",
+    ]);
+    if (links.length > 8) {
+      alert("Please add at most 8 direct retailer product links per item.");
+      return;
+    }
+    for (const link of links) {
+      let parsed;
+      try { parsed = new URL(link); } catch { /* Invalid input */ }
+      const host = (parsed?.hostname || "").toLowerCase().replace(/^www\./, "");
+      if (!parsed || parsed.protocol !== "https:" || parsed.username ||
+          parsed.password || !approved.has(host)) {
+        alert("Only direct HTTPS product pages from supported Irish shops are accepted.");
+        return;
+      }
+    }
+    const body = [url];
+    if (model) body.push("Model: " + model);
+    if (barcode) body.push("EAN: " + barcode);
+    if (rrp) body.push("RRP: " + Number(rrp).toFixed(2));
+    if (source) body.push("RRP source: " + source);
+    for (const link of links) body.push("Compare: " + link);
+    const issueUrl = "https://github.com/" + repo + "/issues/new" +
+      "?labels=watch&title=" + encodeURIComponent("Watch: " + url) +
+      "&body=" + encodeURIComponent(body.join("\n"));
     window.open(issueUrl, "_blank", "noopener");
   };
 }

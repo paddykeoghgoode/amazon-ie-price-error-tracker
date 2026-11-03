@@ -16,3 +16,17 @@ body:
       placeholder: https://www.amazon.ie/dp/B0XXXXXXXX
     validations:
       required: true
+  - type: textarea
+    id: comparison
+    attributes:
+      label: Optional Irish retailer comparison details
+      description: Add the exact model/EAN, direct product links from retailers, and a sourced RRP if you have one. Leave blank if you're only tracking Amazon.
+      placeholder: |
+        Model: SES875BTR2GUK1
+        EAN: 9312432032056
+        Compare: https://www.currys.ie/products/EXAMPLE
+        Compare: https://www.harveynorman.ie/EXAMPLE
+        RRP: 599.99
+        RRP source: https://www.sageappliances.com/eu/example
+    validations:
+      required: false
