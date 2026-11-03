@@ -772,7 +772,6 @@ function renderSectionProgress(deals) {
       <td>${fmtTime(section.generated_at)}</td>
       <td>${escapeHtml(status)}</td>
       <td>${Number(section.items_seen || 0).toLocaleString("en-IE")}</td>
-      <td>Disabled</td>
       <td>${progress}${pending}</td>
       <td>${Number(cex.live_lookups || 0)} live / ${Number(cex.cache_hits || 0)} cached</td>
       <td>${Number((section.general_drops || section.drops || []).length)} <span class="hint">${section.general_drops ? "≥10%" : "legacy ≥30%"}</span></td>
@@ -953,6 +952,63 @@ function selectRadarLeads(deals, now = Date.now()) {
   for(const row of [...cex,...drops]) if(row.asin && !byAsin.has(row.asin)) byAsin.set(row.asin,row);
   return {drops,cex,items:[...byAsin.values()].slice(0,6)};
 }
+function renderOpportunityRadar(deals) {
+  const root = document.getElementById("radar-cards");
+  if (!root) return;
+  const result = selectRadarLeads(deals);
+  const p = deals.alert_policy || {};
+  document.getElementById("radar-drop-count").textContent = String(result.drops.length);
+  document.getElementById("radar-cex-count").textContent = String(result.cex.length);
+  document.getElementById("radar-last-published").textContent = fmtTime(deals.generated_at);
+  document.getElementById("radar-policy").textContent =
+    "Telegram: large historical drops (from " + fmtEuro(p.min_amazon_price_eur ?? 120) +
+    " Amazon price, " + fmtEuro(p.min_saving_eur ?? 120) + " saved, " +
+    (p.min_history_drop_percent ?? 50) + "% off) or exact-model CeX margins of at least " +
+    fmtEuro(p.min_cex_cash_profit_eur ?? 45) + " and " + (p.min_cex_roi_percent ?? 25) +
+    "% ROI. Always confirm seller, variant and checkout.";
+  root.replaceChildren();
+  const make = (tag, label, cls) => {
+    const node = document.createElement(tag);
+    if (label != null) node.textContent = label;
+    if (cls) node.className = cls;
+    return node;
+  };
+  if (!result.items.length) {
+    const box = make("div", null, "radar-empty");
+    box.appendChild(make("strong", "No major opportunities qualify right now."));
+    box.appendChild(make("p", "The tracker still scans everything. Smaller price drops and title-only CeX matches remain in the other tabs.", "hint"));
+    root.appendChild(box);
+    return;
+  }
+  for (const row of result.items) {
+    const card = make("article", null, "radar-item");
+    const head = make("div", null, "radar-item-head");
+    head.appendChild(make("span", row.radar_type === "cex" ? "MATCHED CeX CASH" : "LARGE AMAZON DROP", "eyebrow"));
+    head.appendChild(make("span", "Unverified", "badge fetch"));
+    card.appendChild(head);
+    const h = make("h3"), link = make("a", row.title || row.asin || "Product");
+    link.href = /^[A-Z0-9]{10}$/i.test(String(row.asin || "")) ?
+      "https://www.amazon.ie/dp/" + row.asin : "https://www.amazon.ie/";
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    h.appendChild(link);
+    card.appendChild(h);
+    const price = make("div", null, "radar-item-price");
+    price.appendChild(make("strong", fmtEuro(row.radar_value)));
+    price.appendChild(make("span", row.radar_type === "cex" ?
+      "estimated net cash margin" : "saved vs Amazon price history"));
+    card.appendChild(price);
+    const details = row.radar_type === "cex" ?
+      "Amazon " + fmtEuro(row.price_eur) + " · " + Number(row.cex_net_roi_percent).toFixed(0) +
+      "% ROI · exact " + row.match_confidence.replaceAll("_", " ") :
+      "Amazon " + fmtEuro(row.price_eur) + " · usual " + fmtEuro(row.reference_eur ?? row.median_eur) +
+      " · " + Number(row.drop_percent).toFixed(0) + "% off";
+    card.appendChild(make("p", details, "hint"));
+    card.appendChild(make("p", "Seller, condition and checkout not checked. Open listing to verify.", "hint"));
+    root.appendChild(card);
+  }
+}
+
 function renderDeals(deals) {
   if (!deals || !deals.generated_at) return;
   const summary = document.getElementById("deals-summary");
