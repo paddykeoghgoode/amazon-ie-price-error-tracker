@@ -493,9 +493,56 @@ function render(data) {
       }
     }
     input.setCustomValidity("");
-    const issueUrl =
-      `https://github.com/${repo}/issues/new` +
-      `?labels=watch&title=${encodeURIComponent("Watch: " + url)}&body=${encodeURIComponent(url)}`;
+    const model = (document.getElementById("watch-model")?.value || "").trim().toUpperCase();
+    const barcode = (document.getElementById("watch-ean")?.value || "").trim();
+    const rrp = (document.getElementById("watch-rrp")?.value || "").trim();
+    const source = (document.getElementById("watch-rrp-source")?.value || "").trim();
+    const links = (document.getElementById("watch-retailers")?.value || "")
+      .split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+    if (model && !/^[A-Z0-9][A-Z0-9._-]{3,55}$/.test(model)) {
+      alert("Model/MPN must be a code of 4–56 letters or digits.");
+      return;
+    }
+    if (barcode && !/^\d{8,14}$/.test(barcode)) {
+      alert("EAN must be 8–14 digits.");
+      return;
+    }
+    if (rrp && !(Number(rrp) > 0)) {
+      alert("RRP must be a positive euro amount.");
+      return;
+    }
+    if (source && !/^https:\/\//i.test(source)) {
+      alert("Use an HTTPS link for the RRP source.");
+      return;
+    }
+    const approved = new Set([
+      "currys.ie", "harveynorman.ie", "did.ie", "electrocity.ie",
+      "petermurphyelectrical.ie", "euronics.ie", "expert.ie", "joyces.ie",
+      "arnotts.ie", "keanscm.ie", "irwinelectrical.ie",
+    ]);
+    if (links.length > 8) {
+      alert("Please add at most 8 direct retailer product links per item.");
+      return;
+    }
+    for (const link of links) {
+      let parsed;
+      try { parsed = new URL(link); } catch { /* Invalid input */ }
+      const host = (parsed?.hostname || "").toLowerCase().replace(/^www\./, "");
+      if (!parsed || parsed.protocol !== "https:" || parsed.username ||
+          parsed.password || !approved.has(host)) {
+        alert("Only direct HTTPS product pages from supported Irish shops are accepted.");
+        return;
+      }
+    }
+    const body = [url];
+    if (model) body.push("Model: " + model);
+    if (barcode) body.push("EAN: " + barcode);
+    if (rrp) body.push("RRP: " + Number(rrp).toFixed(2));
+    if (source) body.push("RRP source: " + source);
+    for (const link of links) body.push("Compare: " + link);
+    const issueUrl = "https://github.com/" + repo + "/issues/new" +
+      "?labels=watch&title=" + encodeURIComponent("Watch: " + url) +
+      "&body=" + encodeURIComponent(body.join("\n"));
     window.open(issueUrl, "_blank", "noopener");
   };
 }
