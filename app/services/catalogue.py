@@ -82,6 +82,9 @@ def make_section_catalogue(
         # CeX box cash prices are independent of the current Amazon price.
         # Only preserve this quote when the product identity (title) is unchanged.
         if (prior.get("title") or "") == (item.title or ""):
+            for key in ("barcode", "model_number", "identity_checked_at", "identity_status"):
+                if key in prior:
+                    row[key] = prior[key]
             if isinstance(prior.get("cex_quote_cache"), dict):
                 row["cex_quote_cache"] = prior["cex_quote_cache"]
             # Duplicate notifications remain suppressed even if the observed
@@ -144,6 +147,11 @@ def reuse_cex_metadata(section: dict, published: dict) -> None:
             row = current.get(prior.get("asin"))
             if row is None or row.get("title") != prior.get("title"):
                 continue
+            if stamp(prior.get("identity_checked_at")) > stamp(row.get("identity_checked_at")):
+                for key in ("barcode", "model_number", "identity_checked_at", "identity_status"):
+                    row.pop(key, None)
+                    if key in prior:
+                        row[key] = prior[key]
             for field, timestamp in (("cex_quote_cache", "checked_at"), ("last_cex_alert", "sent_at")):
                 candidate = prior.get(field) or {}
                 existing = row.get(field) or {}

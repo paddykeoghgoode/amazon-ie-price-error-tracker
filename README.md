@@ -301,3 +301,14 @@ python -m scripts.scan --watchlist watchlist.json --output docs/data.json
 ```bash
 python -m unittest discover -s tests -v
 ```
+
+
+### Finding useful leads before and after history builds
+
+Bestseller cards do not provide the exact model/EAN evidence required for CeX Telegram alerts. Each section now shares its existing `premium_spot_check_limit` (six pages) between potentially profitable title-only CeX matches, observed drops, and first-seen items priced at least €250. Product-detail checks gather model/EAN fields without making seller-verification claims. Exact confirmation requires matching ASIN, a consistent price, compatible titles, and matching CeX identifiers. Changed prices and conflicting models cannot become confirmed opportunities. Cached identifiers survive price changes and are invalidated on title changes; overlapping sections reuse them. No extra CeX verification requests are made, and the shared detail pass stops on HTTP 403/429/503.
+
+This also fixes the cold-start loop in which only an already-known drop could get its advertised list price checked. First-seen expensive products now get a bounded opportunity for research before stable price history exists. Advertised list prices still use the stricter 75% / €250-saving alert rules, rather than being treated as reliable historical prices.
+
+An item becoming cheap can be the error itself: stable-history references of at least €500 with at least 75% off and €250 saved may now alert below the normal €120 current-price floor. Advertised list prices alone cannot unlock this exception. Coffee's €100 value gate can use its stable historical reference, while the 100-ratings requirement remains. CeX cash-profit, ROI, fresh-quote and exact-match thresholds remain unchanged.
+
+Actions summaries and the published `cex_stats` now distinguish detail attempts, successful price reads, exact confirmations, missing identifiers, changed prices and mismatches. A successful workflow does not establish that a useful opportunity was found; these counts show where research is getting stuck.

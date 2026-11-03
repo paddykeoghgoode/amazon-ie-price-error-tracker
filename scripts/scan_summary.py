@@ -15,6 +15,7 @@ def report(data: dict, published: bool = False) -> str:
         "| Section | Last scan (UTC) | Status | Items | Seller check | Catalogue checked / priced | CeX attempted | CeX matched | Amazon drops | Price errors | CeX sale flips | CeX regular flips |",
         "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
+    details = []
     for sid, section in sections.items():
         stats = section.get("cex_stats") or {}
         cat = section.get("catalogue_stats") or {}
@@ -37,6 +38,17 @@ def report(data: dict, published: bool = False) -> str:
             f"| {int(stats.get('cash_flips') or 0)} "
             f"| {int(stats.get('arbitrage') or 0)} |"
         )
+        detail = stats.get("detail_checks") or {}
+        if detail:
+            details.append(
+                f"\n{section.get('section_name') or sid}: product detail checks "
+                f"{detail.get('price_read', 0)}/{detail.get('attempted', 0)} prices read; "
+                f"{detail.get('identity_confirmed', 0)} exact CeX identities confirmed; "
+                f"{detail.get('identifiers_missing', 0)} missing identifiers; "
+                f"{detail.get('identity_mismatch', 0)} mismatches; "
+                f"{detail.get('price_changed', 0)} changed prices.\n"
+            )
+    lines.extend(details)
     lines.append("\n**Every finding is a research lead. Amazon seller, condition and checkout price are not checked.**")
     return "\n".join(lines) + "\n"
 
