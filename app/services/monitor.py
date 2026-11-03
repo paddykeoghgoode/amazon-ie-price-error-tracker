@@ -42,6 +42,7 @@ def record_and_detect(
     baseline_max_age_days: int = 30,
     alert_policy: AlertPolicy | None = None,
     emit_alert: bool = True,
+    allow_high_value_history_lead: bool = False,
 ) -> DetectedAlert | None:
     if snap.title and snap.title != known_title:
         db.update_product_title(product_id, snap.title)
@@ -67,9 +68,42 @@ def record_and_detect(
             # Still store the observed price/history; just don't create a
             # low-value alert record or wake the user via Telegram.
             return None
-    return detect_price_lead(
+    alert = detect_price_lead(
         product_id, snap, known_title=known_title,
         cooldown_minutes=cooldown_minutes,
+    )
+    if alert or not allow_high_value_history_lead or alert_policy is None:
+        return alert
+    # Watchlist product pages also alert on substantial, stable-history
+    # 50–74% reductions; the standard price-error detector requires 75%.
+    anchor = db.get_price_baseline(product_id) or {}
+    reference = float(anchor.get("reference_eur") or 0)
+    price = float(snap.price_eur or 0)
+    if (
+        reference <= 0 or price <= 0
+        or not qualifies_price_event(
+            price, historical_reference_eur=reference, policy=alert_policy
+        ) or not should_notify_again(product_id, price, cooldown_minutes=cooldown_minutes)
+    ):
+        return None
+    pct = 100 * (reference - price) / reference
+    reason = (
+        f"High-ticket Amazon historical reduction: {pct:.1f}% "
+        f"(€{reference:.2f} → €{price:.2f}, saving €{reference-price:.2f})"
+    )
+    alert_id = db.create_alert(
+        product_id=product_id, price_eur=price,
+        list_price_eur=snap.list_price_eur,
+        discount_percent=round(pct, 1), reason=reason,
+    )
+    return DetectedAlert(
+        alert_id, snap.asin, round(pct, 1),
+        "💎 Large Amazon price reduction — RESEARCH ONLY\n"
+        f"{snap.title or known_title or snap.asin}\n"
+        f"Now €{price:.2f} · historical €{reference:.2f} "
+        f"· saving €{reference-price:.2f} ({pct:.0f}%)\n"
+        "⚠️ Seller, exact variant, condition and checkout NOT verified.\n"
+        f"{snap.url}",
     )
 
 
@@ -177,6 +211,7 @@ async def check_product(client: httpx.AsyncClient, product: dict) -> ProductSnap
     alert = record_and_detect(
         product_id, snap, known_title=product.get("title"),
         alert_policy=load_alert_policy(),
+        allow_high_value_history_lead=True,
     )
     if alert:
         await notify_alert(alert)
