@@ -120,6 +120,11 @@ class TestHealthMessages(unittest.TestCase):
         self.assertEqual(self.run_health(healthy_result(), MORNING), [])
         self.send.assert_not_called()
 
+    def test_bestseller_crawl_script_imports_health_messages(self):
+        from scripts.crawl_bestsellers import send_health_messages as crawl_send
+
+        self.assertIs(crawl_send, health.send_health_messages)
+
 
 if __name__ == "__main__":
     unittest.main()
