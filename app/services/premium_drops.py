@@ -10,7 +10,9 @@ from app.config import settings
 from app.scraper.amazon_ie import ProductSnapshot
 from app.detector.price_error import should_notify_again
 from app.services.monitor import DetectedAlert
-from app.services.alert_policy import load_alert_policy, qualifies_observed_drop
+from app.services.alert_policy import (
+    load_alert_policy, materially_cheaper_than_last, qualifies_observed_drop,
+)
 
 
 @dataclass(frozen=True)
@@ -141,6 +143,11 @@ def build_lead_alert(
     list_price_eur: float | None = None,
     cooldown_minutes: int | None = None,
 ) -> DetectedAlert | None:
+    previous = db.last_alert_for_product(product_id)
+    if previous and not materially_cheaper_than_last(
+        previous.get("price_eur"), obs.price_eur, load_alert_policy()
+    ):
+        return None
     if not should_notify_again(product_id, obs.price_eur, cooldown_minutes=cooldown_minutes):
         return None
     reason = lead_reason(obs)

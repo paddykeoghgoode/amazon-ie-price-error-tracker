@@ -11,7 +11,7 @@ from app.notifier.telegram import format_price_alert, send_telegram_message, sen
 from app.scraper.amazon_ie import ProductSnapshot, extract_asin, fetch_product, normalize_product_url
 from app.services.price_history import observe_price_reference
 from app.services.alert_policy import (
-    AlertPolicy, load_alert_policy, qualifies_price_event,
+    AlertPolicy, load_alert_policy, materially_cheaper_than_last, qualifies_price_event,
 )
 
 logger = logging.getLogger(__name__)
@@ -68,6 +68,11 @@ def record_and_detect(
             # Still store the observed price/history; just don't create a
             # low-value alert record or wake the user via Telegram.
             return None
+    if alert_policy is not None:
+        last = db.last_alert_for_product(product_id)
+        if last and (last.get("notified_telegram") or last.get("notified_whatsapp")):
+            if not materially_cheaper_than_last(last.get("price_eur"), snap.price_eur, alert_policy):
+                return None
     alert = detect_price_lead(
         product_id, snap, known_title=known_title,
         cooldown_minutes=cooldown_minutes,

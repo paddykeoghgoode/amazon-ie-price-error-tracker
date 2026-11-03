@@ -285,9 +285,15 @@ async def crawl_section(
             age = datetime.now(timezone.utc) - last_at
         except (TypeError, ValueError):
             return True
+        # Same-price opportunities must not re-alert every day. Only a
+        # further material discount warrants another phone notification.
+        prior_price = float(previous.get("price_eur") or 0)
+        current_price = float(row.get("price_eur") or 0)
         return (
-            age >= timedelta(hours=24)
-            or float(row.get("price_eur") or 0) < float(previous.get("price_eur") or 0) - 0.01
+            age >= timedelta(0)
+            and prior_price - current_price >= 25
+            and prior_price > 0
+            and (prior_price - current_price) / prior_price >= 0.10
         )
 
     def mark_cex_sent(row: dict) -> None:

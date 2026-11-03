@@ -141,6 +141,26 @@ def qualifies_cex_alert(row: dict, policy: AlertPolicy | None = None) -> bool:
     )
 
 
+def materially_cheaper_than_last(
+    last_eur: float | None, current_eur: float | None,
+    policy: AlertPolicy | None = None,
+) -> bool:
+    """Do not repeat old deals every 24 hours at an unchanged price."""
+    policy = policy or AlertPolicy()
+    if last_eur is None:
+        return True
+    try:
+        last = float(last_eur)
+        current = float(current_eur or 0)
+    except (TypeError, ValueError):
+        return False
+    return (
+        last > current > 0
+        and last - current >= policy.min_hotlist_extra_drop_eur
+        and _discount(current, last) >= policy.min_hotlist_extra_drop_percent
+    )
+
+
 def hotlist_further_drop_qualifies(
     row: dict, *, previous_eur: float, current_eur: float,
     policy: AlertPolicy | None = None,
