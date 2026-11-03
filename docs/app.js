@@ -985,18 +985,23 @@ function selectRadarLeads(deals, now = Date.now()) {
     const nowPrice = Number(row.price_eur);
     const reference = Number(row.reference_eur ?? row.median_eur);
     const saved = reference - nowPrice;
+    const advertised = row.drop_kind === "list_price";
+    const percent = 100 * saved / reference;
+    const severeHistoryError = !advertised && reference >= Math.max(500, threshold("min_reference_eur",250)) &&
+      saved >= Math.max(250, threshold("min_saving_eur",120)) &&
+      percent >= Math.max(75, threshold("min_history_drop_percent",50));
     const observed = Date.parse(row.last_scanned_at || row.observed_at || deals.last_section_at || deals.generated_at);
-    return Number.isFinite(nowPrice) && Number.isFinite(reference) && reference > nowPrice &&
-      nowPrice >= threshold("min_amazon_price_eur",120) &&
+    return Number.isFinite(nowPrice) && nowPrice > 0 && Number.isFinite(reference) && reference > nowPrice &&
+      (nowPrice >= threshold("min_amazon_price_eur",120) || severeHistoryError) &&
       reference >= threshold("min_reference_eur",250) &&
-      saved >= threshold("min_saving_eur",120) &&
-      (100 * saved/reference) >= threshold("min_history_drop_percent",50) &&
+      saved >= (advertised ? threshold("min_list_saving_eur",250) : threshold("min_saving_eur",120)) &&
+      percent >= (advertised ? threshold("min_list_drop_percent",75) : threshold("min_history_drop_percent",50)) &&
       Number.isFinite(observed) && now >= observed && now-observed <= 12*3600000;
   }).map(row => ({...row, radar_type:"drop", radar_value:Number(row.reference_eur ?? row.median_eur)-Number(row.price_eur)}));
   const cex = [...(deals.cex_flips || []),...(deals.cex_arbitrage || [])].filter(row => {
     if (row.resale_eligible === false) return false;
     const observed=Date.parse(row.observed_at || row.last_scanned_at || deals.last_section_at || deals.generated_at);
-    return Number(row.price_eur) >= threshold("min_cex_buy_price_eur",100) &&
+    return Number(row.price_eur) >= threshold("min_cex_buy_price_eur",0.01) &&
       Number(row.cex_cash_profit_eur) >= threshold("min_cex_cash_profit_eur",45) &&
       Number(row.cex_net_roi_percent) >= threshold("min_cex_roi_percent",25) &&
       ["barcode_verified","model_verified"].includes(row.match_confidence) &&

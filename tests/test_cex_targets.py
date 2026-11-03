@@ -17,7 +17,7 @@ from app.services.cex_arbitrage import enrich_with_cex
 from app.services.cex_cache import quote_entry
 from app.services.cex_targets import (
     TargetConfig, target_state, sync_mappings, discover_targets, attach_target_quotes,
-    refresh_mapped_quotes, watch_rows, exact_target_match,
+    refresh_mapped_quotes, watch_rows, exact_target_match, prune_targets,
 )
 from app.services.discovery_checks import choose_detail_checks
 from scripts.scan_hotlist import recheck, select_fast_checks
@@ -125,7 +125,7 @@ class TestCexTargetCatalogue(unittest.TestCase):
                 await search_boxes(client, 'Sony', strict=True)
         asyncio.run(go())
         self.assertEqual(bodies[0]['page'], 2)
-        self.assertIn('cashBuyPrice>=150', bodies[0]['numericFilters'])
+        self.assertIn('cashBuyPrice>150', bodies[0]['numericFilters'])
         self.assertNotIn('page', bodies[1])
         self.assertEqual(bodies[1]['hitsPerPage'], 3)
 
@@ -134,7 +134,8 @@ class TestCexTargetCatalogue(unittest.TestCase):
         run = {'live_lookups': 9}
         hits = [{'boxId': 'valid', 'boxName': TITLE, 'cashBuyPrice': 300, 'boxWebBuyAllowed': True},
                 {'boxId': 'disabled', 'boxName': TITLE, 'cashBuyPrice': 300, 'boxWebBuyAllowed': 0},
-                {'boxId': 'cheap', 'boxName': TITLE, 'cashBuyPrice': 20, 'boxWebBuyAllowed': 1}]
+                {'boxId': 'cheap', 'boxName': TITLE, 'cashBuyPrice': 9.99, 'boxWebBuyAllowed': 1},
+                {'boxId': 'boundary', 'boxName': TITLE, 'cashBuyPrice': 10, 'boxWebBuyAllowed': 1}]
         async def go():
             with patch('app.scraper.cex_ie.search_boxes', new_callable=AsyncMock, return_value=hits) as search:
                 await discover_targets(state, OPTIONS, config(), object(), run, now=NOW)
@@ -147,6 +148,57 @@ class TestCexTargetCatalogue(unittest.TestCase):
                 await discover_targets(state, OPTIONS, config(), object(), {}, now=NOW)
                 self.assertEqual(search.await_count, 3)
         asyncio.run(go())
+
+    def test_above_ten_cash_is_admitted_even_when_purchase_is_under_one_hundred(self):
+        from dataclasses import replace
+        small = replace(PRICE, cash_eur=10.01)
+        row = item(price=5)
+        row['cex_quote_cache'] = quote_entry(TITLE, small, NOW)
+        state = target_state({})
+        sync_mappings(state, [{'items':[row]}], OPTIONS, now=NOW)
+        self.assertIn(row['asin'], state['mappings'])
+        watch = watch_rows(state, config(), now=NOW)
+        self.assertEqual(len(watch), 1)
+        self.assertFalse(qualifies_cex_alert(watch[0]))  # payout is not net profit
+        selected = choose_detail_checks({'items':[dict(row, identity_status='identifiers_missing', cex_target_box_id=small.box_id)]},
+                                        [], [], config=config(), policy=AlertPolicy())
+        self.assertEqual(len(selected), 1)
+        # A subsequent quote falling to the cutoff keeps the invalidation
+        # record, but no longer contributes an eligible watch.
+        state['mappings'][row['asin']]['cex_quote_cache'] = quote_entry(TITLE, replace(small, cash_eur=10), NOW)
+        prune_targets(state, OPTIONS, NOW)
+        self.assertIn(row['asin'], state['mappings'])
+        self.assertEqual(watch_rows(state, config(), now=NOW), [])
+
+    def test_floor_change_requeues_cached_queries_within_budget_and_keeps_error_backoff(self):
+        state = target_state({})
+        state.update(cash_floor_eur=150, queries={q:{'checked_at':NOW.isoformat()} for q in OPTIONS.queries})
+        state['queries']['Canon EOS']['last_error_at']=NOW.isoformat()
+        async def go():
+            with patch('app.scraper.cex_ie.search_boxes', new_callable=AsyncMock, return_value=[]) as search:
+                run={}
+                await discover_targets(state, OPTIONS, config(), object(), run, now=NOW)
+                self.assertEqual(search.await_count, 2)
+                self.assertEqual(run['live_lookups'], 2)
+                self.assertEqual([c.args[1] for c in search.await_args_list], ['Sony WH','Nvidia RTX'])
+                self.assertEqual(state['cash_floor_eur'], 10)
+        asyncio.run(go())
+
+    def test_low_cash_volume_cannot_evict_all_high_value_targets_or_mappings(self):
+        from dataclasses import replace
+        options=replace(OPTIONS,max_items=6,max_mappings=6)
+        state=target_state({})
+        for n in range(12):
+            quote=replace(PRICE,box_id=str(n),cash_eur=300 if n<4 else 30)
+            when=NOW-timedelta(minutes=10 if n<4 else 1)
+            state['items'][str(n)]=quote_entry(TITLE,quote,when)
+            row=item(str(n),when=when)
+            row['cex_quote_cache']=quote_entry(TITLE,quote,when)
+            state['mappings'][str(n)]=row
+        prune_targets(state,options,NOW)
+        for field in ('items','mappings'):
+            self.assertEqual(len(state[field]),6)
+            self.assertTrue({'0','1','2','3'} <= set(state[field]))
 
     def test_catalogue_rate_limit_stops_section_and_retries_after_backoff(self):
         state = target_state({})

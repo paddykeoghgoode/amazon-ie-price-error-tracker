@@ -38,9 +38,20 @@ class TestQuietTelegram(unittest.TestCase):
             {"cex_cash_profit_eur": 10},
             {"cex_net_roi_percent": 12},
             {"cex_quote_fresh_for_alert": False},
-            {"price_eur": 15},
+            {"price_eur": 0},
         ):
             self.assertFalse(qualifies_cex_alert({**good, **changed}))
+
+    def test_low_purchase_price_can_qualify_for_cex_but_small_profit_stays_quiet(self):
+        from app.scraper.cex_ie import CexPrices
+        from app.services.cex_arbitrage import build_cex_row
+        prices = CexPrices('box', 'Sony headset', None, 80, 100, 120, 'https://ie.webuy.com')
+        row = build_cex_row({'price_eur':15}, prices, min_profit_eur=45, min_profit_percent=10,
+                            min_roi_percent=25, extra_cost_eur=5, payout_haircut_percent=10)
+        row.update(match_confidence='model_verified', cex_quote_fresh_for_alert=True)
+        self.assertEqual(row['cex_cash_profit_eur'], 52)
+        self.assertTrue(qualifies_cex_alert(row))
+        self.assertFalse(qualifies_cex_alert({**row, 'cex_cash_profit_eur':5}))
 
     def test_hotlist_requires_further_material_cut(self):
         row = {"price_eur": 200, "reference_eur": 700}

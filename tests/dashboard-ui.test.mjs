@@ -176,3 +176,21 @@ test("a fast failed check removes an older CeX lead from the overview", () => {
   good.products[0].cex_quote_checked_at="2026-11-02T18:00:00Z";
   assert.equal(merge(deals, good, now).cex_arbitrage.length, 0);
 });
+
+test("expensive branded items remain visible when errors make them cheap, independently of CeX", () => {
+  const start = js.indexOf("function selectRadarLeads(deals, now = Date.now()) {");
+  const end = js.indexOf("\nfunction mergeFastCex(", start);
+  const select = vm.runInNewContext(js.slice(start, end) + "\nselectRadarLeads;");
+  const now=Date.parse("2026-11-03T20:00:00Z");
+  const good={asin:"SAGE",title:"Sage espresso machine",price_eur:85,reference_eur:800,
+    last_scanned_at:"2026-11-03T19:55:00Z",resale_eligible:true};
+  const data={general_drops:[good,{...good,asin:"UNKNOWN",resale_eligible:false},
+    {...good,asin:"LIST",drop_kind:"list_price"},{...good,asin:"CHEAP",reference_eur:90}],
+    cex_arbitrage:[{asin:"CEX",price_eur:15,cex_cash_profit_eur:52,cex_net_roi_percent:346,
+      match_confidence:"model_verified",cex_quote_fresh_for_alert:true,observed_at:good.last_scanned_at}]};
+  const result=select(data,now);
+  assert.equal(result.drops.length,1);
+  assert.equal(result.drops[0].asin,"SAGE");
+  assert.equal(result.cex.length,1);
+  assert.equal(result.cex[0].asin,"CEX");
+});
