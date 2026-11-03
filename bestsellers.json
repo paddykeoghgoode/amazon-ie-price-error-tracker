@@ -22,10 +22,10 @@
   "cex_scan_any_price": true,
   "sections": [
     {
-      "id": "gaming",
-      "name": "Gaming & tech",
-      "max_items": 3500,
-      "max_requests": 220,
+      "id": "videogames",
+      "name": "Video games",
+      "max_items": 2800,
+      "max_requests": 180,
       "categories": [
         {
           "name": "Video games",
@@ -33,28 +33,104 @@
           "depth": 2
         },
         {
-          "name": "Electronics",
-          "path": "/gp/bestsellers/electronics",
-          "depth": 2
-        },
-        {
           "name": "Toys & games",
           "path": "/gp/bestsellers/toys",
-          "depth": 2
+          "depth": 1
+        }
+      ],
+      "discovery_feeds": [
+        {
+          "name": "Movers video games",
+          "path": "/gp/movers-and-shakers/videogames",
+          "depth": 0,
+          "pages": 2
         },
         {
-          "name": "Amazon devices",
-          "path": "/gp/bestsellers/amazon-devices",
-          "depth": 1
-        },
-        {
-          "name": "Musical instruments",
-          "path": "/gp/bestsellers/musical-instruments",
-          "depth": 1
-        },
+          "name": "Most wished video games",
+          "path": "/gp/most-wished-for/videogames",
+          "depth": 0,
+          "pages": 1
+        }
+      ],
+      "include_global_discovery_feeds": false,
+      "cex_priority_keywords": [
+        "game",
+        "gaming",
+        "playstation",
+        "ps5",
+        "ps4",
+        "xbox",
+        "nintendo",
+        "switch",
+        "console"
+      ]
+    },
+    {
+      "id": "pc_hardware",
+      "name": "PC hardware",
+      "max_items": 2800,
+      "max_requests": 180,
+      "categories": [
         {
           "name": "Computers",
           "path": "/gp/bestsellers/electronics/94799106031",
+          "depth": 2
+        },
+        {
+          "name": "Electronics",
+          "path": "/gp/bestsellers/electronics",
+          "depth": 1
+        },
+        {
+          "name": "Software",
+          "path": "/gp/bestsellers/software",
+          "depth": 1
+        }
+      ],
+      "discovery_feeds": [
+        {
+          "name": "Most wished computers",
+          "path": "/gp/most-wished-for/computers",
+          "depth": 0,
+          "pages": 2
+        },
+        {
+          "name": "Movers computers",
+          "path": "/gp/movers-and-shakers/computers",
+          "depth": 0,
+          "pages": 1
+        }
+      ],
+      "include_global_discovery_feeds": false,
+      "cex_priority_keywords": [
+        "laptop",
+        "macbook",
+        "graphics",
+        "gpu",
+        "nvidia",
+        "amd",
+        "ryzen",
+        "intel",
+        "ssd",
+        "memory",
+        "ram",
+        "monitor",
+        "motherboard",
+        "processor",
+        "tablet",
+        "keyboard",
+        "mouse"
+      ]
+    },
+    {
+      "id": "cex_priority",
+      "name": "CeX priority",
+      "max_items": 3200,
+      "max_requests": 200,
+      "categories": [
+        {
+          "name": "Electronics",
+          "path": "/gp/bestsellers/electronics",
           "depth": 1
         },
         {
@@ -68,23 +144,101 @@
           "depth": 1
         },
         {
-          "name": "Software",
-          "path": "/gp/bestsellers/software",
+          "name": "Computers",
+          "path": "/gp/bestsellers/electronics/94799106031",
+          "depth": 1
+        },
+        {
+          "name": "Video games",
+          "path": "/gp/bestsellers/videogames",
           "depth": 1
         }
+      ],
+      "discovery_feeds": [
+        {
+          "name": "Movers electronics",
+          "path": "/gp/movers-and-shakers/electronics",
+          "depth": 0,
+          "pages": 2
+        },
+        {
+          "name": "Most wished electronics",
+          "path": "/gp/most-wished-for/electronics",
+          "depth": 0,
+          "pages": 1
+        }
+      ],
+      "include_global_discovery_feeds": false,
+      "cex_live_lookups_per_run": 22,
+      "catalogue_checks_per_run": 150,
+      "catalogue_time_budget_seconds": 420,
+      "cex_any_price_max_lookups": 45,
+      "cex_any_price_require_keyword": true,
+      "cex_priority_keywords": [
+        "game",
+        "gaming",
+        "playstation",
+        "ps5",
+        "ps4",
+        "xbox",
+        "nintendo",
+        "switch",
+        "console",
+        "iphone",
+        "ipad",
+        "samsung",
+        "pixel",
+        "tablet",
+        "laptop",
+        "macbook",
+        "airpods",
+        "headphone",
+        "headset",
+        "camera",
+        "canon",
+        "nikon",
+        "kindle",
+        "echo",
+        "graphics",
+        "gpu",
+        "oculus",
+        "meta quest",
+        "fitbit",
+        "watch"
+      ]
+    },
+    {
+      "id": "coffee",
+      "name": "Coffee machines",
+      "max_items": 1200,
+      "max_requests": 90,
+      "signal_min_price_eur": 100,
+      "signal_min_review_count": 100,
+      "include_global_discovery_feeds": false,
+      "categories": [
+        {
+          "name": "Coffee machines",
+          "path": "/gp/bestsellers/home/94816616031",
+          "depth": 2
+        }
+      ],
+      "cex_priority_keywords": [
+        "sage",
+        "delonghi",
+        "nespresso",
+        "breville",
+        "bean",
+        "espresso",
+        "barista"
       ]
     },
     {
       "id": "home",
       "name": "Home & garden",
-      "max_items": 3000,
-      "max_requests": 200,
+      "max_items": 2600,
+      "max_requests": 170,
+      "include_global_discovery_feeds": false,
       "categories": [
-        {
-          "name": "Coffee machines",
-          "path": "/gp/bestsellers/home/94816616031",
-          "depth": 1
-        },
         {
           "name": "Home & kitchen",
           "path": "/gp/bestsellers/home",
@@ -101,11 +255,6 @@
           "depth": 1
         },
         {
-          "name": "Grocery",
-          "path": "/gp/bestsellers/grocery",
-          "depth": 1
-        },
-        {
           "name": "Pet supplies",
           "path": "/gp/bestsellers/pet-supplies",
           "depth": 1
@@ -115,8 +264,9 @@
     {
       "id": "lifestyle",
       "name": "Lifestyle",
-      "max_items": 3000,
-      "max_requests": 200,
+      "max_items": 2600,
+      "max_requests": 170,
+      "include_global_discovery_feeds": false,
       "categories": [
         {
           "name": "Beauty",
@@ -148,8 +298,9 @@
     {
       "id": "general",
       "name": "Books & media",
-      "max_items": 3000,
-      "max_requests": 200,
+      "max_items": 2600,
+      "max_requests": 170,
+      "include_global_discovery_feeds": false,
       "categories": [
         {
           "name": "Books",
@@ -180,11 +331,6 @@
           "name": "Arts & crafts",
           "path": "/gp/bestsellers/arts-crafts",
           "depth": 1
-        },
-        {
-          "name": "All departments",
-          "path": "/gp/bestsellers",
-          "depth": 1
         }
       ]
     }
@@ -208,30 +354,5 @@
   "rapid_drop_min_saving_eur": 30,
   "premium_spot_check_limit": 6,
   "premium_alerts_per_run": 8,
-  "discovery_feeds": [
-    {
-      "name": "Movers & shakers",
-      "path": "/gp/movers-and-shakers",
-      "depth": 1,
-      "pages": 2
-    },
-    {
-      "name": "Movers electronics",
-      "path": "/gp/movers-and-shakers/electronics",
-      "depth": 0,
-      "pages": 2
-    },
-    {
-      "name": "Most wished electronics",
-      "path": "/gp/most-wished-for/electronics",
-      "depth": 0,
-      "pages": 1
-    },
-    {
-      "name": "Most wished computers",
-      "path": "/gp/most-wished-for/computers",
-      "depth": 0,
-      "pages": 1
-    }
-  ]
+  "discovery_feeds": []
 }

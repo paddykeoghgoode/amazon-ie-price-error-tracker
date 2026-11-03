@@ -60,6 +60,8 @@ class CrawlConfig:
     premium_spot_check_limit: int = 6
     premium_alerts_per_run: int = 8
     discovery_feeds: list[CategoryRoot] = field(default_factory=list)
+    signal_min_price_eur: float | None = None
+    signal_min_review_count: int | None = None
     daily_summary_hour: int | None = 9
     deep_drop_tiers: list[float] = field(default_factory=lambda: [40.0, 50.0, 66.0])
     verify_max_candidates: int = 35  # legacy configuration; progressive queue supersedes this
@@ -309,6 +311,16 @@ async def crawl(fetch: Fetcher, config: CrawlConfig) -> CrawlResult:
     return result
 
 
+def passes_signal_gates(item: BestsellerItem, config: CrawlConfig) -> bool:
+    """Optional per-section filters (e.g. coffee ≥€100 with enough reviews)."""
+    if config.signal_min_price_eur is not None and float(item.price_eur or 0) < config.signal_min_price_eur:
+        return False
+    if config.signal_min_review_count is not None:
+        if item.review_count is None or item.review_count < config.signal_min_review_count:
+            return False
+    return True
+
+
 def process_crawl(result: CrawlResult, config: CrawlConfig, *, allow_alerts: bool = False) -> ProcessResult:
     processed = ProcessResult()
     premium_alert_budget = config.premium_alerts_per_run
@@ -319,6 +331,7 @@ def process_crawl(result: CrawlResult, config: CrawlConfig, *, allow_alerts: boo
         product_id = db.add_product(asin, item.url, item.title)
         previous = db.latest_price_check(product_id)
         previous_eur = float(previous["price_eur"]) if previous and previous.get("price_eur") is not None else None
+        signals_ok = passes_signal_gates(item, config)
         snap = ProductSnapshot(
             asin=asin,
             url=item.url,
@@ -335,7 +348,7 @@ def process_crawl(result: CrawlResult, config: CrawlConfig, *, allow_alerts: boo
             cooldown_minutes=config.alert_cooldown_minutes,
             baseline_max_age_days=config.baseline_max_age_days,
         )
-        if alert and allow_alerts:
+        if alert and allow_alerts and signals_ok:
             processed.alerts.append(alert)
 
         rapid = observe_rapid_scan_drop(
@@ -348,7 +361,7 @@ def process_crawl(result: CrawlResult, config: CrawlConfig, *, allow_alerts: boo
             previous_eur=previous_eur,
             config=config,
         )
-        if rapid:
+        if rapid and signals_ok:
             processed.rapid_drops.append(observation_to_row(rapid))
             if allow_alerts and premium_alert_budget > 0:
                 lead = build_lead_alert(
@@ -367,7 +380,7 @@ def process_crawl(result: CrawlResult, config: CrawlConfig, *, allow_alerts: boo
         # General Amazon reductions are independent of CeX matching and the
         # much stricter price-error/Telegram alert threshold.
         saving = round(reference_eur - item.price_eur, 2)
-        if saving > 0 and drop >= config.general_drop_percent:
+        if saving > 0 and drop >= config.general_drop_percent and signals_ok:
             processed.general_drops.append({
                 "asin": asin,
                 "title": item.title,
@@ -380,7 +393,7 @@ def process_crawl(result: CrawlResult, config: CrawlConfig, *, allow_alerts: boo
                 "drop_percent": drop,
                 "reference_confirmed_at": anchor["confirmed_at"],
             })
-        if drop >= config.report_drop_percent:
+        if drop >= config.report_drop_percent and signals_ok:
             processed.drops.append(
                 {
                     "asin": asin,
@@ -411,7 +424,7 @@ def process_crawl(result: CrawlResult, config: CrawlConfig, *, allow_alerts: boo
             reference_eur=reference_eur,
             config=config,
         )
-        if premium:
+        if premium and signals_ok:
             processed.premium_drops.append(observation_to_row(premium))
             if allow_alerts and premium_alert_budget > 0:
                 lead = build_lead_alert(

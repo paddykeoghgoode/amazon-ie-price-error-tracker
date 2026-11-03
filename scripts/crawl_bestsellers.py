@@ -190,6 +190,18 @@ async def crawl_section(
         for row in (processed.rapid_drops + processed.premium_drops + processed.drops)
         if (row.get("drop_percent") or 0) >= 25 or float(row.get("price_eur") or 0) >= config.premium_min_price_eur
     ]
+    if section_id == "cex_priority":
+        seen_urgent = set(urgent)
+        keywords = [k.lower() for k in config.cex_priority_keywords]
+        for row in section_catalogue.get("items") or []:
+            if not row.get("active", True) or row.get("price_eur") is None:
+                continue
+            hay = f"{row.get('title') or ''} {row.get('category') or ''}".lower()
+            if any(k in hay for k in keywords) and row["asin"] not in seen_urgent:
+                urgent.append(row["asin"])
+                seen_urgent.add(row["asin"])
+            if len(urgent) >= 45:
+                break
     batch = select_check_batch(
         section_catalogue, limit=config.catalogue_checks_per_run,
         priority_asins=urgent,

@@ -71,6 +71,7 @@ def make_section_catalogue(
             "category": category,
             "rank": item.rank,
             "price_eur": price,
+            "review_count": item.review_count,
             "active": True,
             "first_seen_at": prior.get("first_seen_at") or stamp,
             "last_seen_at": stamp,

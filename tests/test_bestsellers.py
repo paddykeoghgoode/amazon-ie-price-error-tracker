@@ -62,6 +62,20 @@ class TestParsePage(unittest.TestCase):
         self.assertIsNone(page.items[2].price_eur)
         self.assertEqual(page.child_paths, ["/gp/bestsellers/home/111"])
 
+    def test_review_count_from_card(self):
+        html = page_html(
+            "Coffee Machines",
+            [
+                item_html("B000000001", 1, "Espresso maker", "€1,099.00").replace(
+                    "</div>",
+                    '<a aria-label="4.6 out of 5 stars, 1,284 ratings"></a></div>',
+                    1,
+                ),
+            ],
+        )
+        page = parse_bestseller_page(html)
+        self.assertEqual(page.items[0].review_count, 1284)
+
     def test_captcha_is_blocked(self):
         page = parse_bestseller_page('<form action="/errors/validateCaptcha"></form>')
         self.assertTrue(page.blocked)

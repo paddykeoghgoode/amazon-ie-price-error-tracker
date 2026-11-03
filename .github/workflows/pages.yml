@@ -13,7 +13,10 @@ on:
         options:
           - rotate
           - all
-          - gaming
+          - videogames
+          - pc_hardware
+          - cex_priority
+          - coffee
           - home
           - lifestyle
           - general
@@ -308,7 +311,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        section: [gaming, home, lifestyle, general]
+        section: [videogames, pc_hardware, cex_priority, coffee, home, lifestyle, general]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     concurrency:
