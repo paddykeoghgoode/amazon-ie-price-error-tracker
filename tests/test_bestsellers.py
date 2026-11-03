@@ -200,7 +200,7 @@ class TestDetection(unittest.TestCase):
             sent = asyncio.run(send_alerts(alerts, self.config, details_url="https://example/DEALS.md"))
         self.assertEqual(sent, 2)
         self.assertEqual([c.args[0].asin for c in notify.call_args_list], ["B000000004", "B000000003"])
-        self.assertIn("3 more", summary.call_args.args[0])
+        summary.assert_not_called()  # No 'and X more' Telegram spam.
 
 
 if __name__ == "__main__":

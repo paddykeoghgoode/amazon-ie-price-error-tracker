@@ -26,7 +26,7 @@ class TestSellerCheckDisabled(unittest.TestCase):
         script = Path("scripts/crawl_bestsellers.py").read_text(encoding="utf-8")
         self.assertNotIn("verify_candidates(", script)
         self.assertNotIn("fetch_product(", script)
-        self.assertIn("allow_alerts=True", script)
+        self.assertIn("allow_alerts=notify", script)
         self.assertIn("enrich_with_cex(", script)
 
     def test_old_verified_sections_become_unverified(self):
@@ -53,14 +53,14 @@ class TestSellerCheckDisabled(unittest.TestCase):
     def test_unverified_cex_profit_can_send_research_alert(self):
         row = {
             "asin": "B000000001", "title": "Sony Headset",
-            "url": "https://www.amazon.ie/dp/B000000001", "price_eur": 40,
-            "cex_cash_eur": 100, "cex_cash_profit_eur": 45, "cex_retail_eur": 130,
+            "url": "https://www.amazon.ie/dp/B000000001", "price_eur": 120,
+            "cex_cash_eur": 240, "cex_cash_profit_eur": 70, "cex_retail_eur": 300,
             "cex_min_profit_eur": 10, "cex_max_buy_eur": 75,
-            "cex_break_even_buy_eur": 90, "cex_net_roi_percent": 112.5,
+            "cex_break_even_buy_eur": 230, "cex_net_roi_percent": 58.3,
             "cex_url": "https://ie.webuy.com/product-detail?id=123",
             "cex_quote_fresh_for_alert": True,
             "cex_quote_checked_at": "2026-11-02T20:00:00+00:00",
-            "match_confidence": "title_only",
+            "match_confidence": "model_verified", "cex_cash_flip": True,
         }
 
         async def check():
