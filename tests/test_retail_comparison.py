@@ -170,10 +170,10 @@ class TestRetailerRequests(unittest.TestCase):
         async def once(prev=None, model=MPN):
             products = [{"asin": "B0AAA11111", "price_eur": 636.49, "model_number": model}]
             specs = {"B0AAA11111": {"model": model, "retailer_urls": [MERCHANT], "rrp_eur": 599}}
+            constructor = httpx.AsyncClient
             with patch("app.services.retail_compare.httpx.AsyncClient") as make_client, patch(
                 "app.services.retail_compare.asyncio.sleep", new_callable=AsyncMock
             ):
-                constructor = httpx.AsyncClient
                 make_client.return_value.__aenter__.return_value = constructor(
                     transport=httpx.MockTransport(respond))
                 await compare_watchlist(products, specs, prev)

@@ -29,6 +29,43 @@ Besides price-error alerts, the bot sends:
 - a **warning** if Amazon blocks the crawl or it finds suspiciously few items (at most every 12 hours), and a message when it recovers;
 - a **daily summary** after 09:00 Ireland time, so silence never means "broken". Change or disable it with `daily_summary_hour` in [`bestsellers.json`](bestsellers.json) (`null` turns it off).
 
+## Irish retailer price comparisons for your watchlist
+
+The **Watchlist → Retail Price Comparison** card now supports retailer price research alongside Amazon. To add a new product, enter its Amazon link and open **“Add Irish retailer price comparisons and RRP”** on the dashboard. Enter an exact model/MPN or EAN, optional manufacturer RRP and source, and up to eight HTTPS **direct product-page URLs** from supported Irish retailers (Currys, Harvey Norman, DID, ElectroCity, Peter Murphy Electrical, Euronics, Expert, Joyces, Arnotts, Keans, Irwin Electrical). You can also edit an existing `Watch:` GitHub issue and add lines like:
+
+```text
+Model: SES875BTR2GUK1
+EAN: 9312432032056
+Compare: https://www.petermurphyelectrical.ie/products/your-exact-product
+RRP: 599.99
+RRP source: https://www.sageappliances.com/eu/your-model
+```
+
+Or configure `watchlist.json` for a specific ASIN:
+
+```json
+{
+  "products": [
+    {
+      "asin": "B0EXAMPLE1",
+      "model": "SES875BTR2GUK1",
+      "barcode": "9312432032056",
+      "retailer_urls": [
+        "https://www.petermurphyelectrical.ie/products/your-exact-product"
+      ],
+      "rrp_eur": 599.99,
+      "rrp_source": "https://www.sageappliances.com/eu/your-model"
+    }
+  ]
+}
+```
+
+**Important:** Replace example product links/ASINs with the real ones. The scanner never guesses a retailer item from a similar title, nor scrapes Google Shopping automatically. It checks only the exact retailer product URLs you supply; a shop page needs structured `Product → Offer` EUR pricing and an exact MPN or barcode match. If an item is out of stock, a model differs, the page hides prices, or access is denied, the dashboard shows the reason and does **not** count it as the best price. Multiple variant prices are rejected as ambiguous.
+
+**Freshness and request limits:** watchlist Amazon checks continue every 10 minutes, but known retailer URLs are refreshed **at most every 12 hours** (3-hour backoff on missing/error data), limited to **12 retailer requests per watchlist run** with delays. Results, timestamps and supplier-specific errors are cached in the published `data.json`. This is not a nationwide price guarantee. The "lowest checked retailer" is item-only EUR and **excludes delivery**, stock may change and final checkout totals may differ.
+
+**RRP:** this is optional and labelled **user supplied**, with an optional manufacturer source URL. Amazon's strikethrough / “was” price is shown separately and is **not** assumed to be official RRP. No RRP is fabricated from competing listings. No purchases are automated.
+
 ## Add products to the Watchlist from GitHub Pages
 
 The site is hosted on **static GitHub Pages**, so it cannot safely save products directly into the repository from a browser. Open the **Watchlist** tab, paste an Amazon.ie URL, Amazon **amzn.eu** short link, or 10-character ASIN, and select **Add via GitHub**. GitHub opens a prefilled issue; tap **Create Issue** once. That's the complete submission step.
