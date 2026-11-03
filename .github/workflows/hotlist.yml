@@ -2,7 +2,7 @@ name: Fast checks for price-drop leads
 on:
   schedule:
     # Ten-minute targeted checks, staggered from full/watchlist ticks.
-    - cron: "0,10,20,30,40,50 * * * *"
+    - cron: "2,12,22,32,42,52 * * * *"
   workflow_dispatch:
 permissions:
   contents: read

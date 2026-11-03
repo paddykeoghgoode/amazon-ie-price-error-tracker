@@ -105,7 +105,7 @@ python -m scripts.crawl_bestsellers --max-items 500 --no-notify
 
 - **Product identity:** Historical/detail-page barcodes and models can improve matching where present, but the main bestseller scan no longer fetches individual Amazon product pages to gather them. CeX details are compared only if they expose explicit identifiers. A conflicting model or barcode is rejected. `match_confidence` is `barcode_verified`, `model_verified`, or `title_only`; missing CeX identity is never described as an exact match.
 - **Maximum buy price:** CeX cash quote is reduced by the configured payout haircut, then delivery and extra costs are subtracted. Each opportunity shows expected net cash profit, ROI, the break-even Amazon item price, and the maximum Amazon item price that still meets the minimum euro margin and ROI. Configure `cex_delivery_eur` (default €0, estimate only) and `cex_min_roi_percent` (default 15%). Shipping and checkout totals must be verified before buying. These figures do not include taxes or unexpected deductions.
-- **Fast hotlist:** `Fast checks for price-drop leads` runs independently every 10 minutes (:00, :10, :20, :30, :40 and :50 UTC), checking up to 12 recently observed Amazon price drops of at least 30% from the last 48 hours. It republishes `hotlist.json` and sends a research alert for a further product-page price cut; it does not verify sellers or checkout offers. Scheduled runs may be delayed. It is not a complete scrape of Amazon every 15 minutes.
+- **Fast hotlist:** `Fast checks for price-drop leads` runs independently every 10 minutes (:02, :12, :22, :32, :42 and :52 UTC), checking up to 12 recently observed Amazon price drops of at least 30% from the last 48 hours. It republishes `hotlist.json` and sends a research alert for a further product-page price cut; it does not verify sellers or checkout offers. Scheduled runs may be delayed. It is not a complete scrape of Amazon every 15 minutes.
 - **Tiered alerts:** Where barcode/model evidence is available and estimated profit is ≥€25, the tracker can send a high-potential research alert with CeX quote timestamp, ROI, matching level and maximum estimated purchase price. Seller and checkout price are not verified. Title-only matches remain lower confidence; no automation purchases anything.
 
 ### CeX profitability assumptions
@@ -131,7 +131,7 @@ A listing match is still heuristic. Check the exact variant, whether the Amazon 
 | Scan | Scheduled times (UTC) | Target frequency |
 |---|---|---|
 | Watched products | :05, :15, :25, :35, :45, :55 | Every 10 minutes |
-| Targeted recent Amazon price drops | :00, :10, :20, :30, :40, :50 | Every 10 minutes |
+| Targeted recent Amazon price drops | :02, :12, :22, :32, :42, :52 | Every 10 minutes |
 | Amazon bestseller discovery | :05, :25, :45 | One rotating section every 20 minutes |
 | CeX quotes | Separate cached data | Refresh only when due or when a promising lead needs a fresh quote |
 

@@ -32,7 +32,7 @@ class TestFasterSchedules(unittest.TestCase):
 
     def test_hotlist_runs_at_10m_and_cex_live_budget_stays_bounded(self):
         crons = [x["cron"] for x in self.hotlist.get("on", self.hotlist.get(True))["schedule"]]
-        self.assertEqual(crons, ["0,10,20,30,40,50 * * * *"])
+        self.assertEqual(crons, ["2,12,22,32,42,52 * * * *"])
         config = json.loads(Path("bestsellers.json").read_text(encoding="utf-8"))
         self.assertEqual(config["cex_live_lookups_per_run"], 25)
         self.assertLessEqual(config["catalogue_time_budget_seconds"], 360)
