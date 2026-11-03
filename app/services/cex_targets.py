@@ -29,7 +29,8 @@ class TargetConfig:
     enabled: bool = False
     max_items: int = 300
     max_mappings: int = 100
-    min_cash_eur: float = 150
+    min_cash_eur: float = 10  # Exclusive floor: CeX must offer more than this.
+    priority_cash_eur: float = 150
     searches_per_run: int = 2
     refreshes_per_run: int = 2
     query_refresh_hours: float = 24
@@ -42,7 +43,8 @@ def load_target_config(path: str | Path = "bestsellers.json") -> TargetConfig:
         enabled=raw.get("enabled") is True,
         max_items=max(1, min(500, int(raw.get("max_items", 300)))),
         max_mappings=max(1, min(100, int(raw.get("max_mappings", 100)))),
-        min_cash_eur=max(1, float(raw.get("min_cash_eur", 150))),
+        min_cash_eur=max(0, float(raw.get("min_cash_eur", 10))),
+        priority_cash_eur=max(0, float(raw.get("priority_cash_eur", 150))),
         searches_per_run=max(0, min(2, int(raw.get("searches_per_run", 2)))),
         refreshes_per_run=max(0, min(2, int(raw.get("refreshes_per_run", 2)))),
         query_refresh_hours=max(24, float(raw.get("query_refresh_hours", 24))),
@@ -101,7 +103,21 @@ def prune_targets(state, options, now):
         rows.sort(key=lambda r: r.get(stamp) or "", reverse=True)
         key = (lambda r: r["quote"]["box_id"]) if field == "items" else (lambda r: r["asin"])
         limit = options.max_items if field == "items" else options.max_mappings
-        state[field] = {key(r): r for r in rows[:limit]}
+        # Broadening discovery must not fill every slot with cheap games and
+        # accessories. Protect two thirds for high-cash items when available;
+        # either group can borrow unused capacity. Requests remain unchanged.
+        def cash(row):
+            prices = cache_price(row if field == "items" else row.get("cex_quote_cache"))
+            return prices.cash_eur if prices else 0
+        if field == "items":
+            rows = [r for r in rows if cash(r) > options.min_cash_eur]
+        # Keep unavailable/error mapping records so an older section cannot
+        # resurrect a cash quote invalidated by a more recent box refresh.
+        preferred = [r for r in rows if cash(r) >= options.priority_cash_eur]
+        selected = preferred[:(limit * 2 + 2) // 3]
+        seen = {key(r) for r in selected}
+        selected += [r for r in rows if key(r) not in seen][:limit - len(selected)]
+        state[field] = {key(r): r for r in selected}
     state["generated_at"] = now.isoformat()
 
 
@@ -110,6 +126,12 @@ async def discover_targets(state, options, config, client, run_state, *, now=Non
     now = now or datetime.now(timezone.utc)
     if not options.enabled or not config.cex_enabled:
         return
+    if state.get("cash_floor_eur") != options.min_cash_eur:
+        # Revisit old queries after a scope change without bypassing backoff
+        # or the two-search allowance. Don't wait a day on the old €150 filter.
+        state["queries"] = {q: {"last_error_at": r["last_error_at"]}
+                            for q, r in state["queries"].items() if r.get("last_error_at")}
+        state["cash_floor_eur"] = options.min_cash_eur
     queries = sorted(options.queries, key=lambda q: state["queries"].get(q, {}).get("checked_at") or "")
     used = 0
     for query in queries:
@@ -138,7 +160,7 @@ async def discover_targets(state, options, config, client, run_state, *, now=Non
                     retail = float(hit.get("sellPrice") or 0)
                 except (ValueError, TypeError, OverflowError):
                     continue
-                if not box_id or not title or not options.min_cash_eur <= cash < float("inf"):
+                if not box_id or not title or not options.min_cash_eur < cash < float("inf"):
                     continue
                 prices = cex_ie.CexPrices(box_id, title, hit.get("categoryName"), cash, 0,
                                          retail, cex_ie.product_url(box_id), catalog_barcodes(hit),
@@ -219,7 +241,7 @@ def sync_mappings(state, sections, options, *, now=None):
             cache = prior["cex_quote_cache"]
         prices = cache_price(cache)
         if (not prices or cache.get("source") == "catalogue_search" or
-                prices.cash_eur < options.min_cash_eur or not exact_target_match(row, prices) or
+                prices.cash_eur <= options.min_cash_eur or not exact_target_match(row, prices) or
                 not row.get("identity_checked_at")):
             continue
         state["mappings"][asin] = {
@@ -261,16 +283,17 @@ async def refresh_mapped_quotes(state, options, config, client, run_state, *, no
         run_state["mapped_quote_refreshes"] = run_state.get("mapped_quote_refreshes", 0) + 1
 
 
-def watch_rows(state, config, *, now=None):
+def watch_rows(state, config, *, now=None, options=None):
     now = now or datetime.now(timezone.utc)
     policy = load_alert_policy()
+    options = options or load_target_config()
     rows = []
     for mapping in state.get("mappings", {}).values():
         if relevance(mapping)[1] == "explicitly_excluded_brand":
             continue
         cache = mapping.get("cex_quote_cache") or {}
         prices = cache_price(cache)
-        if (not prices or cache.get("source") == "catalogue_search" or
+        if (not prices or prices.cash_eur <= options.min_cash_eur or cache.get("source") == "catalogue_search" or
                 not _recent(mapping.get("last_seen_at"), now) or not exact_target_match(mapping, prices)):
             continue
         row = build_cex_row(mapping, prices,

@@ -59,6 +59,20 @@ class TestAmazonGeneralDrops(unittest.TestCase):
             again = process_crawl(scan(65), self.config)
         self.assertAlmostEqual(again.general_drops[0]["drop_percent"], 35.0)
 
+    def test_expensive_branded_item_crash_alerts_without_cex_buying_it(self):
+        self.config.cex_enabled = False
+        def coffee(price):
+            result = scan(price)
+            result.items[ASIN][0].title = 'Sage Barista Espresso Machine'
+            return result
+        for _ in range(3):
+            process_crawl(coffee(800), self.config)
+        result = process_crawl(coffee(85), self.config, allow_alerts=True)
+        self.assertTrue(result.alerts)
+        self.assertEqual(result.cex_lookups, [])
+        payload = export_deals(coffee(85), result, github_repo='example/tracker', config=self.config)
+        self.assertTrue(payload['general_drops'][0]['resale_eligible'])
+
     def test_section_scoping_preserves_general_threshold(self):
         self.config.general_drop_percent = 18
         sections = [CrawlSection("gaming", "Gaming", []), CrawlSection("home", "Home", [])]

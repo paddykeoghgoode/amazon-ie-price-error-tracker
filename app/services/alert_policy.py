@@ -22,7 +22,9 @@ class AlertPolicy:
     # reductions qualify when no stable Amazon history is available.
     min_list_drop_percent: float = 75.0
     min_list_saving_eur: float = 250.0
-    min_cex_buy_price_eur: float = 100.0
+    # CeX resale is assessed by exact identity and net profit, independently
+    # of the high-ticket Amazon-drop floor. A genuine error can be very cheap.
+    min_cex_buy_price_eur: float = 0.01
     min_cex_cash_profit_eur: float = 45.0
     min_cex_roi_percent: float = 25.0
     max_alerts_per_run: int = 3

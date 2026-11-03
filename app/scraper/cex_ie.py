@@ -307,7 +307,7 @@ async def search_boxes(client: httpx.AsyncClient, query: str, *, hits_per_page: 
     if page:
         body["page"] = max(0, int(page))
     if min_cash_eur is not None:
-        body["numericFilters"].append(f"cashBuyPrice>={float(min_cash_eur):g}")
+        body["numericFilters"].append(f"cashBuyPrice>{float(min_cash_eur):g}")
     headers = {
         **CEX_HEADERS,
         "X-Algolia-Application-Id": ALGOLIA_APP_ID,
