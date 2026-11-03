@@ -103,7 +103,7 @@
 
   <section class="card">
     <h2>High-ticket &amp; rapid drops</h2>
-    <p class="hint">Expensive items (≥€100) with ≥45% off their reference, or ≥€80 items that fell ≥20% since the last scan. Includes Movers &amp; Shakers / Most Wished feeds, not only bestseller charts.</p>
+    <p class="hint">Research feed for observed expensive/rapid discounts. Telegram uses stricter high-value and saving requirements than this table. Seller/checkout price not verified.</p>
     <div class="table-wrap">
       <table id="premium-table" hidden>
         <thead>
@@ -140,6 +140,24 @@
           <option value="40">40% or more</option>
           <option value="50">50% or more</option>
           <option value="75">75% or more</option>
+        </select>
+      </label>
+      <label class="drop-control">Minimum Amazon price
+        <select id="drop-min-price" aria-label="Minimum current product price">
+          <option value="0" selected>All prices</option>
+          <option value="50">€50+</option>
+          <option value="100">€100+</option>
+          <option value="200">€200+</option>
+          <option value="400">€400+</option>
+        </select>
+      </label>
+      <label class="drop-control">Minimum euro saving
+        <select id="drop-min-saving" aria-label="Minimum amount saved in euros">
+          <option value="0" selected>All savings</option>
+          <option value="25">€25+</option>
+          <option value="50">€50+</option>
+          <option value="100">€100+</option>
+          <option value="200">€200+</option>
         </select>
       </label>
       <label class="drop-control">Section
