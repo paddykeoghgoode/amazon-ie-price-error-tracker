@@ -1,4 +1,4 @@
-name: Fast checks for price-drop leads
+name: Fast checks for CeX targets and price drops
 on:
   schedule:
     # Ten-minute targeted checks, staggered from full/watchlist ticks.
@@ -35,21 +35,22 @@ jobs:
           mkdir -p site
           curl -fsSL "$PAGES_URL/deals.json?t=$(date +%s)" -o site/deals.json || echo '{}' > site/deals.json
           curl -fsSL "$PAGES_URL/hotlist.json?t=$(date +%s)" -o site/previous-hotlist.json || echo '{}' > site/previous-hotlist.json
-      - name: Recheck recent observed price-drop leads
+          curl -fsSL "$PAGES_URL/catalogue.json?t=$(date +%s)" -o site/catalogue.json || echo '{}' > site/catalogue.json
+      - name: Check exact CeX targets and recent drops within twelve pages
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python -m scripts.scan_hotlist --deals site/deals.json --previous site/previous-hotlist.json --output site/hotlist.json
+        run: python -m scripts.scan_hotlist --deals site/deals.json --previous site/previous-hotlist.json --catalogue site/catalogue.json --output site/hotlist.json --limit 12
       - name: Preserve current datasets
         run: |
           curl -fsSL "$PAGES_URL/deals.json?t=$(date +%s)" -o docs/deals.json || echo '{}' > docs/deals.json
           curl -fsSL "$PAGES_URL/data.json?t=$(date +%s)" -o docs/data.json || true
           cp site/hotlist.json docs/hotlist.json
-          curl -fsSL "$PAGES_URL/catalogue.json?t=$(date +%s)" -o docs/catalogue.json || echo '{"sections":{}}' > docs/catalogue.json
+          cp site/catalogue.json docs/catalogue.json
           curl -fsSL "$PAGES_URL/catalogue.csv?t=$(date +%s)" -o docs/catalogue.csv || printf 'section,asin,title,url,category,rank,price_eur\n' > docs/catalogue.csv
       - id: deployment
         uses: ./.github/actions/deploy-tracker-site
         with:
           artifact_name: pages-hotlist-${{ github.run_attempt }}
       - name: Report scan time and counts
-        run: python -c "import json,os; d=json.load(open('docs/hotlist.json')); open(os.environ['GITHUB_STEP_SUMMARY'],'a').write('Hotlist checked %s, price read %s at %s UTC\\n' % (len(d['products']), d['price_read'], d['generated_at']))"
+        run: python -m scripts.scan_summary --input docs/hotlist.json --summary "$GITHUB_STEP_SUMMARY"

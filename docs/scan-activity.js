@@ -21,13 +21,14 @@ function trackerWorkflowRun(run) {
   return SCAN_ACTIVITY_TRACKER_PATHS.has(run.path) ||
     run.name === "Scan and publish tracker" ||
     run.name === "Fast checks for price-drop leads" ||
+    run.name === "Fast checks for CeX targets and price drops" ||
     run.name === "Fast checks for confirmed drops";
 }
 
 function trackerWorkflowName(run) {
   if (run.path === ".github/workflows/hotlist.yml" ||
       String(run.name || "").startsWith("Fast checks")) {
-    return "Priority price-drop checks";
+    return "CeX targets & price-drop checks";
   }
   return run.event === "issues" ? "Watchlist change" : "Watchlist & bestseller tracker";
 }

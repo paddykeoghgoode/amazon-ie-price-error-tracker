@@ -5,6 +5,20 @@ from app.snapshot import read_snapshot
 
 
 def report(data: dict, published: bool = False) -> str:
+    if data.get("scan_kind") == "hotlist":
+        stats = data.get("funnel") or {}
+        lines = ["## CeX targets and fast price checks", "",
+                 f"Checked at {data.get('generated_at')} · {data.get('scan_status')}", "",
+                 "| Stage | Count |", "| --- | ---: |"]
+        for key, label in (("catalogue_skus", "CeX target SKUs"), ("exact_mappings", "Exact ASIN mappings"),
+                           ("fresh_quotes", "Fresh cash quotes"), ("stale_quotes", "Quotes awaiting refresh"),
+                           ("amazon_attempted", "Amazon pages attempted"), ("price_read", "Prices read"),
+                           ("identity_mismatch", "Identity missing or changed"),
+                           ("above_buy_ceiling", "Above profitable buy ceiling"),
+                           ("unreadable", "Unreadable pages"), ("profitable", "Qualifying cash margins"),
+                           ("alerts_sent", "Alerts delivered")):
+            lines.append(f"| {label} | {stats.get(key, 0)} |")
+        return "\n".join(lines) + "\n"
     sections = data.get("sections") or {data.get("section_id", "section"): data}
     name = data.get("last_section_name") or data.get("section_name") or "Bestsellers"
     lines = [
@@ -39,6 +53,14 @@ def report(data: dict, published: bool = False) -> str:
             f"| {int(stats.get('arbitrage') or 0)} |"
         )
         detail = stats.get("detail_checks") or {}
+        first = stats.get("cex_first") or {}
+        if first:
+            details.append(f"\nCeX-first: {first.get('catalogue_skus', 0)} target SKUs; "
+                           f"{first.get('exact_mappings', 0)} exact Amazon mappings; "
+                           f"{first.get('fresh_quotes', 0)} fresh cash quotes. "
+                           f"Used {first.get('catalogue_searches', 0)} catalogue searches and "
+                           f"{first.get('mapped_quote_refreshes', 0)} mapped quote refreshes "
+                           "within the existing CeX allowance.\n")
         if detail:
             details.append(
                 f"\n{section.get('section_name') or sid}: product detail checks "

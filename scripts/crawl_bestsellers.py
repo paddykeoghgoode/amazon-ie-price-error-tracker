@@ -35,6 +35,10 @@ from app.services.premium_drops import spot_check_list_prices
 from app.services.discovery_checks import choose_detail_checks, apply_detail_checks
 from app.services.alert_policy import load_alert_policy
 from app.services.resale_relevance import relevance
+from app.services.cex_targets import (
+    load_target_config, target_state, sync_mappings, refresh_mapped_quotes,
+    discover_targets, attach_target_quotes, target_funnel,
+)
 from app.services.monitor import BROWSER_HEADERS
 from app.services.catalogue import (
     make_section_catalogue, select_check_batch, apply_batch_results,
@@ -166,12 +170,25 @@ async def crawl_section(
         section_name=section_name,
     )
     reuse_cex_metadata(section_catalogue, published_catalogue or {})
+    target_options = load_target_config(args.config)
+    targets = target_state(published_catalogue or {})
+    cex_state: dict = {}
+    started = time.monotonic()
+    priority_section = any(s.id == section_id and s.priority_rotation for s in load_sections(args.config))
+    if target_options.enabled:
+        sync_mappings(targets, list(((published_catalogue or {}).get("sections") or {}).values())
+                      + [section_catalogue], target_options)
+        if priority_section:
+            async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=20.0) as client:
+                await refresh_mapped_quotes(targets, target_options, config, client, cex_state)
+                await discover_targets(targets, target_options, config, client, cex_state)
+        attach_target_quotes(section_catalogue["items"], targets)
     urgent = [
         row["asin"]
         for row in (processed.rapid_drops + processed.premium_drops + processed.drops)
         if (row.get("drop_percent") or 0) >= 25 or float(row.get("price_eur") or 0) >= config.premium_min_price_eur
     ]
-    if any(s.id == section_id and s.priority_rotation for s in load_sections(args.config)):
+    if priority_section:
         seen_urgent = set(urgent)
         keywords = [k.lower() for k in config.cex_priority_keywords]
         # Oldest keyword opportunities progress instead of repeatedly selecting
@@ -193,8 +210,11 @@ async def crawl_section(
     for row in section_catalogue.get("items") or []:
         allowed, reason, brand = relevance(row)
         row.update(resale_eligible=allowed, resale_reason=reason, resale_brand=brand)
-        if allowed:
+        if allowed or (target_options.enabled and row.get("cex_target_box_id") and reason != "explicitly_excluded_brand"):
             relevant_items.append(row)
+    target_candidates = sorted((r for r in relevant_items if r.get("cex_target_box_id")),
+                               key=lambda r: (r.get("last_checked_at") or "", r["asin"]))
+    urgent = [r["asin"] for r in target_candidates[:12]] + urgent
     batch = select_check_batch(
         {**section_catalogue, "items": relevant_items}, limit=config.catalogue_checks_per_run,
         priority_asins=urgent,
@@ -216,16 +236,14 @@ async def crawl_section(
         for row in section_catalogue["items"]
         if row.get("asin") and isinstance(row.get("cex_quote_cache"), dict)
     }
-    cex_state: dict = {}
     lookups: list[dict] = []
     flips: list[dict] = []
     checked_batch: list[dict] = []
-    started = time.monotonic()
     # Small batches and a time budget keep GitHub Actions from timing out.
     # No additional Amazon product-page/seller requests are made here.
     async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=20.0) as client:
         for offset in range(0, len(candidates), 20):
-            if offset and time.monotonic() - started >= config.catalogue_time_budget_seconds:
+            if time.monotonic() - started >= config.catalogue_time_budget_seconds:
                 logger.warning("[%s] CeX research time budget reached; remaining ASINs stay queued", section_id)
                 break
             group = candidates[offset:offset + 20]
@@ -274,6 +292,9 @@ async def crawl_section(
         section_catalogue, checked_batch, [], {}, lookups,
         cex_enabled=config.cex_enabled, quote_cache=quote_cache,
     )
+    if target_options.enabled:
+        sync_mappings(targets, [section_catalogue], target_options)
+        section_catalogue["cex_targets"] = targets
     section_catalogue["checked_this_run"] = len(checked_batch)
     processed.catalogue_stats = catalogue_progress(
         section_catalogue, checked_this_run=len(checked_batch),
@@ -301,6 +322,10 @@ async def crawl_section(
         "provisional_matches": len(lookups),
         "brand_not_prioritised": len(section_catalogue["items"]) - len(relevant_items),
         "detail_checks": detail_stats,
+        "cex_first": {**target_funnel(targets, config),
+                      "catalogue_candidates": len(target_candidates),
+                      "catalogue_searches": cex_state.get("target_searches", 0),
+                      "mapped_quote_refreshes": cex_state.get("mapped_quote_refreshes", 0)},
         "exact_matches": sum(r.get("match_confidence") in ("barcode_verified", "model_verified") for r in lookups),
         "title_only_matches": sum(r.get("match_confidence") == "title_only" for r in lookups),
         "lookups": len(lookups),
@@ -326,6 +351,10 @@ async def crawl_section(
     # alert again; repeatedly rechecking the same price should not spam Telegram.
     catalogue_rows = {row["asin"]: row for row in section_catalogue["items"]}
     def should_send_cex(row: dict) -> bool:
+        # Mapped opportunities have one notification owner: the fast workflow.
+        # It checks today's product-page identity and price before sending.
+        if target_options.enabled and row.get("asin") in targets["mappings"]:
+            return False
         if not row.get("cex_quote_fresh_for_alert"):
             return False
         previous = (catalogue_rows.get(row.get("asin")) or {}).get("last_cex_alert") or {}

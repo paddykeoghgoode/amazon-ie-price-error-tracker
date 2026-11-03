@@ -3,6 +3,8 @@ const LIVE_REFRESH_MS = 90_000;
 
 let lastDataAt = "";
 let lastDealsAt = "";
+let lastDealsSnapshot = {};
+let lastTargetSnapshot = {};
 
 function escapeHtml(s) {
   return String(s)
@@ -617,6 +619,56 @@ function cexStatusLine(deals) {
   return `CeX checked ${attempted} records (cached or live); ${lookups} provisional CeX matches · margin ≥€${minEur} or ≥${minPct}% · ${stats.cash_flips || 0} sale leads · ${stats.arbitrage || 0} other leads. Seller/checkout not verified.`;
 }
 
+function cexTargetView(data, now = Date.now()) {
+  const stats = data.funnel || {};
+  const labels = {
+    profitable: "Meets cash margin", above_buy_ceiling: "Waiting for a lower price",
+    identity_mismatch: "Variant or identifier not confirmed", price_not_read: "Price not read",
+    below_minimum_buy: "Below configured buy-price minimum",
+  };
+  const rows = (data.products || []).filter((row) => row.scan_lane === "cex_target")
+    .sort((a, b) => String(b.checked_at || "").localeCompare(String(a.checked_at || "")))
+    .slice(0, 24).map((row) => {
+      const age = now - Date.parse(row.checked_at);
+      const old = !Number.isFinite(age) || age < 0 || age > 30 * 60 * 1000;
+      return {...row, result_label: old ? "Awaiting a fresh check" : (labels[row.status] || "Research only")};
+    });
+  return {rows,
+    summary: `${Number(stats.catalogue_skus || 0)} CeX target SKUs · ${Number(stats.exact_mappings || 0)} exact Amazon matches · ${Number(stats.fresh_quotes || 0)} fresh cash quotes`,
+    diagnostics: `Last fast scan: ${Number(stats.amazon_attempted || 0)} pages checked, ${Number(stats.price_read || 0)} prices read, ${Number(stats.identity_mismatch || 0)} identity checks failed, ${Number(stats.profitable || 0)} qualifying margins. ${Number(stats.stale_quotes || 0)} quotes awaiting refresh.`,
+  };
+}
+
+function renderCexTargets(data) {
+  const summary = document.getElementById("cex-target-summary");
+  const diagnostics = document.getElementById("cex-target-diagnostics");
+  const body = document.getElementById("cex-target-body");
+  const table = document.getElementById("cex-target-table");
+  if (!summary || !body || !data.funnel) return;
+  lastTargetSnapshot = data;
+  renderOpportunityRadar(lastDealsSnapshot);
+  const view = cexTargetView(data);
+  summary.textContent = view.summary;
+  diagnostics.textContent = view.diagnostics + (data.blocked_until ? ` Provider cooldown until ${fmtTime(data.blocked_until)}.` : "");
+  body.innerHTML = "";
+  table.hidden = !view.rows.length;
+  for (const row of view.rows) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td><a href="https://www.amazon.ie/dp/${encodeURIComponent(row.asin)}" target="_blank" rel="noopener">${escapeHtml(row.title || row.asin)}</a><div class="hint">${escapeHtml(row.cex_title || "")}</div></td>
+      <td class="price">${fmtEuro(row.price_eur)}</td><td class="price">${fmtEuro(row.cex_max_buy_eur)}</td>
+      <td class="price">${fmtEuro(row.cex_cash_profit_eur)}</td><td class="time">${fmtTime(row.checked_at)}<div class="hint">Quote ${fmtTime(row.cex_quote_checked_at)}</div></td>
+      <td>${escapeHtml(row.result_label)}${row.found_at ? `<div class="hint">Found ${fmtTime(row.found_at)}</div>` : ""}</td>`;
+    body.appendChild(tr);
+  }
+}
+
+function loadCexTargets() {
+  return fetch(`hotlist.json?t=${Date.now()}`, {cache: "no-store"})
+    .then((res) => res.ok ? res.json() : null)
+    .then((data) => { if (data) renderCexTargets(data); })
+    .catch(() => {});
+}
+
 function renderNearMargin(bodyId, tableId, rows) {
   const body = document.getElementById(bodyId);
   const table = document.getElementById(tableId);
@@ -957,10 +1009,25 @@ function selectRadarLeads(deals, now = Date.now()) {
   for(const row of [...cex,...drops]) if(row.asin && !byAsin.has(row.asin)) byAsin.set(row.asin,row);
   return {drops,cex,items:[...byAsin.values()].slice(0,6)};
 }
+function mergeFastCex(deals, hotlist, now = Date.now()) {
+  const checked = (hotlist.products || []).filter(row => row.scan_lane === "cex_target" &&
+    Number.isFinite(Date.parse(row.checked_at)) && now >= Date.parse(row.checked_at) &&
+    now - Date.parse(row.checked_at) <= 30 * 60000);
+  const latest = new Map(checked.map(row => [row.asin, row]));
+  const retain = row => !latest.has(row.asin) || Date.parse(latest.get(row.asin).checked_at) <
+    Date.parse(row.observed_at || row.last_scanned_at || deals.generated_at);
+  const profitable = checked.filter(row => row.status === "profitable" &&
+    row.cex_quote_fresh_for_alert === true && Number.isFinite(Date.parse(row.cex_quote_checked_at)) &&
+    now >= Date.parse(row.cex_quote_checked_at) && now - Date.parse(row.cex_quote_checked_at) <= 12 * 3600000)
+    .map(row => ({...row, observed_at: row.checked_at}));
+  return {...deals, cex_flips: (deals.cex_flips || []).filter(retain),
+    cex_arbitrage: [...profitable, ...(deals.cex_arbitrage || []).filter(retain)]};
+}
+
 function renderOpportunityRadar(deals) {
   const root = document.getElementById("radar-cards");
   if (!root) return;
-  const result = selectRadarLeads(deals);
+  const result = selectRadarLeads(mergeFastCex(deals, lastTargetSnapshot));
   const p = deals.alert_policy || {};
   document.getElementById("radar-drop-count").textContent = String(result.drops.length);
   document.getElementById("radar-cex-count").textContent = String(result.cex.length);
@@ -1021,6 +1088,7 @@ function researchLogRows(deals, includeUnrecognised = false) {
 
 function renderDeals(deals) {
   if (!deals || !deals.generated_at) return;
+  lastDealsSnapshot = deals;
   const summary = document.getElementById("deals-summary");
   const fresh = sectionFreshness(deals);
   summary.textContent =
@@ -1093,6 +1161,7 @@ fetch(`deals.json?t=${Date.now()}`, { cache: "no-store" })
   .catch(() => {});
 
 function refreshIfChanged() {
+  loadCexTargets();
   Promise.all([
     fetch(`data.json?t=${Date.now()}`, { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
@@ -1124,3 +1193,4 @@ loadData()
   });
 
 setInterval(refreshIfChanged, LIVE_REFRESH_MS);
+loadCexTargets();
