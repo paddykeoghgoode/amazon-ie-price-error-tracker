@@ -163,6 +163,29 @@ The defaults in `bestsellers.json` now use `cex_extra_cost_eur: 5` and `cex_payo
 
 A listing match is still heuristic. Check the exact variant, whether the Amazon listing is physical and new, Ireland delivery and final checkout total, CeX's current cash quote and store acceptance conditions before spending money.
 
+## Live GitHub Actions activity on the dashboard
+
+The **Overview → Live scan activity** panel uses GitHub's **public** Actions REST API
+(no GitHub token in the browser) to show the newest tracker and priority-drop
+runs, including **queued**, **running**, **completed**, **failed** or **cancelled**.
+Each card links directly to its GitHub Actions run and shows the current
+job/step when GitHub reports it.
+
+**Percentage is workflow-step completion, not product scan progress.**
+For example, the "Crawl bestseller section" step may take several minutes;
+the percentage will stay unchanged while products are processed. Newly
+created matrix jobs can change the set of steps. The dashboard therefore
+labels the denominator as *reported* steps and never invents an ASIN-count
+completion percentage. If detailed job data is not available, the card says so
+and links to GitHub instead of showing a false number.
+
+The dashboard checks recent workflow runs about every **2½ minutes**, but
+fetches the heavier per-run job details no more often than every **4 minutes**,
+for at most two active runs. This is deliberate to avoid exceeding the
+unauthenticated GitHub API rate limit. If GitHub rate-limits the browser,
+the panel keeps the last fetched state and reports that the status may be
+delayed. Scheduled scans and publishing continue independently.
+
 ## Automatic scan schedule (UTC)
 
 | Scan | Scheduled times (UTC) | Target frequency |
