@@ -920,6 +920,39 @@ function renderPremiumDrops(deals) {
   }
 }
 
+function selectRadarLeads(deals, now = Date.now()) {
+  const config = deals.alert_policy || {};
+  const threshold = (key, fallback) => {
+    const value = Number(config[key]);
+    return config[key] != null && Number.isFinite(value) ? value : fallback;
+  };
+  const drops = (deals.general_drops || deals.drops || []).filter(row => {
+    const nowPrice = Number(row.price_eur);
+    const reference = Number(row.reference_eur ?? row.median_eur);
+    const saved = reference - nowPrice;
+    const observed = Date.parse(row.last_scanned_at || row.observed_at || deals.last_section_at || deals.generated_at);
+    return Number.isFinite(nowPrice) && Number.isFinite(reference) && reference > nowPrice &&
+      nowPrice >= threshold("min_amazon_price_eur",120) &&
+      reference >= threshold("min_reference_eur",250) &&
+      saved >= threshold("min_saving_eur",120) &&
+      (100 * saved/reference) >= threshold("min_history_drop_percent",50) &&
+      Number.isFinite(observed) && now >= observed && now-observed <= 12*3600000;
+  }).map(row => ({...row, radar_type:"drop", radar_value:Number(row.reference_eur ?? row.median_eur)-Number(row.price_eur)}));
+  const cex = [...(deals.cex_flips || []),...(deals.cex_arbitrage || [])].filter(row => {
+    const observed=Date.parse(row.observed_at || row.last_scanned_at || deals.last_section_at || deals.generated_at);
+    return Number(row.price_eur) >= threshold("min_cex_buy_price_eur",100) &&
+      Number(row.cex_cash_profit_eur) >= threshold("min_cex_cash_profit_eur",45) &&
+      Number(row.cex_net_roi_percent) >= threshold("min_cex_roi_percent",25) &&
+      ["barcode_verified","model_verified"].includes(row.match_confidence) &&
+      row.cex_quote_fresh_for_alert === true && row.cex_cash_flip !== false &&
+      Number.isFinite(observed) && now >= observed && now-observed <= 12*3600000;
+  }).map(row => ({...row, radar_type:"cex",radar_value:Number(row.cex_cash_profit_eur)}));
+  drops.sort((a,b)=>b.radar_value-a.radar_value);
+  cex.sort((a,b)=>b.radar_value-a.radar_value);
+  const byAsin = new Map();
+  for(const row of [...cex,...drops]) if(row.asin && !byAsin.has(row.asin)) byAsin.set(row.asin,row);
+  return {drops,cex,items:[...byAsin.values()].slice(0,6)};
+}
 function renderDeals(deals) {
   if (!deals || !deals.generated_at) return;
   const summary = document.getElementById("deals-summary");
@@ -972,6 +1005,7 @@ function renderDeals(deals) {
       `${Number(progress.cex_matched || 0).toLocaleString("en-IE")} confirmed CeX matches.`;
   }
   renderGeneralDrops(deals);
+  renderOpportunityRadar(deals);
   renderDeepDrops(deals);
   renderCex(deals);
   renderCexArbitrage(deals);
