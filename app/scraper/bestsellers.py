@@ -26,11 +26,13 @@ class BestsellerPage:
 
 
 def normalize_category_path(value: str) -> str:
-    """Accept 'home', '/gp/bestsellers/home/123', or a full amazon.ie URL."""
+    """Accept bestseller paths, movers-and-shakers, most-wished-for, or full URLs."""
     text = value.strip()
     if text.startswith(AMAZON_IE_BASE):
         text = text[len(AMAZON_IE_BASE):]
     text = text.split("?")[0].split("/ref=")[0].rstrip("/")
+    if text.startswith("/gp/movers-and-shakers") or text.startswith("/gp/most-wished-for"):
+        return text or "/gp/movers-and-shakers"
     if not text.startswith("/"):
         text = f"/gp/bestsellers/{text}" if text else "/gp/bestsellers"
     return text
@@ -76,9 +78,8 @@ def _item_from_block(block) -> BestsellerItem | None:
 def _child_paths(soup: BeautifulSoup) -> list[str]:
     out: list[str] = []
     seen: set[str] = set()
-    for a in soup.select('div[role="group"] a[href*="/gp/bestsellers"]'):
+    for a in soup.select('div[role="group"] a[href*="/gp/bestsellers"], div[role="group"] a[href*="/gp/movers-and-shakers"], div[role="group"] a[href*="/gp/most-wished-for"]'):
         href = a.get("href") or ""
-        # Children use ref=zg_bs_nav_*; parents up the tree use ref=zg_bs_unv_*.
         if "zg_bs_nav" not in href:
             continue
         path = normalize_category_path(href)

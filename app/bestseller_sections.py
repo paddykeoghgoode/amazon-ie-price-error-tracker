@@ -23,6 +23,7 @@ def _parse_categories(entries: list) -> list[CategoryRoot]:
             path=normalize_category_path(entry["path"] if isinstance(entry, dict) else entry),
             depth=int(entry.get("depth", 1)) if isinstance(entry, dict) else 1,
             name=entry.get("name") if isinstance(entry, dict) else None,
+            pages=int(entry["pages"]) if isinstance(entry, dict) and entry.get("pages") is not None else None,
         )
         for entry in entries
     ]
@@ -65,8 +66,15 @@ def config_for_section(base: CrawlConfig, section: CrawlSection) -> CrawlConfig:
     """Return a copy of base config scoped to one section."""
     max_items = section.max_items if section.max_items is not None else max(2000, base.max_items // 4)
     max_requests = section.max_requests if section.max_requests is not None else max(150, base.max_requests // 4)
+    roots: list[CategoryRoot] = []
+    seen: set[str] = set()
+    for root in list(base.discovery_feeds) + list(section.categories):
+        if root.path in seen:
+            continue
+        seen.add(root.path)
+        roots.append(root)
     return CrawlConfig(
-        roots=list(section.categories),
+        roots=roots,
         exclude=set(base.exclude),
         max_items=max_items,
         max_requests=max_requests,
@@ -78,6 +86,14 @@ def config_for_section(base: CrawlConfig, section: CrawlSection) -> CrawlConfig:
         baseline_max_age_days=base.baseline_max_age_days,
         report_drop_percent=base.report_drop_percent,
         general_drop_percent=base.general_drop_percent,
+        premium_min_price_eur=base.premium_min_price_eur,
+        premium_history_drop_percent=base.premium_history_drop_percent,
+        rapid_drop_min_price_eur=base.rapid_drop_min_price_eur,
+        rapid_drop_percent=base.rapid_drop_percent,
+        rapid_drop_min_saving_eur=base.rapid_drop_min_saving_eur,
+        premium_spot_check_limit=base.premium_spot_check_limit,
+        premium_alerts_per_run=base.premium_alerts_per_run,
+        discovery_feeds=list(base.discovery_feeds),
         daily_summary_hour=base.daily_summary_hour,
         deep_drop_tiers=list(base.deep_drop_tiers),
         cex_enabled=base.cex_enabled,
@@ -130,6 +146,14 @@ def config_for_all_sections(base: CrawlConfig, sections: list[CrawlSection]) -> 
         baseline_max_age_days=base.baseline_max_age_days,
         report_drop_percent=base.report_drop_percent,
         general_drop_percent=base.general_drop_percent,
+        premium_min_price_eur=base.premium_min_price_eur,
+        premium_history_drop_percent=base.premium_history_drop_percent,
+        rapid_drop_min_price_eur=base.rapid_drop_min_price_eur,
+        rapid_drop_percent=base.rapid_drop_percent,
+        rapid_drop_min_saving_eur=base.rapid_drop_min_saving_eur,
+        premium_spot_check_limit=base.premium_spot_check_limit,
+        premium_alerts_per_run=base.premium_alerts_per_run,
+        discovery_feeds=list(base.discovery_feeds),
         daily_summary_hour=base.daily_summary_hour,
         deep_drop_tiers=list(base.deep_drop_tiers),
         cex_enabled=base.cex_enabled,

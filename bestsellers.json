@@ -200,5 +200,38 @@
   "cex_error_retry_hours": 6,
   "cex_alert_quote_max_age_hours": 12,
   "cex_request_delay_seconds": 0.75,
-  "general_drop_percent": 10
+  "general_drop_percent": 10,
+  "premium_min_price_eur": 100,
+  "premium_history_drop_percent": 45,
+  "rapid_drop_min_price_eur": 80,
+  "rapid_drop_percent": 20,
+  "rapid_drop_min_saving_eur": 30,
+  "premium_spot_check_limit": 6,
+  "premium_alerts_per_run": 8,
+  "discovery_feeds": [
+    {
+      "name": "Movers & shakers",
+      "path": "/gp/movers-and-shakers",
+      "depth": 1,
+      "pages": 2
+    },
+    {
+      "name": "Movers electronics",
+      "path": "/gp/movers-and-shakers/electronics",
+      "depth": 0,
+      "pages": 2
+    },
+    {
+      "name": "Most wished electronics",
+      "path": "/gp/most-wished-for/electronics",
+      "depth": 0,
+      "pages": 1
+    },
+    {
+      "name": "Most wished computers",
+      "path": "/gp/most-wished-for/computers",
+      "depth": 0,
+      "pages": 1
+    }
+  ]
 }

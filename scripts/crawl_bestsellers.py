@@ -29,7 +29,7 @@ from app.services.bestsellers import (
     send_notification,
 )
 from app.services.cex_arbitrage import enrich_with_cex
-from app.services.health import send_health_messages
+from app.services.premium_drops import spot_check_list_prices
 from app.services.monitor import BROWSER_HEADERS
 from app.services.catalogue import (
     make_section_catalogue, select_check_batch, apply_batch_results,
@@ -128,6 +128,8 @@ async def send_section_summary(section_name: str, payload: dict, dashboard_url: 
     message = (
         f"✅ {section_name} bestseller scan done\n\n"
         f"Possible price-error leads this section: {alerts}\n"
+        f"High-ticket / rapid drops: {len(payload.get('premium_drops') or [])} premium · "
+        f"{len(payload.get('rapid_drops') or [])} rapid\n"
         f"Possible CeX profit leads: {flips} (on sale) · {arb} (other)\n"
         f"Catalogue processed: {int((payload.get('catalogue_stats') or {}).get('checked') or 0):,} / "
         f"{int((payload.get('catalogue_stats') or {}).get('priced') or 0):,} priced listings\n"
@@ -163,13 +165,31 @@ async def crawl_section(
     # verification is intentionally DISABLED: it is not an eligibility gate
     # for price-drop leads, CeX matching or Telegram research alerts.
     processed = process_crawl(result, config, allow_alerts=True)
+    spot_rows = (
+        processed.rapid_drops
+        + processed.premium_drops
+        + [d for d in processed.drops if float(d.get("price_eur") or 0) >= config.premium_min_price_eur]
+    )
+    async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=30.0) as spot_client:
+        spot_alerts = await spot_check_list_prices(
+            spot_client,
+            spot_rows,
+            config=config,
+            allow_alerts=notify,
+            delay_seconds=config.request_delay_seconds,
+        )
+        processed.alerts.extend(spot_alerts)
     section_catalogue = make_section_catalogue(
         result,
         previous_catalogue_section,
         section_id=section_id,
         section_name=section_name,
     )
-    urgent = [row["asin"] for row in processed.drops if (row.get("drop_percent") or 0) >= 30]
+    urgent = [
+        row["asin"]
+        for row in (processed.rapid_drops + processed.premium_drops + processed.drops)
+        if (row.get("drop_percent") or 0) >= 25 or float(row.get("price_eur") or 0) >= config.premium_min_price_eur
+    ]
     batch = select_check_batch(
         section_catalogue, limit=config.catalogue_checks_per_run,
         priority_asins=urgent,
@@ -295,6 +315,14 @@ async def crawl_section(
             }
 
     if notify:
+        seen_alert_asins: set[str] = set()
+        unique_alerts: list = []
+        for alert in processed.alerts:
+            if alert.asin in seen_alert_asins:
+                continue
+            seen_alert_asins.add(alert.asin)
+            unique_alerts.append(alert)
+        processed.alerts = unique_alerts
         if processed.alerts:
             await send_alerts(processed.alerts, config, details_url=dashboard_url)
         if processed.cex_flips:

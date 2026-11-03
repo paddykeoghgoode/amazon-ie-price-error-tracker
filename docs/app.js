@@ -886,6 +886,40 @@ document.getElementById("catalogue-next")?.addEventListener("click", () => {
   renderCataloguePage();
 });
 
+function renderPremiumDrops(deals) {
+  const rows = [...(deals.premium_drops || []), ...(deals.rapid_drops || [])].sort(
+    (a, b) => (b.drop_percent || 0) - (a.drop_percent || 0)
+  );
+  const table = document.getElementById("premium-table");
+  const body = document.getElementById("premium-body");
+  const empty = document.getElementById("premium-empty");
+  if (!body) return;
+  body.innerHTML = "";
+  if (!rows.length) {
+    if (table) table.hidden = true;
+    if (empty) empty.hidden = false;
+    return;
+  }
+  if (empty) empty.hidden = true;
+  if (table) table.hidden = false;
+  for (const d of rows.slice(0, 25)) {
+    const kind =
+      d.drop_kind === "rapid_scan"
+        ? "Rapid (since last scan)"
+        : d.drop_kind === "premium_history"
+          ? "Premium vs reference"
+          : d.drop_kind || "Drop";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><a href="${escapeHtml(d.url)}" target="_blank" rel="noopener">${escapeHtml(d.title || d.asin)}</a><div class="hint">${escapeHtml(d.category || "")}</div></td>
+      <td class="price">${fmtEuro(d.price_eur)}</td>
+      <td class="was">${fmtEuro(d.reference_eur || d.median_eur)}</td>
+      <td>${escapeHtml(String(d.drop_percent))}%</td>
+      <td>${escapeHtml(kind)}</td>`;
+    body.appendChild(tr);
+  }
+}
+
 function renderDeals(deals) {
   if (!deals || !deals.generated_at) return;
   const summary = document.getElementById("deals-summary");
@@ -925,6 +959,7 @@ function renderDeals(deals) {
     body.appendChild(tr);
   }
   renderSectionProgress(deals);
+  renderPremiumDrops(deals);
   const overview = document.getElementById("catalogue-overview");
   const progress = deals.catalogue_stats || {};
   if (overview && progress.discovered != null) {
