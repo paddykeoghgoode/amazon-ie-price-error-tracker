@@ -264,3 +264,57 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 @media (max-width: 640px) {
   .retail-inputs { grid-template-columns: 1fr; }
 }
+
+
+/* Live GitHub Actions progress. Percentages are steps, not product counts. */
+.scan-activity-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.scan-activity-head h2 { margin-bottom: 0.4rem; }
+.scan-activity-head .hint { margin: 0 0 0.7rem; }
+.scan-activity-head > a { font-size: 0.85rem; flex: 0 0 auto; }
+.scan-activity-list { display: grid; gap: 0.7rem; }
+.scan-run {
+  border: 1px solid #39495f;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  background: #151e2c;
+  min-width: 0;
+}
+.scan-run-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.scan-run-head > a { font-weight: 650; }
+.scan-run-head .badge { margin-left: auto; }
+.scan-run-subtitle { margin: 0.55rem 0 0.4rem; color: var(--muted); font-size: 0.85rem; }
+.scan-run-step { margin: 0.3rem 0; color: #c2d5ed; font-size: 0.85rem; }
+.scan-progress-line { display: flex; align-items: center; gap: 0.75rem; }
+.scan-progress-line strong { min-width: 3rem; text-align: right; font-variant-numeric: tabular-nums; }
+.scan-progress-line progress {
+  width: 100%;
+  flex: 1;
+  min-width: 0;
+  height: 0.85rem;
+  appearance: none;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #2b3648;
+}
+.scan-progress-line progress::-webkit-progress-bar { background: #2b3648; border-radius: 999px; }
+.scan-progress-line progress::-webkit-progress-value { background: var(--accent); border-radius: 999px; }
+.scan-progress-line progress::-moz-progress-bar { background: var(--accent); border-radius: 999px; }
+.scan-activity-disclaimer { border-top: 1px solid #37475c; padding-top: 0.7rem; }
+.scan-run .badge.running { color: #ffd29a; background: rgba(255,153,0,0.16); }
+.scan-run .badge.queued { color: #becce1; background: rgba(153,172,198,0.15); }
+.scan-run .badge.failed { color: #ff9a9c; background: rgba(255,77,79,0.17); }
+@media (max-width: 640px) {
+  .scan-run { padding: 0.75rem; }
+  .scan-run-head .badge { margin-left: 0; }
+}

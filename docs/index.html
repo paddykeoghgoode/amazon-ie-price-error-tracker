@@ -27,6 +27,18 @@
   </nav>
   <main id="tracker-main">
     <div role="tabpanel" id="panel-overview" aria-labelledby="tab-overview">
+  <section class="card scan-activity" aria-labelledby="scan-activity-title">
+    <div class="scan-activity-head">
+      <div>
+        <h2 id="scan-activity-title">Live scan activity</h2>
+        <p class="hint">GitHub Actions status for the bestseller, watchlist and fast price-drop checks.</p>
+      </div>
+      <a href="https://github.com/paddykeoghgoode/amazon-ie-price-error-tracker/actions" target="_blank" rel="noopener">View all runs</a>
+    </div>
+    <p id="scan-activity-summary" role="status" aria-live="polite" class="hint">Checking GitHub Actions…</p>
+    <div id="scan-activity-runs" class="scan-activity-list" aria-label="Recent tracker workflow runs"></div>
+    <p class="hint scan-activity-disclaimer">Percentage means <strong>GitHub Actions workflow steps completed</strong> in jobs reported so far, <strong>not</strong> the percentage of Amazon products scanned. A scan can remain at the same percentage while processing a large section. Status refreshes about every 2½ minutes; step details refresh less frequently to respect GitHub's API limits.</p>
+  </section>
   <section class="card">
     <h2>Section scan progress</h2>
     <p class="hint">Each block publishes independently. Times are Ireland time. Seller verification is disabled; Amazon prices are observed from bestseller pages. CeX work is bounded and cached.</p>
@@ -309,5 +321,6 @@ https://www.harveynorman.ie/..." form="add-form"></textarea>
   </footer>
 
   <script src="app.js"></script>
+  <script src="scan-activity.js"></script>
 </body>
 </html>
