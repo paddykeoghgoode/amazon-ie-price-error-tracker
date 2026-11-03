@@ -71,6 +71,7 @@ def make_section_catalogue(
             "category": category,
             "rank": item.rank,
             "price_eur": price,
+            "review_count": item.review_count,
             "active": True,
             "first_seen_at": prior.get("first_seen_at") or stamp,
             "last_seen_at": stamp,
@@ -124,6 +125,30 @@ def make_section_catalogue(
         "generated_at": stamp,
         "items": items,
     }
+
+
+def reuse_cex_metadata(section: dict, published: dict) -> None:
+    """Reuse quotes and delivered-alert fingerprints across overlapping sections."""
+    def stamp(value: str | None) -> datetime:
+        try:
+            parsed = datetime.fromisoformat(value or "")
+            if parsed.tzinfo is not None:
+                return parsed.astimezone(timezone.utc)
+        except (ValueError, TypeError):
+            pass
+        return datetime.min.replace(tzinfo=timezone.utc)
+
+    current = {row.get("asin"): row for row in section.get("items") or []}
+    for prior_section in (published.get("sections") or {}).values():
+        for prior in prior_section.get("items") or []:
+            row = current.get(prior.get("asin"))
+            if row is None or row.get("title") != prior.get("title"):
+                continue
+            for field, timestamp in (("cex_quote_cache", "checked_at"), ("last_cex_alert", "sent_at")):
+                candidate = prior.get(field) or {}
+                existing = row.get(field) or {}
+                if stamp(candidate.get(timestamp)) > stamp(existing.get(timestamp)):
+                    row[field] = dict(candidate)
 
 
 def select_check_batch(

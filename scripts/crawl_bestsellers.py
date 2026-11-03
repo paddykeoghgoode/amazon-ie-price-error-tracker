@@ -15,6 +15,7 @@ from app.bestseller_sections import (
     config_for_all_sections,
     config_for_section,
     load_sections,
+    next_priority_section,
     rotate_section_id,
 )
 from app.config import settings
@@ -36,6 +37,7 @@ from app.services.monitor import BROWSER_HEADERS
 from app.services.catalogue import (
     make_section_catalogue, select_check_batch, apply_batch_results,
     catalogue_progress, merge_catalogue,
+    reuse_cex_metadata,
 )
 from app.snapshot import read_snapshot, write_snapshot
 
@@ -91,6 +93,10 @@ def resolve_section_id(args: argparse.Namespace, sections: list) -> str:
         if previous_path and previous_path.exists():
             try:
                 previous = read_snapshot(previous_path)
+                priority_id = next_priority_section(sections, previous)
+                if priority_id is not None:
+                    logger.info("Priority rotation selected %s from published checkpoints", priority_id)
+                    return priority_id
                 ordered = [s.id for s in sections if s.id != "all"]
                 last_id = previous.get("last_section_id")
                 if last_id not in ordered:
@@ -116,7 +122,7 @@ def resolve_section_id(args: argparse.Namespace, sections: list) -> str:
         run_no = args.run_number
         if run_no is None:
             run_no = int(os.environ.get("GITHUB_RUN_NUMBER", "0") or 0)
-        return rotate_section_id(sections, run_no)
+        return next_priority_section(sections, {}) or rotate_section_id(sections, run_no)
     if args.section == "all":
         return "all"
     return args.section
@@ -130,6 +136,7 @@ async def crawl_section(
     args: argparse.Namespace,
     notify: bool,
     previous_catalogue_section: dict | None = None,
+    published_catalogue: dict | None = None,
 ) -> tuple[dict, dict]:
     async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=30.0) as client:
         result = await crawl(httpx_fetcher(client), config)
@@ -142,6 +149,9 @@ async def crawl_section(
         result.blocked,
         len(result.items),
     )
+
+    if result.blocked:
+        raise RuntimeError(f"[{section_id}] Amazon blocked the crawl; preserve published checkpoint")
 
     # One scan of bestseller pages records thousands of observed prices. Seller
     # verification is intentionally DISABLED: it is not an eligibility gate
@@ -170,11 +180,30 @@ async def crawl_section(
         section_id=section_id,
         section_name=section_name,
     )
+    reuse_cex_metadata(section_catalogue, published_catalogue or {})
     urgent = [
         row["asin"]
         for row in (processed.rapid_drops + processed.premium_drops + processed.drops)
         if (row.get("drop_percent") or 0) >= 25 or float(row.get("price_eur") or 0) >= config.premium_min_price_eur
     ]
+    if any(s.id == section_id and s.priority_rotation for s in load_sections(args.config)):
+        seen_urgent = set(urgent)
+        keywords = [k.lower() for k in config.cex_priority_keywords]
+        # Oldest keyword opportunities progress instead of repeatedly selecting
+        # the first bestseller cards; expensive items win ties.
+        keyword_rows = sorted(section_catalogue.get("items") or [], key=lambda r: (
+            bool(r.get("last_checked_at")), r.get("last_checked_at") or "",
+            -float(r.get("price_eur") or 0),
+        ))
+        for row in keyword_rows:
+            if not row.get("active", True) or row.get("price_eur") is None:
+                continue
+            hay = f"{row.get('title') or ''} {row.get('category') or ''}".lower()
+            if any(k in hay for k in keywords) and row["asin"] not in seen_urgent:
+                urgent.append(row["asin"])
+                seen_urgent.add(row["asin"])
+            if len(urgent) >= 45:
+                break
     batch = select_check_batch(
         section_catalogue, limit=config.catalogue_checks_per_run,
         priority_asins=urgent,
@@ -369,6 +398,7 @@ async def run(args: argparse.Namespace) -> None:
                 config, section_id=section.id, section_name=section.name,
                 args=args, notify=notify,
                 previous_catalogue_section=existing_sections.get(section.id),
+                published_catalogue=complete_catalogue,
             )
             merged = merge_section_deals(merged, part)
             complete_catalogue = merge_catalogue(complete_catalogue, section_inventory)
@@ -389,6 +419,7 @@ async def run(args: argparse.Namespace) -> None:
             args=args,
             notify=notify,
             previous_catalogue_section=existing_sections.get(section.id),
+            published_catalogue=previous_catalogue,
         )
         if not args.publish_fragment and args.merge_previous and args.merge_previous.exists():
             previous = read_snapshot(args.merge_previous)

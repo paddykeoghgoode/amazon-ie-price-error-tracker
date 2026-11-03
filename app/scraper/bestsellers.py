@@ -15,6 +15,7 @@ class BestsellerItem:
     price_eur: float | None
     rank: int | None
     url: str
+    review_count: int | None = None
 
 
 @dataclass
@@ -48,6 +49,23 @@ def _category_name(soup: BeautifulSoup) -> str | None:
     return None
 
 
+def _review_count_from_block(block) -> int | None:
+    for el in block.select("[aria-label]"):
+        label = el.get("aria-label") or ""
+        m = re.search(r"([\d][\d,.\s]*\d|\d)\s+(?:ratings|reviews)\b", label, re.I)
+        if m:
+            digits = re.sub(r"[^\d]", "", m.group(1))
+            if digits:
+                return int(digits)
+    text = block.get_text(" ", strip=True)
+    m = re.search(r"([\d][\d,.\s]*\d|\d)\s+(?:ratings|reviews)\b", text, re.I)
+    if m:
+        digits = re.sub(r"[^\d]", "", m.group(1))
+        if digits:
+            return int(digits)
+    return None
+
+
 def _item_from_block(block) -> BestsellerItem | None:
     asin = (block.get("data-asin") or "").strip().upper()
     if not re.fullmatch(r"[A-Z0-9]{10}", asin):
@@ -72,7 +90,14 @@ def _item_from_block(block) -> BestsellerItem | None:
         m = re.search(r"\d+", rank_el.get_text())
         rank = int(m.group()) if m else None
 
-    return BestsellerItem(asin=asin, title=title, price_eur=price, rank=rank, url=normalize_product_url(asin))
+    return BestsellerItem(
+        asin=asin,
+        title=title,
+        price_eur=price,
+        rank=rank,
+        url=normalize_product_url(asin),
+        review_count=_review_count_from_block(block),
+    )
 
 
 def _child_paths(soup: BeautifulSoup) -> list[str]:

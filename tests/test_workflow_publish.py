@@ -24,7 +24,10 @@ class TestWorkflowPublishing(unittest.TestCase):
         jobs = workflow["jobs"]
         full = jobs["bestsellers-all"]
         self.assertEqual(full["strategy"]["max-parallel"], 1)
-        self.assertEqual(full["strategy"]["matrix"]["section"], ["gaming", "home", "lifestyle", "general"])
+        self.assertEqual(
+            full["strategy"]["matrix"]["section"],
+            ["videogames", "pc_hardware", "cex_priority", "coffee", "home", "lifestyle", "general"],
+        )
         self.assertIn("matrix.section", full["name"])
         steps = full["steps"]
         crawl = next(step["run"] for step in steps if step.get("name") == "Crawl section and notify")

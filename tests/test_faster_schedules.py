@@ -56,19 +56,24 @@ class TestFasterSchedules(unittest.TestCase):
 
     def test_section_rotation_uses_last_published_result_not_run_number(self):
         sections = load_sections(Path("bestsellers.json"))
-        self.assertEqual([s.id for s in sections], ["gaming", "home", "lifestyle", "general"])
+        for section in sections:
+            section.priority_rotation = False
+        ordered = [s.id for s in sections]
+        self.assertEqual(
+            ordered,
+            ["videogames", "pc_hardware", "cex_priority", "coffee", "home", "lifestyle", "general"],
+        )
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "deals.json"
-            for previous_id, expected in (
-                ("gaming", "home"), ("home", "lifestyle"),
-                ("lifestyle", "general"), ("general", "gaming")
-            ):
+            for previous_id, expected in zip(ordered, ordered[1:] + ordered[:1]):
                 path.write_text(json.dumps({"last_section_id": previous_id}), encoding="utf-8")
                 args = argparse.Namespace(section="rotate", merge_previous=path, run_number=99)
                 self.assertEqual(resolve_section_id(args, sections), expected)
 
     def test_rotation_falls_back_to_latest_section_or_existing_run_index(self):
         sections = load_sections(Path("bestsellers.json"))
+        for section in sections:
+            section.priority_rotation = False
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "deals.json"
             args = argparse.Namespace(section="rotate", merge_previous=path, run_number=11)
@@ -86,7 +91,8 @@ class TestFasterSchedules(unittest.TestCase):
         matrix = jobs["bestsellers-all"]
         self.assertEqual(matrix["strategy"]["max-parallel"], 1)
         self.assertEqual(matrix["strategy"]["matrix"]["section"],
-                         ["gaming", "home", "lifestyle", "general"])
+                         ["videogames", "pc_hardware", "cex_priority", "coffee",
+                          "home", "lifestyle", "general"])
         self.assertIn("github.event_name == 'issues'",
                       self.pages["concurrency"]["group"])
         self.assertEqual(self.pages["permissions"]["issues"], "write")
