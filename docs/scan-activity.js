@@ -150,6 +150,58 @@ function trackerSafeRunUrl(run) {
   return "https://github.com/" + SCAN_ACTIVITY_REPOSITORY + "/actions/runs/" + id;
 }
 
+// Animate only between *actual GitHub-reported* percentages. Never simulate
+// progress while a long-running crawl step is still in progress.
+function trackerProgressTransition(previous, reported) {
+  const target = Number.isFinite(Number(reported))
+    ? Math.max(0, Math.min(100, Math.round(Number(reported)))) : 0;
+  const known = previous !== null && previous !== undefined && Number.isFinite(Number(previous));
+  const last = known
+    ? Math.max(0, Math.min(100, Math.round(Number(previous)))) : 0;
+  return {
+    from: target > last ? last : target,
+    to: target,
+    animate: target > last,
+  };
+}
+
+function trackerTweenPercent(from, to, fraction) {
+  const t = Math.max(0, Math.min(1, Number(fraction) || 0));
+  // Ease out, finishing at the real new percentage in 900ms.
+  const eased = 1 - Math.pow(1 - t, 3);
+  return Math.round(from + (to - from) * eased);
+}
+
+function animateTrackerBar(fill, label, previous, reported) {
+  const change = trackerProgressTransition(previous, reported);
+  const setVisual = (pct) => {
+    fill.style.width = pct + "%";
+    label.textContent = pct + "%";
+  };
+  setVisual(change.from);
+
+  const reduceMotion = typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!change.animate || reduceMotion || typeof window.requestAnimationFrame !== "function") {
+    setVisual(change.to);
+    return;
+  }
+
+  window.requestAnimationFrame((startedAt) => {
+    const duration = 900;
+    const frame = (now) => {
+      // If the user navigates away or a new run list replaces this card,
+      // stop updating a detached progress element.
+      if (!fill.isConnected) return;
+      const fraction = Math.min(1, Math.max(0, (now - startedAt) / duration));
+      setVisual(trackerTweenPercent(change.from, change.to, fraction));
+      if (fraction < 1) window.requestAnimationFrame(frame);
+      else setVisual(change.to);
+    };
+    frame(startedAt);
+  });
+}
+
 function renderScanActivity(runs, detailsById, failure) {
   const root = document.getElementById("scan-activity-runs");
   const info = document.getElementById("scan-activity-summary");
@@ -169,6 +221,13 @@ function renderScanActivity(runs, detailsById, failure) {
     : "No active runs among the latest tracker workflows · Checked " +
       trackerLocalTime(new Date().toISOString());
   if (failure) info.textContent += " · GitHub status may be delayed: " + failure;
+  // Cards are recreated on each API refresh; remember the last *reported*
+  // value by run ID so unchanged percentages don't animate from zero again.
+  const lastReported = new Map();
+  for (const oldCard of root.querySelectorAll(".scan-run[data-run-id]")) {
+    const oldBar = oldCard.querySelector('[role="progressbar"][aria-valuenow]');
+    if (oldBar) lastReported.set(oldCard.dataset.runId, Number(oldBar.getAttribute("aria-valuenow")));
+  }
   root.replaceChildren();
   if (!runs.length) {
     root.appendChild(trackerText("p", "No recent tracker runs were returned by GitHub.", "empty"));
@@ -177,6 +236,7 @@ function renderScanActivity(runs, detailsById, failure) {
   for (const run of runs) {
     const panel = document.createElement("article");
     panel.className = "scan-run";
+    panel.dataset.runId = String(run.id);
 
     const heading = document.createElement("div");
     heading.className = "scan-run-head";
@@ -207,14 +267,29 @@ function renderScanActivity(runs, detailsById, failure) {
     if (progress && run.status !== "completed") {
       const line = document.createElement("div");
       line.className = "scan-progress-line";
-      const bar = document.createElement("progress");
-      bar.max = 100;
-      bar.value = progress.percentage;
+      const bar = document.createElement("div");
+      bar.className = "scan-progress-track";
+      bar.setAttribute("role", "progressbar");
       bar.setAttribute("aria-label", "Completed known GitHub workflow steps");
+      bar.setAttribute("aria-valuemin", "0");
+      bar.setAttribute("aria-valuemax", "100");
+      bar.setAttribute("aria-valuenow", String(progress.percentage));
+      bar.setAttribute("aria-valuetext",
+        progress.completedSteps + " of " + progress.totalSteps + " reported steps complete");
+      const fill = document.createElement("div");
+      fill.className = "scan-progress-fill";
+      fill.setAttribute("aria-hidden", "true");
+      bar.appendChild(fill);
+      const percentageLabel = trackerText("strong", progress.percentage + "%");
       line.appendChild(bar);
-      line.appendChild(trackerText("strong",
-        progress.percentage + "%"));
+      line.appendChild(percentageLabel);
       panel.appendChild(line);
+      // The DOM must be connected before checking isConnected in the animator.
+      // The new value is the only destination: no invented in-between scan work.
+      const oldValue = lastReported.get(String(run.id));
+      panel._animateProgress = () => animateTrackerBar(
+        fill, percentageLabel, oldValue, progress.percentage
+      );
       panel.appendChild(trackerText("p",
         progress.completedSteps + " of " + progress.totalSteps +
         " reported steps completed · " + progress.completedJobs + " of " +
@@ -243,6 +318,10 @@ function renderScanActivity(runs, detailsById, failure) {
       ));
     }
     root.appendChild(panel);
+    if (panel._animateProgress) {
+      panel._animateProgress();
+      delete panel._animateProgress;
+    }
   }
 }
 
@@ -326,6 +405,7 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     trackerWorkflowRun, trackerWorkflowName, trackerStatus,
     trackerStepProgress, selectedActivityRuns, trackerSafeRunUrl,
+    trackerProgressTransition, trackerTweenPercent,
   };
 }
 if (typeof document !== "undefined") {
