@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Any
 
@@ -7,6 +8,7 @@ from app import database as db
 from app.config import settings
 from app.services.bestsellers import CrawlConfig, CrawlResult, ProcessResult
 from app.services.drop_tiers import tiered_deep_drops
+from app.services.alert_policy import load_alert_policy
 from app.snapshot import _fmt_dublin, _fmt_euro
 
 _SECTION_STORE_KEYS = (
@@ -215,6 +217,7 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
         "generated_at": incoming.get("generated_at"),
         "github_repo": incoming.get("github_repo") or base.get("github_repo"),
         "telegram_configured": incoming.get("telegram_configured", base.get("telegram_configured")),
+        "alert_policy": incoming.get("alert_policy") or base.get("alert_policy") or asdict(load_alert_policy()),
         "min_discount_percent": incoming.get("min_discount_percent", base.get("min_discount_percent", 75)),
         "sections": sections,
         "section_order": list(sections.keys()),
@@ -273,6 +276,7 @@ def export_deals(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "github_repo": github_repo,
         "telegram_configured": settings.telegram_enabled,
+        "alert_policy": asdict(load_alert_policy()),
         "min_discount_percent": settings.min_discount_percent,
         "blocked": result.blocked,
         "requests": result.requests,
