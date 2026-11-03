@@ -593,5 +593,34 @@
       "Mortal Kombat"
     ],
     "excluded_brands": []
+  },
+  "cex_first": {
+    "enabled": true,
+    "max_items": 300,
+    "min_cash_eur": 150,
+    "searches_per_run": 2,
+    "refreshes_per_run": 2,
+    "query_refresh_hours": 24,
+    "queries": [
+      "PlayStation 5",
+      "Xbox Series X",
+      "Nintendo Switch OLED",
+      "Steam Deck",
+      "Meta Quest",
+      "Nvidia RTX",
+      "AMD Ryzen",
+      "Intel Core",
+      "Apple iPad",
+      "Apple iPhone",
+      "Samsung Galaxy",
+      "Sony WH",
+      "Bose QuietComfort",
+      "Canon EOS",
+      "Nikon",
+      "Sony Alpha",
+      "GoPro",
+      "DJI"
+    ],
+    "max_mappings": 100
   }
 }

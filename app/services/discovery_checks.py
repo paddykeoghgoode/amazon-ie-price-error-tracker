@@ -38,7 +38,17 @@ def choose_detail_checks(catalogue, lookups, drops, *, config, policy):
         lane = 0 if asin in profitable else 1 if asin in dropped else 2
         rows.append((lane, row.get('identity_checked_at') or '', -price, asin, row))
     rows.sort(key=lambda x: x[:4])
-    return [r[-1] for r in rows[:config.premium_spot_check_limit]]
+    # Build exact maps before a price drop occurs, including targets that are
+    # currently too expensive. Reserve at most half the SAME six-page budget.
+    targets = sorted((r for r in items.values() if r.get('cex_target_box_id')
+                      and relevance(r)[1] != 'explicitly_excluded_brand'
+                      and r.get('identity_status') != 'confirmed'
+                      and float(r.get('price_eur') or 0) >= policy.min_cex_buy_price_eur),
+                     key=lambda r: (r.get('identity_checked_at') or '', r['asin']))
+    selected = targets[:config.premium_spot_check_limit // 2]
+    seen = {r['asin'] for r in selected}
+    selected.extend(r[-1] for r in rows if r[-1]['asin'] not in seen)
+    return selected[:config.premium_spot_check_limit]
 
 
 def apply_detail_checks(catalogue, selected, snapshots, lookups, quote_cache):

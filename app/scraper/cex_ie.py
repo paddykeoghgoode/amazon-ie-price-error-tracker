@@ -284,7 +284,9 @@ def pick_best_box_hit(amazon_title: str | None, hits: list[dict]) -> dict | None
     return None
 
 
-async def search_boxes(client: httpx.AsyncClient, query: str, *, hits_per_page: int = 3, strict: bool = False) -> list[dict]:
+async def search_boxes(client: httpx.AsyncClient, query: str, *, hits_per_page: int = 3,
+                       strict: bool = False, page: int = 0,
+                       min_cash_eur: float | None = None) -> list[dict]:
     if not query.strip():
         return []
     url = f"https://search.webuy.io/1/indexes/{ALGOLIA_INDEX}/query"
@@ -302,6 +304,10 @@ async def search_boxes(client: httpx.AsyncClient, query: str, *, hits_per_page: 
         ],
         "numericFilters": ["boxVisibilityOnWeb=1"],
     }
+    if page:
+        body["page"] = max(0, int(page))
+    if min_cash_eur is not None:
+        body["numericFilters"].append(f"cashBuyPrice>={float(min_cash_eur):g}")
     headers = {
         **CEX_HEADERS,
         "X-Algolia-Application-Id": ALGOLIA_APP_ID,

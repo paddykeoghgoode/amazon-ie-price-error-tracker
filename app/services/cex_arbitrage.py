@@ -138,6 +138,7 @@ async def enrich_with_cex(
     cache: dict[str, dict] | None = None,
     run_state: dict | None = None,
     now: datetime | None = None,
+    force_refresh: bool = False,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Price all candidate ASINs, reusing a timestamped CeX quote when suitable.
 
@@ -240,7 +241,8 @@ async def enrich_with_cex(
             age = age_hours(prior, now) if prices else None
             quote_fresh = age is not None and age <= alert_ttl
             needs_refresh = (
-                not usable or prices is None or
+                force_refresh or not usable or prices is None or
+                (prior or {}).get("source") == "catalogue_search" or
                 (high_interest and not quote_fresh)
             )
             if needs_refresh:
@@ -302,7 +304,8 @@ async def enrich_with_cex(
                 continue
             age = age_hours(prior, now) if cache is not None else 0
             quote_fresh = bool(age is not None and age <= alert_ttl and
-                               retry_allowed(prior, now, error_ttl))
+                               retry_allowed(prior, now, error_ttl) and
+                               (prior or {}).get("source") != "catalogue_search")
             row = build_cex_row(
                 item, prices,
                 min_profit_eur=config.cex_min_cash_profit_eur,

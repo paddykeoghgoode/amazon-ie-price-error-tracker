@@ -136,3 +136,43 @@ test("research log shows actual found times and can include unrecognised brands"
   assert.ok(table.includes('<th>Found</th>'));
   assert.ok(html.includes('id="research-include-unrecognised"'));
 });
+
+test("CeX target view reports funnel, timestamps and stale observations honestly", () => {
+  const start = js.indexOf("function cexTargetView(data, now = Date.now()) {");
+  const end = js.indexOf("\nfunction renderCexTargets(", start);
+  const view = vm.runInNewContext(js.slice(start, end) + "\ncexTargetView;");
+  const now = Date.parse("2026-11-03T20:00:00Z");
+  const data = {funnel: {catalogue_skus: 250, exact_mappings: 30, fresh_quotes: 25,
+    amazon_attempted: 12, price_read: 10, identity_mismatch: 2, profitable: 1, stale_quotes: 5},
+    products: [
+      {asin:"new",scan_lane:"cex_target",status:"profitable",checked_at:"2026-11-03T19:55:00Z",found_at:"2026-11-03T19:55:00Z"},
+      {asin:"old",scan_lane:"cex_target",status:"profitable",checked_at:"2026-11-02T19:55:00Z"},
+      {asin:"drop",scan_lane:"drop",status:"price_read",checked_at:"2026-11-03T19:55:00Z"},
+    ]};
+  const result = view(data, now);
+  assert.equal(result.rows.length, 2);
+  assert.match(result.summary, /250 CeX target SKUs/);
+  assert.match(result.diagnostics, /12 pages checked/);
+  assert.equal(result.rows[0].result_label, "Meets cash margin");
+  assert.equal(result.rows[1].result_label, "Awaiting a fresh check");
+  assert.equal(result.rows[0].found_at, data.products[0].found_at);
+  assert.ok(html.includes('id="cex-target-table"'));
+});
+
+test("a fast failed check removes an older CeX lead from the overview", () => {
+  const start = js.indexOf("function mergeFastCex(deals, hotlist, now = Date.now()) {");
+  const end = js.indexOf("\nfunction renderOpportunityRadar(", start);
+  const merge = vm.runInNewContext(js.slice(start, end) + "\nmergeFastCex;");
+  const now = Date.parse("2026-11-03T20:00:00Z");
+  const deals = {generated_at:"2026-11-03T19:00:00Z",cex_arbitrage:[{asin:"A",price_eur:180}]};
+  const failed = {products:[{asin:"A",scan_lane:"cex_target",status:"identity_mismatch",checked_at:"2026-11-03T19:55:00Z"}]};
+  assert.equal(merge(deals, failed, now).cex_arbitrage.length, 0);
+  const good = {products:[{...failed.products[0],status:"profitable",price_eur:150,
+    cex_quote_fresh_for_alert:true,cex_quote_checked_at:"2026-11-03T18:00:00Z"}]};
+  const fresh = merge(deals, good, now).cex_arbitrage;
+  assert.equal(fresh.length, 1);
+  assert.equal(fresh[0].price_eur, 150);
+  assert.equal(fresh[0].observed_at, "2026-11-03T19:55:00Z");
+  good.products[0].cex_quote_checked_at="2026-11-02T18:00:00Z";
+  assert.equal(merge(deals, good, now).cex_arbitrage.length, 0);
+});

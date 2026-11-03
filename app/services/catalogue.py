@@ -334,11 +334,19 @@ def merge_catalogue(previous: dict | None, fragment: dict) -> dict:
             "checked_this_run": fragment.get("checked_this_run", stats["checked_this_run"]),
         },
     }
+    # Shared state belongs at the root, not copied into all seven sections.
+    for section in sections.values():
+        section.pop("cex_targets", None)
     return {
         "generated_at": fragment.get("generated_at"),
         "last_section_id": sid,
         "seller_verification_enabled": False,
         "sections": sections,
+        "cex_targets": (
+            fragment.get("cex_targets") or (previous or {}).get("cex_targets") or {}
+        ) if (fragment.get("cex_targets") or {}).get("generated_at", "") >= (
+            (previous or {}).get("cex_targets") or {}).get("generated_at", "")
+        else (previous or {}).get("cex_targets", {}),
     }
 
 

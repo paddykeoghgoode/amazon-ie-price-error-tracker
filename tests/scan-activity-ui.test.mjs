@@ -17,7 +17,7 @@ test("only tracker and fast priority runs are shown, not test suite or arbitrary
   assert.equal(trackerWorkflowRun({ name: "Fast checks for price-drop leads",
     path: ".github/workflows/hotlist.yml" }), true);
   assert.equal(trackerWorkflowName({ path: ".github/workflows/hotlist.yml", event: "schedule" }),
-    "Priority price-drop checks");
+    "CeX targets & price-drop checks");
   assert.equal(trackerWorkflowName({ path: ".github/workflows/pages.yml", event: "issues" }),
     "Watchlist change");
 });
