@@ -19,7 +19,8 @@ test("five accessible tabs and all Amazon drop controls exist", () => {
     assert.ok(html.includes('aria-labelledby="tab-' + id + '"'));
   }
   for (const id of ["drop-min", "drop-section", "drop-search", "drop-sort",
-                    "general-drops-table", "general-drops-pagination"]) {
+                    "general-drops-table", "general-drops-pagination",
+                    "drop-min-price", "drop-min-saving", "radar-cards"]) {
     assert.ok(html.includes('id="' + id + '"'));
   }
 });
