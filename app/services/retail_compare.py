@@ -90,7 +90,17 @@ def _money(value: object) -> float | None:
     if isinstance(value, bool) or value is None:
         return None
     try:
-        price = Decimal(str(value).replace(",", "").replace("€", "").strip())
+        raw = str(value).replace("€", "").replace("\u00a0", "").replace(" ", "").strip()
+        if "," in raw and "." in raw:
+            # Both 1,299.99 (Irish) and 1.299,99 (EU) are supported.
+            raw = (raw.replace(".", "").replace(",", ".")
+                   if raw.rfind(",") > raw.rfind(".")
+                   else raw.replace(",", ""))
+        elif "," in raw:
+            raw = raw.replace(",", ".") if re.search(r",\d{1,2}$", raw) else raw.replace(",", "")
+        elif raw.count(".") > 1:
+            return None
+        price = Decimal(raw)
         if not price.is_finite() or price <= 0 or price > 100000:
             return None
         return float(price.quantize(Decimal("0.01")))
@@ -111,8 +121,19 @@ def parse_retail_spec(data: dict | None) -> dict:
             break
     rrp = _money(raw.get("rrp_eur"))
     source = str(raw.get("rrp_source") or "").strip()
-    if not (source.startswith("https://") and urlsplit(source).hostname and
-            not urlsplit(source).username and len(source) <= 1000):
+    try:
+        parsed_source = urlsplit(source)
+        source_safe = (
+            parsed_source.scheme == "https"
+            and bool(parsed_source.hostname)
+            and not parsed_source.username
+            and not parsed_source.password
+            and parsed_source.port in (None, 443)
+            and len(source) <= 1000
+        )
+    except ValueError:
+        source_safe = False
+    if not source_safe:
         source = None
     return {
         "model": clean_model(raw.get("model")),
