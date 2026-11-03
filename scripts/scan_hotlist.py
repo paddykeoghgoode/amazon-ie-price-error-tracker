@@ -48,7 +48,25 @@ async def recheck(deals, previous, limit=12, notify=True):
                     item.update(status="price_read", price_eur=snap.price_eur)
                     threshold = min(float(earlier.get("price_eur") or float("inf")),
                                     float(row.get("price_eur") or float("inf")))
-                    if notify and hotlist_further_drop_qualifies(
+                    last_notified = earlier.get("last_alert_at")
+                    last_price = float(earlier.get("last_alert_price_eur") or 0)
+                    recently_sent = False
+                    if last_notified:
+                        try:
+                            sent_at = datetime.fromisoformat(last_notified)
+                            recently_sent = (
+                                sent_at.tzinfo is not None and
+                                timedelta(0) <= now - sent_at < timedelta(hours=24)
+                            )
+                        except (TypeError, ValueError):
+                            pass
+                    meaningful_new_low = (
+                        not recently_sent or
+                        (last_price > 0 and
+                         last_price - snap.price_eur >= load_alert_policy().min_hotlist_extra_drop_eur and
+                         snap.price_eur <= last_price * (1 - load_alert_policy().min_hotlist_extra_drop_percent / 100))
+                    )
+                    if notify and meaningful_new_low and hotlist_further_drop_qualifies(
                         row, previous_eur=threshold, current_eur=snap.price_eur
                     ):
                         message = (
