@@ -52,13 +52,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--section",
         default="rotate",
-        help="Section id from bestsellers.json, 'all' for full crawl, or 'rotate' (uses --run-number)",
+        help="Section id from bestsellers.json, 'all' for full crawl, or 'rotate' (after latest published section)",
     )
     parser.add_argument(
         "--run-number",
         type=int,
         default=None,
-        help="GitHub run number for rotate mode (defaults to GITHUB_RUN_NUMBER)",
+        help="Fallback rotation index if no published section checkpoint is available",
     )
     parser.add_argument(
         "--merge-previous",
@@ -82,6 +82,35 @@ def parse_args() -> argparse.Namespace:
 
 def resolve_section_id(args: argparse.Namespace, sections: list) -> str:
     if args.section == "rotate":
+        # A workflow run number includes watchlist-only ticks, issues and manual
+        # dispatches; using it for rotation would repeatedly skip sections.
+        # Choose the successor of the last SUCCESSFULLY PUBLISHED section instead.
+        previous_path = getattr(args, "merge_previous", None)
+        if previous_path and previous_path.exists():
+            try:
+                previous = read_snapshot(previous_path)
+                ordered = [s.id for s in sections if s.id != "all"]
+                last_id = previous.get("last_section_id")
+                if last_id not in ordered:
+                    historical = previous.get("sections") or {}
+                    completed = {
+                        sid: snap for sid, snap in historical.items()
+                        if sid in ordered and isinstance(snap, dict)
+                    }
+                    if completed:
+                        last_id = max(
+                            completed,
+                            key=lambda sid: str(completed[sid].get("generated_at") or ""),
+                        )
+                if last_id in ordered:
+                    next_id = ordered[(ordered.index(last_id) + 1) % len(ordered)]
+                    logger.info(
+                        "Rotating after last published section %s -> %s", last_id, next_id
+                    )
+                    return next_id
+            except (OSError, ValueError, TypeError) as exc:
+                logger.warning("Previous section checkpoint unreadable (%s)", type(exc).__name__)
+        # First-ever scan or local run with no published checkpoint.
         run_no = args.run_number
         if run_no is None:
             run_no = int(os.environ.get("GITHUB_RUN_NUMBER", "0") or 0)

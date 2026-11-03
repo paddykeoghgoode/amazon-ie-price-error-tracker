@@ -1,5 +1,5 @@
 {
-  "_comment": "Rotating Amazon sections continue discovering thousands of prices. CeX quote cache survives via catalogue.json (72h positive, 7d no-match, 6h retry on error); up to 40 new CeX lookups per section scan and no requests after CeX 429. Only quote-verified offers <=12h old can trigger buying alerts.",
+  "_comment": "Amazon discovery runs every 20 min; watched items and fast recent drops every 10 min. CeX cash quotes persist in catalogue.json (72h positives, 7d misses, 6h error backoff). Keep live CeX limit at 25/section run to avoid increasing the previous hourly request budget.",
   "max_items": 12000,
   "max_requests": 800,
   "pages_per_category": 2,
@@ -193,8 +193,8 @@
     "/gp/bestsellers/gift-cards"
   ],
   "catalogue_checks_per_run": 120,
-  "catalogue_time_budget_seconds": 480,
-  "cex_live_lookups_per_run": 40,
+  "catalogue_time_budget_seconds": 360,
+  "cex_live_lookups_per_run": 25,
   "cex_quote_ttl_hours": 72,
   "cex_no_match_ttl_hours": 168,
   "cex_error_retry_hours": 6,
