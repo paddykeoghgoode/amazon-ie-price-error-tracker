@@ -84,7 +84,7 @@ def qualifies_price_event(
         current = float(current_eur or 0)
     except (ValueError, TypeError):
         return False
-    if not (policy.min_amazon_price_eur <= current < float("inf")):
+    if not (0 < current < float("inf")):
         return False
     for raw_reference, is_advertised_list in (
         (historical_reference_eur, False),
@@ -97,6 +97,14 @@ def qualifies_price_event(
         if not (policy.min_reference_eur <= ref < float("inf")):
             continue
         saving = ref - current
+        if current < policy.min_amazon_price_eur:
+            # A genuine error can make an expensive item cheap. Require a
+            # stable high-value history and a much deeper cut for this lane;
+            # an advertised list price alone never bypasses the normal floor.
+            if (is_advertised_list or ref < max(500, policy.min_reference_eur)
+                    or saving < max(250, policy.min_saving_eur)
+                    or _discount(current, ref) < max(75, policy.min_history_drop_percent)):
+                continue
         if saving < (policy.min_list_saving_eur if is_advertised_list else policy.min_saving_eur):
             continue
         threshold = (

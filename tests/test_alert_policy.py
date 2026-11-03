@@ -12,7 +12,9 @@ from app.services.alert_policy import (
 class TestQuietTelegram(unittest.TestCase):
     def test_cheap_games_suppressed_even_with_90pct_discounts(self):
         self.assertFalse(qualifies_price_event(5, historical_reference_eur=120))
-        self.assertFalse(qualifies_price_event(85, historical_reference_eur=500))
+        self.assertTrue(qualifies_price_event(85, historical_reference_eur=500))
+        self.assertFalse(qualifies_price_event(85, list_reference_eur=500))
+        self.assertFalse(qualifies_price_event(85, historical_reference_eur=300))
         self.assertTrue(qualifies_price_event(150, historical_reference_eur=400))
 
     def test_historical_vs_advertised_was_prices_are_different(self):
@@ -111,6 +113,11 @@ class TestWatchlistHistory(unittest.TestCase):
         self.assertIn("RESEARCH ONLY", lead.message)
         db.mark_alert_notified(lead.alert_id, telegram=True, whatsapp=False)
         self.assertIsNone(self.observe(200), "unchanged lead must not repeat")
+
+    def test_deep_error_on_expensive_item_can_alert_below_current_price_floor(self):
+        for _ in range(3):
+            self.assertIsNone(self.observe(500))
+        self.assertIsNotNone(self.observe(85))
 
 if __name__ == "__main__":
     unittest.main()

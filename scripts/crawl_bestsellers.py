@@ -32,6 +32,7 @@ from app.services.bestsellers import (
 from app.services.cex_arbitrage import enrich_with_cex
 from app.services.health import send_health_messages
 from app.services.premium_drops import spot_check_list_prices
+from app.services.discovery_checks import choose_detail_checks, apply_detail_checks
 from app.services.alert_policy import load_alert_policy
 from app.services.monitor import BROWSER_HEADERS
 from app.services.catalogue import (
@@ -157,23 +158,6 @@ async def crawl_section(
     # verification is intentionally DISABLED: it is not an eligibility gate
     # for price-drop leads, CeX matching or Telegram research alerts.
     processed = process_crawl(result, config, allow_alerts=notify)
-    min_interrupt_price = load_alert_policy().min_amazon_price_eur
-    spot_rows = [
-        row for row in (
-            processed.rapid_drops
-            + processed.premium_drops
-            + processed.drops
-        ) if float(row.get("price_eur") or 0) >= min_interrupt_price
-    ]
-    async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=30.0) as spot_client:
-        spot_alerts = await spot_check_list_prices(
-            spot_client,
-            spot_rows,
-            config=config,
-            allow_alerts=notify,
-            delay_seconds=config.request_delay_seconds,
-        )
-        processed.alerts.extend(spot_alerts)
     section_catalogue = make_section_catalogue(
         result,
         previous_catalogue_section,
@@ -254,6 +238,26 @@ async def crawl_section(
                 logger.warning("[%s] CeX limited requests: stop this section's CeX lookups", section_id)
                 break
 
+    # One shared detail-page budget serves CeX identity, known drops and
+    # first-seen high-value list-price research. No separate verification crawl.
+    policy = load_alert_policy()
+    detail_rows = choose_detail_checks(
+        section_catalogue, lookups,
+        processed.rapid_drops + processed.premium_drops + processed.drops,
+        config=config, policy=policy,
+    )
+    snapshots = {}
+    async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=30.0) as detail_client:
+        processed.alerts.extend(await spot_check_list_prices(
+            detail_client, detail_rows, config=config, allow_alerts=notify,
+            delay_seconds=config.request_delay_seconds, snapshots=snapshots,
+        ))
+    detail_stats = apply_detail_checks(
+        section_catalogue, detail_rows, snapshots, lookups, quote_cache,
+    )
+    flips = [row for row in lookups if row.get("cex_cash_flip")]
+    logger.info("[%s] Product detail research: %s", section_id, detail_stats)
+
     apply_batch_results(
         section_catalogue, checked_batch, [], {}, lookups,
         cex_enabled=config.cex_enabled, quote_cache=quote_cache,
@@ -283,6 +287,9 @@ async def crawl_section(
         "errors": cex_state.get("errors", 0),
         "rate_limited": bool(cex_state.get("rate_limited", False)),
         "provisional_matches": len(lookups),
+        "detail_checks": detail_stats,
+        "exact_matches": sum(r.get("match_confidence") in ("barcode_verified", "model_verified") for r in lookups),
+        "title_only_matches": sum(r.get("match_confidence") == "title_only" for r in lookups),
         "lookups": len(lookups),
         "cash_flips": len(processed.cex_flips),
         "arbitrage": len(processed.cex_arbitrage),

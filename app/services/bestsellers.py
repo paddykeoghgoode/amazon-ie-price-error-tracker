@@ -314,9 +314,9 @@ async def crawl(fetch: Fetcher, config: CrawlConfig) -> CrawlResult:
     return result
 
 
-def passes_signal_gates(item: BestsellerItem, config: CrawlConfig) -> bool:
+def passes_signal_gates(item: BestsellerItem, config: CrawlConfig, *, reference_eur: float | None = None) -> bool:
     """Optional per-section filters (e.g. coffee ≥€100 with enough reviews)."""
-    if config.signal_min_price_eur is not None and float(item.price_eur or 0) < config.signal_min_price_eur:
+    if config.signal_min_price_eur is not None and max(float(item.price_eur or 0), float(reference_eur or 0)) < config.signal_min_price_eur:
         return False
     if config.signal_min_review_count is not None:
         if item.review_count is None or item.review_count < config.signal_min_review_count:
@@ -335,7 +335,8 @@ def process_crawl(result: CrawlResult, config: CrawlConfig, *, allow_alerts: boo
         product_id = db.add_product(asin, item.url, item.title)
         previous = db.latest_price_check(product_id)
         previous_eur = float(previous["price_eur"]) if previous and previous.get("price_eur") is not None else None
-        signals_ok = passes_signal_gates(item, config)
+        prior_anchor = db.get_price_baseline(product_id) or {}
+        signals_ok = passes_signal_gates(item, config, reference_eur=prior_anchor.get("reference_eur"))
         snap = ProductSnapshot(
             asin=asin,
             url=item.url,
