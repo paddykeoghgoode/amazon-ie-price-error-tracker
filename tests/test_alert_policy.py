@@ -86,6 +86,7 @@ class TestWatchlistHistory(unittest.TestCase):
         snap = ProductSnapshot(
             asin="B000000001", url="https://www.amazon.ie/dp/B000000001",
             title="Electronics", price_eur=price, currency="EUR",
+            list_price_eur=None, availability=None,
         )
         return record_and_detect(
             self.pid, snap, alert_policy=AlertPolicy(),
