@@ -114,3 +114,25 @@ test("resale-first UI includes shortlist metrics and avoids a redundant seller c
   assert.ok(html.includes('data-tab="overview">Top Deals</button>'));
   assert.ok(!html.includes("<th>Seller checks</th>"));
 });
+
+test("research log shows actual found times and can include unrecognised brands", () => {
+  const start = js.indexOf("function researchLogRows(");
+  const end = js.indexOf("\nfunction renderDeals(", start);
+  const select = vm.runInNewContext(js.slice(start, end) + "\nresearchLogRows;");
+  const first = "2026-11-03T10:00:00Z";
+  const data = { generated_at:"2026-11-03T12:00:00Z", drops: [
+    {asin:"A",found_at:first,resale_eligible:true},
+    {asin:"B",found_at:first,resale_eligible:false},
+    {asin:"C"},
+    {asin:"D",found_at:"invalid"},
+  ]};
+  const filtered = select(data);
+  assert.equal(filtered.length,3);
+  assert.equal(filtered[0].found_at, first);
+  assert.equal(filtered[1].found_at,null);
+  assert.equal(filtered[2].found_at,null);
+  assert.equal(select(data,true).length,4);
+  const table = html.slice(html.indexOf('id="deals-table"'), html.indexOf('id="deals-body"'));
+  assert.ok(table.includes('<th>Found</th>'));
+  assert.ok(html.includes('id="research-include-unrecognised"'));
+});

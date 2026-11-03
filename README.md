@@ -312,3 +312,12 @@ This also fixes the cold-start loop in which only an already-known drop could ge
 An item becoming cheap can be the error itself: stable-history references of at least €500 with at least 75% off and €250 saved may now alert below the normal €120 current-price floor. Advertised list prices alone cannot unlock this exception. Coffee's €100 value gate can use its stable historical reference, while the 100-ratings requirement remains. CeX cash-profit, ROI, fresh-quote and exact-match thresholds remain unchanged.
 
 Actions summaries and the published `cex_stats` now distinguish detail attempts, successful price reads, exact confirmations, missing identifiers, changed prices and mismatches. A successful workflow does not establish that a useful opportunity was found; these counts show where research is getting stuck.
+
+
+### Resale interest and finding times
+
+The research log shows a **Found** column in Ireland time, using the original `found_at` timestamp. The same ASIN at the same price keeps its earliest known finding time across section rescans and overlapping categories. A new price gets a new finding time. Missing legacy timestamps display **Unknown**, rather than the current publication time.
+
+`resale_brand_policy` in `bestsellers.json` controls automatic discovery relevance. The editable `preferred_brands` list contains recognised brands and resale-relevant product lines; `excluded_brands` overrides it. Matching uses an explicit brand field or a brand/product-line prefix in the title. A passing mention such as “compatible with Sony” does not identify the manufacturer. This is a configurable interest list, not a quality guarantee or an inference about country of origin. Brands such as Anker, UGREEN, Xiaomi and DJI remain eligible.
+
+Unrecognised listings remain in **All Listings** and retain price history. Their findings are tagged, hidden from the default research log/shortlist, and excluded from automatic bestseller Telegram alerts, hotlist follow-ups, and new priority CeX/detail-page work. A fresh exact model/barcode CeX quote is an exception for an unfamiliar brand; an explicit exclusion still wins. Manually curated watchlist monitoring is unchanged. **Include unrecognised brands** reveals retained research-log observations without changing notification/research policy. Set `enabled` to false to disable this filtering, or extend the preferred list for a niche brand you want researched. Older published rows acquire relevance tags as the next successful scan publishes.

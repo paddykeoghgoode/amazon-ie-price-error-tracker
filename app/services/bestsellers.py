@@ -23,6 +23,7 @@ from app.services.premium_drops import (
     observation_to_row,
 )
 from app.services.drop_tiers import drop_tier
+from app.services.resale_relevance import relevance
 from app.services.monitor import DetectedAlert, notify_alert, record_and_detect, send_notification
 
 logger = logging.getLogger(__name__)
@@ -469,6 +470,7 @@ async def send_cex_alerts(
     eligible = [
         row for row in flips
         if qualifies_cex_alert(row, policy)
+        and relevance(row)[0]
         and (should_send is None or should_send(row))
     ]
     eligible.sort(key=lambda row: float(row.get("cex_cash_profit_eur") or 0), reverse=True)

@@ -15,11 +15,14 @@ from app.services.alert_policy import (
     hotlist_further_drop_qualifies, load_alert_policy, qualifies_observed_drop,
 )
 from app.snapshot import read_snapshot, write_snapshot
+from app.services.resale_relevance import relevance
 
 def candidates(deals, now, limit=12):
     rows = {}
     policy = load_alert_policy()
     for row in (deals.get("drops") or []) + (deals.get("cex_flips") or []):
+        if not relevance(row)[0]:
+            continue
         if not qualifies_observed_drop(row, policy):
             continue
         try:

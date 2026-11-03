@@ -47,9 +47,9 @@ class TestHotlist(unittest.TestCase):
     def test_recent_observed_drops_do_not_require_seller(self):
         now = datetime.now(timezone.utc)
         data = {"drops": [
-            {"asin": "A", "price_eur": 150, "reference_eur": 290, "drop_percent": 48, "found_at": now.isoformat()},
-            {"asin": "B", "price_eur": 140, "reference_eur": 650, "drop_percent": 78, "found_at": now.isoformat()},
-            {"asin": "C", "price_eur": 4, "reference_eur": 70, "drop_percent": 94, "found_at": now.isoformat()},
+            {"asin": "A", "title": "Sony headset", "price_eur": 150, "reference_eur": 290, "drop_percent": 48, "found_at": now.isoformat()},
+            {"asin": "B", "title": "Sony headset", "price_eur": 140, "reference_eur": 650, "drop_percent": 78, "found_at": now.isoformat()},
+            {"asin": "C", "title": "Sony game", "price_eur": 4, "reference_eur": 70, "drop_percent": 94, "found_at": now.isoformat()},
         ]}
         self.assertEqual([r["asin"] for r in candidates(data, now)], ["B"])  # Cheap games excluded
 

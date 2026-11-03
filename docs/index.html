@@ -77,7 +77,10 @@
   <section class="card research-section">
     <h2>Suspected price errors: research log</h2>
     <p id="deals-summary" class="hint">No bestseller crawl has run yet.</p>
+    <label class="hint research-filter"><input id="research-include-unrecognised" type="checkbox" /> Include unrecognised brands</label>
+    <p class="hint">Automatic research prioritises recognised brands or exact CeX resale evidence. All listings remain available. Found times are shown in Ireland time.</p>
     <ul id="deals-alerts" class="alerts" hidden></ul>
+    <p id="research-log-empty" class="empty" hidden>No prioritised findings. Include unrecognised brands to review other observations.</p>
     <div class="table-wrap">
       <table id="deals-table" hidden>
         <thead>
@@ -86,6 +89,7 @@
             <th>Now</th>
             <th>Usual</th>
             <th>Drop</th>
+            <th>Found</th>
           </tr>
         </thead>
         <tbody id="deals-body"></tbody>

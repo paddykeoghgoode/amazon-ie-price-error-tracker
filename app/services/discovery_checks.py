@@ -5,6 +5,7 @@ from app.scraper.cex_ie import titles_match_for_trade_in
 from app.scraper.product_identity import normalise_barcode
 from app.services.cex_arbitrage import _compatible_quote, _match_level
 from app.services.cex_cache import cache_price
+from app.services.resale_relevance import relevance
 
 
 def choose_detail_checks(catalogue, lookups, drops, *, config, policy):
@@ -21,6 +22,8 @@ def choose_detail_checks(catalogue, lookups, drops, *, config, policy):
     dropped = {r['asin'] for r in drops}
     rows = []
     for asin, row in items.items():
+        if not relevance(row)[0]:
+            continue
         price = float(row.get('price_eur') or 0)
         minimum = policy.min_cex_buy_price_eur if asin in profitable else policy.min_amazon_price_eur
         if price < minimum:
