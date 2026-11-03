@@ -315,6 +315,17 @@ function renderRetailComparisons(products) {
         ' (−' + discount + '%)' : '') +
       ' · Amazon advertised “was”: ' + fmtEuro(product.list_price_eur) +
       ' (not treated as manufacturer RRP).</p>';
+    const exactModel = cmp.model || product.model_number || "";
+    if (exactModel) {
+      const find = document.createElement("p");
+      find.className = "hint";
+      const search = "https://www.google.com/search?q=" +
+        encodeURIComponent('"' + exactModel + '" site:.ie price');
+      find.innerHTML = '<a target="_blank" rel="noopener" href="' +
+        escapeHtml(search) + '">Find more Irish retailer product links for this exact model</a>' +
+        ' · Copy specific shop URLs into your existing Watch issue.';
+      section.appendChild(find);
+    }
     const note = document.createElement("p");
     note.className = "hint retail-status-note";
     const delta = cmp.amazon_minus_lowest_retail_eur;
