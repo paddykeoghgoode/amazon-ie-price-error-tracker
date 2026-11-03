@@ -13,6 +13,9 @@ import httpx
 from app import database as db
 from app.scraper.amazon_ie import AMAZON_IE_BASE, ProductSnapshot, is_eligible_amazon_offer, eligible_offer_type, fetch_product
 from app.scraper.bestsellers import BestsellerItem, normalize_category_path, parse_bestseller_page
+from app.services.alert_policy import (
+    load_alert_policy, qualifies_cex_alert, qualifies_observed_drop,
+)
 from app.services.premium_drops import (
     build_lead_alert,
     observe_premium_history_drop,
@@ -261,53 +264,53 @@ async def crawl(fetch: Fetcher, config: CrawlConfig) -> CrawlResult:
     def budget_left() -> bool:
         return result.requests < config.max_requests and len(result.items) < config.max_items
 
-    # Roots are crawled in order, so put the categories you care most about first.
-    for root in config.roots:
-        queue: deque[tuple[str, int]] = deque([(root.path, root.depth)])
-        while queue and budget_left():
-            path, depth = queue.popleft()
-            if path in visited:
-                continue
-            visited.add(path)
-            category_name = None
-            for page_no in range(1, (root.pages or config.pages_per_category) + 1):
-                if not budget_left():
-                    break
-                url = f"{AMAZON_IE_BASE}{path}" + (f"?pg={page_no}" if page_no > 1 else "")
-                result.requests += 1
-                try:
-                    status, html = await fetch(url)
-                except Exception as exc:
-                    logger.warning("Fetch failed for %s: %s", url, exc)
-                    status, html = 0, ""
-                if config.request_delay_seconds:
-                    await asyncio.sleep(config.request_delay_seconds)
+    # Seed every root before descendants so early trees cannot starve later roots.
+    queue = deque((root.path, root.depth, root.pages or config.pages_per_category)
+                  for root in config.roots)
+    while queue and budget_left():
+        path, depth, pages = queue.popleft()
+        if path in visited:
+            continue
+        visited.add(path)
+        category_name = None
+        for page_no in range(1, pages + 1):
+            if not budget_left():
+                break
+            url = f"{AMAZON_IE_BASE}{path}" + (f"?pg={page_no}" if page_no > 1 else "")
+            result.requests += 1
+            try:
+                status, html = await fetch(url)
+            except Exception as exc:
+                logger.warning("Fetch failed for %s: %s", url, exc)
+                status, html = 0, ""
+            if config.request_delay_seconds:
+                await asyncio.sleep(config.request_delay_seconds)
 
-                if status != 200:
-                    result.errors += 1
-                    consecutive_errors += 1
-                    logger.warning("HTTP %s for %s", status, url)
-                    if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
-                        logger.error("Too many failed pages in a row; stopping crawl")
-                        result.blocked = True
-                        return result
-                    break
-                consecutive_errors = 0
-
-                page = parse_bestseller_page(html)
-                if page.blocked:
-                    logger.error("Amazon returned a captcha page at %s; stopping crawl", url)
+            if status != 200:
+                result.errors += 1
+                consecutive_errors += 1
+                logger.warning("HTTP %s for %s", status, url)
+                if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                    logger.error("Too many failed pages in a row; stopping crawl")
                     result.blocked = True
                     return result
+                break
+            consecutive_errors = 0
 
-                category_name = category_name or page.category
-                for item in page.items:
-                    if len(result.items) >= config.max_items:
-                        break
-                    result.items.setdefault(item.asin, (item, category_name))
-                if page_no == 1 and depth > 0:
-                    queue.extend((child, depth - 1) for child in page.child_paths)
-            result.categories.append(category_name or path)
+            page = parse_bestseller_page(html)
+            if page.blocked:
+                logger.error("Amazon returned a captcha page at %s; stopping crawl", url)
+                result.blocked = True
+                return result
+
+            category_name = category_name or page.category
+            for item in page.items:
+                if len(result.items) >= config.max_items:
+                    break
+                result.items.setdefault(item.asin, (item, category_name))
+            if page_no == 1 and depth > 0:
+                queue.extend((child, depth - 1, pages) for child in page.child_paths)
+        result.categories.append(category_name or path)
     return result
 
 
@@ -323,7 +326,8 @@ def passes_signal_gates(item: BestsellerItem, config: CrawlConfig) -> bool:
 
 def process_crawl(result: CrawlResult, config: CrawlConfig, *, allow_alerts: bool = False) -> ProcessResult:
     processed = ProcessResult()
-    premium_alert_budget = config.premium_alerts_per_run
+    policy = load_alert_policy()
+    premium_alert_budget = min(config.premium_alerts_per_run, policy.max_alerts_per_run)
     for asin, (item, category) in result.items.items():
         if item.price_eur is None:
             continue
@@ -347,6 +351,8 @@ def process_crawl(result: CrawlResult, config: CrawlConfig, *, allow_alerts: boo
             known_title=item.title,
             cooldown_minutes=config.alert_cooldown_minutes,
             baseline_max_age_days=config.baseline_max_age_days,
+            alert_policy=policy,
+            emit_alert=allow_alerts,
         )
         if alert and allow_alerts and signals_ok:
             processed.alerts.append(alert)
@@ -363,7 +369,8 @@ def process_crawl(result: CrawlResult, config: CrawlConfig, *, allow_alerts: boo
         )
         if rapid and signals_ok:
             processed.rapid_drops.append(observation_to_row(rapid))
-            if allow_alerts and premium_alert_budget > 0:
+            if (allow_alerts and premium_alert_budget > 0
+                    and qualifies_observed_drop(observation_to_row(rapid), policy)):
                 lead = build_lead_alert(
                     product_id, rapid, cooldown_minutes=config.alert_cooldown_minutes
                 )
@@ -426,7 +433,8 @@ def process_crawl(result: CrawlResult, config: CrawlConfig, *, allow_alerts: boo
         )
         if premium and signals_ok:
             processed.premium_drops.append(observation_to_row(premium))
-            if allow_alerts and premium_alert_budget > 0:
+            if (allow_alerts and premium_alert_budget > 0
+                    and qualifies_observed_drop(observation_to_row(premium), policy)):
                 lead = build_lead_alert(
                     product_id, premium, cooldown_minutes=config.alert_cooldown_minutes
                 )
@@ -451,9 +459,18 @@ async def send_cex_alerts(
     should_send: Callable[[dict], bool] | None = None,
     on_sent: Callable[[dict], None] | None = None,
 ) -> int:
-    cap = max_alerts if max_alerts is not None else config.cex_max_alerts_per_run
+    policy = load_alert_policy()
+    cap = min(
+        max_alerts if max_alerts is not None else config.cex_max_alerts_per_run,
+        policy.max_alerts_per_run,
+    )
     sent = 0
-    eligible = [row for row in flips if should_send is None or should_send(row)]
+    eligible = [
+        row for row in flips
+        if qualifies_cex_alert(row, policy)
+        and (should_send is None or should_send(row))
+    ]
+    eligible.sort(key=lambda row: float(row.get("cex_cash_profit_eur") or 0), reverse=True)
     for row in eligible[:cap]:
         title = row.get("title") or row.get("asin") or "Item"
         amazon = float(row.get("price_eur") or 0)
@@ -500,16 +517,13 @@ async def send_cex_alerts(
 async def send_alerts(
     alerts: list[DetectedAlert], config: CrawlConfig, *, details_url: str | None = None
 ) -> int:
+    # Never send a second "and X more" message for a scan. The dashboard
+    # retains all candidates; Telegram is reserved for the strongest leads.
+    cap = min(config.max_alerts_per_run, load_alert_policy().max_alerts_per_run)
     ranked = sorted(alerts, key=lambda a: a.discount_percent or 0, reverse=True)
-    for alert in ranked[: config.max_alerts_per_run]:
+    for alert in ranked[:cap]:
         await notify_alert(alert)
-    extra = len(ranked) - config.max_alerts_per_run
-    if extra > 0:
-        lines = [f"…and {extra} more possible Amazon.ie price errors in this bestseller scan."]
-        if details_url:
-            lines.append(details_url)
-        await send_notification("\n".join(lines))
-    return min(len(ranked), config.max_alerts_per_run)
+    return min(len(ranked), cap)
 
 
 def verification_rejection_reason(snap: ProductSnapshot, expected: float) -> str | None:

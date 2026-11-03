@@ -15,6 +15,7 @@ class CrawlSection:
     categories: list[CategoryRoot]
     max_items: int | None = None
     max_requests: int | None = None
+    priority_rotation: bool = False
     include_global_discovery_feeds: bool = True
     discovery_feeds: list[CategoryRoot] = field(default_factory=list)
     signal_min_price_eur: float | None = None
@@ -53,6 +54,7 @@ def load_sections(path: Path) -> list[CrawlSection]:
                     categories=_parse_categories(entry.get("categories") or []),
                     max_items=int(entry["max_items"]) if entry.get("max_items") else None,
                     max_requests=int(entry["max_requests"]) if entry.get("max_requests") else None,
+                    priority_rotation=bool(entry.get("priority_rotation", False)),
                     include_global_discovery_feeds=bool(
                         entry.get("include_global_discovery_feeds", True)
                     ),
@@ -113,6 +115,30 @@ def rotate_section_id(sections: list[CrawlSection], run_number: int) -> str:
     if not ordered:
         return sections[0].id
     return ordered[run_number % len(ordered)].id
+
+
+def next_priority_section(sections: list[CrawlSection], previous: dict) -> str | None:
+    """Visit all priorities between secondary turns, using published checkpoints."""
+    from datetime import datetime, timezone
+
+    priority = [s for s in sections if s.priority_rotation and s.id != "all"]
+    secondary = [s for s in sections if not s.priority_rotation and s.id != "all"]
+    if not priority or not secondary:
+        return None
+    checkpoints = previous.get("sections") or {}
+
+    def stamp(section: CrawlSection) -> datetime:
+        try:
+            value = datetime.fromisoformat(checkpoints[section.id]["generated_at"])
+            if value.tzinfo is not None:
+                return value.astimezone(timezone.utc)
+        except (KeyError, TypeError, ValueError):
+            pass
+        return datetime.min.replace(tzinfo=timezone.utc)
+
+    latest_secondary = max(stamp(s) for s in secondary)
+    due = [s for s in priority if stamp(s) <= latest_secondary]
+    return min(due or secondary, key=stamp).id
 
 
 def config_for_section(base: CrawlConfig, section: CrawlSection) -> CrawlConfig:

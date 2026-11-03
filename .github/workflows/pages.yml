@@ -272,7 +272,7 @@ jobs:
   queue-next-bestseller:
     name: Queue next section after publishing
     needs: [bestsellers, publish-bestsellers, watchlist, publish-watchlist]
-    # No chain after manually selecting 'all' (the four-section matrix has
+    # No chain after manually selecting 'all' (the seven-section matrix has
     # its own publishing flow), or after an unsuccessful publication.
     if: >-
       always() &&

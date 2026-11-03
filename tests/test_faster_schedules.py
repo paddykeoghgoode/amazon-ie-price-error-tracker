@@ -56,6 +56,8 @@ class TestFasterSchedules(unittest.TestCase):
 
     def test_section_rotation_uses_last_published_result_not_run_number(self):
         sections = load_sections(Path("bestsellers.json"))
+        for section in sections:
+            section.priority_rotation = False
         ordered = [s.id for s in sections]
         self.assertEqual(
             ordered,
@@ -70,6 +72,8 @@ class TestFasterSchedules(unittest.TestCase):
 
     def test_rotation_falls_back_to_latest_section_or_existing_run_index(self):
         sections = load_sections(Path("bestsellers.json"))
+        for section in sections:
+            section.priority_rotation = False
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "deals.json"
             args = argparse.Namespace(section="rotate", merge_previous=path, run_number=11)

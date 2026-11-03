@@ -11,12 +11,16 @@ from pathlib import Path
 import httpx
 from app.scraper.amazon_ie import fetch_product
 from app.services.monitor import BROWSER_HEADERS, send_notification
+from app.services.alert_policy import (
+    hotlist_further_drop_qualifies, load_alert_policy, qualifies_observed_drop,
+)
 from app.snapshot import read_snapshot, write_snapshot
 
 def candidates(deals, now, limit=12):
     rows = {}
+    policy = load_alert_policy()
     for row in (deals.get("drops") or []) + (deals.get("cex_flips") or []):
-        if float(row.get("drop_percent") or 0) < 30:
+        if not qualifies_observed_drop(row, policy):
             continue
         try:
             stamp = datetime.fromisoformat(row.get("found_at") or row.get("observed_at") or "")
@@ -37,20 +41,49 @@ async def recheck(deals, previous, limit=12, notify=True):
             item = {"asin": asin, "title": row.get("title"), "url": row.get("url"),
                     "status": "price_not_read", "found_at": row.get("found_at"),
                     "checked_at": datetime.now(timezone.utc).isoformat()}
+            earlier = prior.get(asin) or {}
             try:
                 snap = await fetch_product(client, asin)
                 if snap.price_eur is not None and snap.price_eur > 0:
                     item.update(status="price_read", price_eur=snap.price_eur)
-                    earlier = prior.get(asin) or {}
                     threshold = min(float(earlier.get("price_eur") or float("inf")),
                                     float(row.get("price_eur") or float("inf")))
-                    if notify and snap.price_eur < threshold - 0.01:
-                        await send_notification(
-                            f"🚨 Observed further Amazon price drop (UNVERIFIED OFFER)\n"
+                    last_notified = earlier.get("last_alert_at")
+                    last_price = float(earlier.get("last_alert_price_eur") or 0)
+                    recently_sent = False
+                    if last_notified:
+                        try:
+                            sent_at = datetime.fromisoformat(last_notified)
+                            recently_sent = (
+                                sent_at.tzinfo is not None and
+                                timedelta(0) <= now - sent_at < timedelta(hours=24)
+                            )
+                        except (TypeError, ValueError):
+                            pass
+                    meaningful_new_low = (
+                        not recently_sent or
+                        (last_price > 0 and
+                         last_price - snap.price_eur >= load_alert_policy().min_hotlist_extra_drop_eur and
+                         snap.price_eur <= last_price * (1 - load_alert_policy().min_hotlist_extra_drop_percent / 100))
+                    )
+                    if notify and meaningful_new_low and hotlist_further_drop_qualifies(
+                        row, previous_eur=threshold, current_eur=snap.price_eur
+                    ):
+                        message = (
+                            "🚨 Large high-ticket Amazon reduction (RESEARCH ONLY)\n"
                             f"{snap.title or asin}\n"
-                            f"Page price €{snap.price_eur:.2f}, previously €{threshold:.2f}\n"
-                            "⚠️ Seller, condition, variant and checkout price NOT checked. Research only.\n"
-                            f"Checked {item['checked_at']} UTC\n{row.get('url')}")
+                            f"Now €{snap.price_eur:.2f}, last observed €{threshold:.2f}\n"
+                            f"Extra reduction €{threshold - snap.price_eur:.2f}\n"
+                            "⚠️ Seller, condition, variant and delivered checkout are not verified.\n"
+                            f"{row.get('url')}"
+                        )
+                        ok, sms_ok = await send_notification(message)
+                        if ok or sms_ok:
+                            item["last_alert_price_eur"] = snap.price_eur
+                            item["last_alert_at"] = item["checked_at"]
+                    elif earlier.get("last_alert_at"):
+                        item["last_alert_price_eur"] = earlier.get("last_alert_price_eur")
+                        item["last_alert_at"] = earlier["last_alert_at"]
             except (httpx.HTTPError, ValueError, TypeError):
                 pass
             out.append(item)

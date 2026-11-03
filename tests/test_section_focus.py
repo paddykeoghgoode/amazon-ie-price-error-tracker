@@ -27,8 +27,8 @@ class TestSectionFocus(unittest.TestCase):
         self.assertEqual(coffee.signal_min_price_eur, 100.0)
         self.assertEqual(coffee.signal_min_review_count, 100)
         cex = next(s for s in sections if s.id == "cex_priority")
-        self.assertEqual(cex.cex_live_lookups_per_run, 22)
-        self.assertEqual(cex.catalogue_checks_per_run, 150)
+        self.assertEqual(cex.cex_live_lookups_per_run, 10)
+        self.assertEqual(cex.catalogue_checks_per_run, 120)
 
     def test_config_for_section_applies_overrides(self):
         base = load_config(Path("bestsellers.json"))

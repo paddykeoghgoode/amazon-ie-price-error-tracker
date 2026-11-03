@@ -15,6 +15,7 @@ from app.bestseller_sections import (
     config_for_all_sections,
     config_for_section,
     load_sections,
+    next_priority_section,
     rotate_section_id,
 )
 from app.config import settings
@@ -31,10 +32,12 @@ from app.services.bestsellers import (
 from app.services.cex_arbitrage import enrich_with_cex
 from app.services.health import send_health_messages
 from app.services.premium_drops import spot_check_list_prices
+from app.services.alert_policy import load_alert_policy
 from app.services.monitor import BROWSER_HEADERS
 from app.services.catalogue import (
     make_section_catalogue, select_check_batch, apply_batch_results,
     catalogue_progress, merge_catalogue,
+    reuse_cex_metadata,
 )
 from app.snapshot import read_snapshot, write_snapshot
 
@@ -90,6 +93,10 @@ def resolve_section_id(args: argparse.Namespace, sections: list) -> str:
         if previous_path and previous_path.exists():
             try:
                 previous = read_snapshot(previous_path)
+                priority_id = next_priority_section(sections, previous)
+                if priority_id is not None:
+                    logger.info("Priority rotation selected %s from published checkpoints", priority_id)
+                    return priority_id
                 ordered = [s.id for s in sections if s.id != "all"]
                 last_id = previous.get("last_section_id")
                 if last_id not in ordered:
@@ -115,30 +122,10 @@ def resolve_section_id(args: argparse.Namespace, sections: list) -> str:
         run_no = args.run_number
         if run_no is None:
             run_no = int(os.environ.get("GITHUB_RUN_NUMBER", "0") or 0)
-        return rotate_section_id(sections, run_no)
+        return next_priority_section(sections, {}) or rotate_section_id(sections, run_no)
     if args.section == "all":
         return "all"
     return args.section
-
-
-async def send_section_summary(section_name: str, payload: dict, dashboard_url: str) -> None:
-    stats = payload.get("cex_stats") or {}
-    flips = int(stats.get("cash_flips") or 0)
-    arb = int(stats.get("arbitrage") or 0)
-    alerts = int(payload.get("new_alerts") or 0)
-    message = (
-        f"✅ {section_name} bestseller scan done\n\n"
-        f"Possible price-error leads this section: {alerts}\n"
-        f"High-ticket / rapid drops: {len(payload.get('premium_drops') or [])} premium · "
-        f"{len(payload.get('rapid_drops') or [])} rapid\n"
-        f"Possible CeX profit leads: {flips} (on sale) · {arb} (other)\n"
-        f"Catalogue processed: {int((payload.get('catalogue_stats') or {}).get('checked') or 0):,} / "
-        f"{int((payload.get('catalogue_stats') or {}).get('priced') or 0):,} priced listings\n"
-        f"CeX checks so far: {int((payload.get('catalogue_stats') or {}).get('cex_attempted') or 0):,}\n\n"
-        "⚠️ Observed Amazon prices only; seller/condition/checkout NOT verified.\n"
-        f"{dashboard_url}"
-    )
-    await send_notification(message)
 
 
 async def crawl_section(
@@ -149,6 +136,7 @@ async def crawl_section(
     args: argparse.Namespace,
     notify: bool,
     previous_catalogue_section: dict | None = None,
+    published_catalogue: dict | None = None,
 ) -> tuple[dict, dict]:
     async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=30.0) as client:
         result = await crawl(httpx_fetcher(client), config)
@@ -162,15 +150,21 @@ async def crawl_section(
         len(result.items),
     )
 
+    if result.blocked:
+        raise RuntimeError(f"[{section_id}] Amazon blocked the crawl; preserve published checkpoint")
+
     # One scan of bestseller pages records thousands of observed prices. Seller
     # verification is intentionally DISABLED: it is not an eligibility gate
     # for price-drop leads, CeX matching or Telegram research alerts.
-    processed = process_crawl(result, config, allow_alerts=True)
-    spot_rows = (
-        processed.rapid_drops
-        + processed.premium_drops
-        + [d for d in processed.drops if float(d.get("price_eur") or 0) >= config.premium_min_price_eur]
-    )
+    processed = process_crawl(result, config, allow_alerts=notify)
+    min_interrupt_price = load_alert_policy().min_amazon_price_eur
+    spot_rows = [
+        row for row in (
+            processed.rapid_drops
+            + processed.premium_drops
+            + processed.drops
+        ) if float(row.get("price_eur") or 0) >= min_interrupt_price
+    ]
     async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=30.0) as spot_client:
         spot_alerts = await spot_check_list_prices(
             spot_client,
@@ -186,15 +180,22 @@ async def crawl_section(
         section_id=section_id,
         section_name=section_name,
     )
+    reuse_cex_metadata(section_catalogue, published_catalogue or {})
     urgent = [
         row["asin"]
         for row in (processed.rapid_drops + processed.premium_drops + processed.drops)
         if (row.get("drop_percent") or 0) >= 25 or float(row.get("price_eur") or 0) >= config.premium_min_price_eur
     ]
-    if section_id == "cex_priority":
+    if any(s.id == section_id and s.priority_rotation for s in load_sections(args.config)):
         seen_urgent = set(urgent)
         keywords = [k.lower() for k in config.cex_priority_keywords]
-        for row in section_catalogue.get("items") or []:
+        # Oldest keyword opportunities progress instead of repeatedly selecting
+        # the first bestseller cards; expensive items win ties.
+        keyword_rows = sorted(section_catalogue.get("items") or [], key=lambda r: (
+            bool(r.get("last_checked_at")), r.get("last_checked_at") or "",
+            -float(r.get("price_eur") or 0),
+        ))
+        for row in keyword_rows:
             if not row.get("active", True) or row.get("price_eur") is None:
                 continue
             hay = f"{row.get('title') or ''} {row.get('category') or ''}".lower()
@@ -313,9 +314,15 @@ async def crawl_section(
             age = datetime.now(timezone.utc) - last_at
         except (TypeError, ValueError):
             return True
+        # Same-price opportunities must not re-alert every day. Only a
+        # further material discount warrants another phone notification.
+        prior_price = float(previous.get("price_eur") or 0)
+        current_price = float(row.get("price_eur") or 0)
         return (
-            age >= timedelta(hours=24)
-            or float(row.get("price_eur") or 0) < float(previous.get("price_eur") or 0) - 0.01
+            age >= timedelta(0)
+            and prior_price - current_price >= 25
+            and prior_price > 0
+            and (prior_price - current_price) / prior_price >= 0.10
         )
 
     def mark_cex_sent(row: dict) -> None:
@@ -350,9 +357,9 @@ async def crawl_section(
                 deep_drop=False, max_alerts=config.cex_any_price_max_alerts_per_run,
                 should_send=should_send_cex, on_sent=mark_cex_sent,
             )
-        if not args.skip_health:
-            await send_health_messages(result, processed, config, dashboard_url=dashboard_url)
-        await send_section_summary(section_name, payload, dashboard_url)
+        # Run status, health and all research leads are visible on GitHub/Pages.
+        # No Telegram/WhatsApp scan-complete, welcome, health or daily digests.
+        # The only messages are qualifying high-ticket drop/CeX leads.
     # export_deals was created before the async notifications. Refresh delivery
     # flags after sends so Pages doesn't say "Telegram pending" for sent alerts.
     payload["alerts"] = db.recent_alerts(limit=50)
@@ -391,6 +398,7 @@ async def run(args: argparse.Namespace) -> None:
                 config, section_id=section.id, section_name=section.name,
                 args=args, notify=notify,
                 previous_catalogue_section=existing_sections.get(section.id),
+                published_catalogue=complete_catalogue,
             )
             merged = merge_section_deals(merged, part)
             complete_catalogue = merge_catalogue(complete_catalogue, section_inventory)
@@ -411,6 +419,7 @@ async def run(args: argparse.Namespace) -> None:
             args=args,
             notify=notify,
             previous_catalogue_section=existing_sections.get(section.id),
+            published_catalogue=previous_catalogue,
         )
         if not args.publish_fragment and args.merge_previous and args.merge_previous.exists():
             previous = read_snapshot(args.merge_previous)

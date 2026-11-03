@@ -145,11 +145,14 @@ function renderGeneralDropsPage() {
   const pagination = document.getElementById("general-drops-pagination");
   if (!table || !body || !summary) return;
   const min = Number(document.getElementById("drop-min")?.value || 10);
+  const minPrice = Number(document.getElementById("drop-min-price")?.value || 0);
+  const minSaving = Number(document.getElementById("drop-min-saving")?.value || 0);
   const section = document.getElementById("drop-section")?.value || "";
   const sort = document.getElementById("drop-sort")?.value || "percentage";
   const q = (document.getElementById("drop-search")?.value || "").toLowerCase().trim();
   const selected = generalDropRows.filter((r) => {
-    if (r.drop_percent < min || (section && r.section_id !== section)) return false;
+    if (r.drop_percent < min || r.price_eur < minPrice || r.savings_eur < minSaving ||
+        (section && r.section_id !== section)) return false;
     return !q || [r.title, r.asin, r.category, r.section_name]
       .some((v) => String(v || "").toLowerCase().includes(q));
   });
@@ -228,7 +231,7 @@ function renderGeneralDrops(deals) {
 }
 
 function setupGeneralDropControls() {
-  for (const id of ["drop-min", "drop-section", "drop-sort", "drop-search"]) {
+  for (const id of ["drop-min", "drop-min-price", "drop-min-saving", "drop-section", "drop-sort", "drop-search"]) {
     document.getElementById(id)?.addEventListener("input", () => {
       generalDropPage = 0;
       renderGeneralDropsPage();
@@ -772,7 +775,6 @@ function renderSectionProgress(deals) {
       <td>${fmtTime(section.generated_at)}</td>
       <td>${escapeHtml(status)}</td>
       <td>${Number(section.items_seen || 0).toLocaleString("en-IE")}</td>
-      <td>Disabled</td>
       <td>${progress}${pending}</td>
       <td>${Number(cex.live_lookups || 0)} live / ${Number(cex.cache_hits || 0)} cached</td>
       <td>${Number((section.general_drops || section.drops || []).length)} <span class="hint">${section.general_drops ? "≥10%" : "legacy ≥30%"}</span></td>
@@ -920,6 +922,96 @@ function renderPremiumDrops(deals) {
   }
 }
 
+function selectRadarLeads(deals, now = Date.now()) {
+  const config = deals.alert_policy || {};
+  const threshold = (key, fallback) => {
+    const value = Number(config[key]);
+    return config[key] != null && Number.isFinite(value) ? value : fallback;
+  };
+  const drops = (deals.general_drops || deals.drops || []).filter(row => {
+    const nowPrice = Number(row.price_eur);
+    const reference = Number(row.reference_eur ?? row.median_eur);
+    const saved = reference - nowPrice;
+    const observed = Date.parse(row.last_scanned_at || row.observed_at || deals.last_section_at || deals.generated_at);
+    return Number.isFinite(nowPrice) && Number.isFinite(reference) && reference > nowPrice &&
+      nowPrice >= threshold("min_amazon_price_eur",120) &&
+      reference >= threshold("min_reference_eur",250) &&
+      saved >= threshold("min_saving_eur",120) &&
+      (100 * saved/reference) >= threshold("min_history_drop_percent",50) &&
+      Number.isFinite(observed) && now >= observed && now-observed <= 12*3600000;
+  }).map(row => ({...row, radar_type:"drop", radar_value:Number(row.reference_eur ?? row.median_eur)-Number(row.price_eur)}));
+  const cex = [...(deals.cex_flips || []),...(deals.cex_arbitrage || [])].filter(row => {
+    const observed=Date.parse(row.observed_at || row.last_scanned_at || deals.last_section_at || deals.generated_at);
+    return Number(row.price_eur) >= threshold("min_cex_buy_price_eur",100) &&
+      Number(row.cex_cash_profit_eur) >= threshold("min_cex_cash_profit_eur",45) &&
+      Number(row.cex_net_roi_percent) >= threshold("min_cex_roi_percent",25) &&
+      ["barcode_verified","model_verified"].includes(row.match_confidence) &&
+      row.cex_quote_fresh_for_alert === true && row.cex_cash_flip !== false &&
+      Number.isFinite(observed) && now >= observed && now-observed <= 12*3600000;
+  }).map(row => ({...row, radar_type:"cex",radar_value:Number(row.cex_cash_profit_eur)}));
+  drops.sort((a,b)=>b.radar_value-a.radar_value);
+  cex.sort((a,b)=>b.radar_value-a.radar_value);
+  const byAsin = new Map();
+  for(const row of [...cex,...drops]) if(row.asin && !byAsin.has(row.asin)) byAsin.set(row.asin,row);
+  return {drops,cex,items:[...byAsin.values()].slice(0,6)};
+}
+function renderOpportunityRadar(deals) {
+  const root = document.getElementById("radar-cards");
+  if (!root) return;
+  const result = selectRadarLeads(deals);
+  const p = deals.alert_policy || {};
+  document.getElementById("radar-drop-count").textContent = String(result.drops.length);
+  document.getElementById("radar-cex-count").textContent = String(result.cex.length);
+  document.getElementById("radar-last-published").textContent = fmtTime(deals.generated_at);
+  document.getElementById("radar-policy").textContent =
+    "Telegram: large historical drops (from " + fmtEuro(p.min_amazon_price_eur ?? 120) +
+    " Amazon price, " + fmtEuro(p.min_saving_eur ?? 120) + " saved, " +
+    (p.min_history_drop_percent ?? 50) + "% off) or exact-model CeX margins of at least " +
+    fmtEuro(p.min_cex_cash_profit_eur ?? 45) + " and " + (p.min_cex_roi_percent ?? 25) +
+    "% ROI. Always confirm seller, variant and checkout.";
+  root.replaceChildren();
+  const make = (tag, label, cls) => {
+    const node = document.createElement(tag);
+    if (label != null) node.textContent = label;
+    if (cls) node.className = cls;
+    return node;
+  };
+  if (!result.items.length) {
+    const box = make("div", null, "radar-empty");
+    box.appendChild(make("strong", "No major opportunities qualify right now."));
+    box.appendChild(make("p", "The tracker still scans everything. Smaller price drops and title-only CeX matches remain in the other tabs.", "hint"));
+    root.appendChild(box);
+    return;
+  }
+  for (const row of result.items) {
+    const card = make("article", null, "radar-item");
+    const head = make("div", null, "radar-item-head");
+    head.appendChild(make("span", row.radar_type === "cex" ? "MATCHED CeX CASH" : "LARGE AMAZON DROP", "eyebrow"));
+    head.appendChild(make("span", "Unverified", "badge fetch"));
+    card.appendChild(head);
+    const h = make("h3"), link = make("a", row.title || row.asin || "Product");
+    link.href = /^[A-Z0-9]{10}$/i.test(String(row.asin || "")) ?
+      "https://www.amazon.ie/dp/" + row.asin : "https://www.amazon.ie/";
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    h.appendChild(link);
+    card.appendChild(h);
+    const price = make("div", null, "radar-item-price");
+    price.appendChild(make("strong", fmtEuro(row.radar_value)));
+    price.appendChild(make("span", row.radar_type === "cex" ?
+      "estimated net cash margin" : "saved vs Amazon price history"));
+    card.appendChild(price);
+    const details = row.radar_type === "cex" ?
+      "Amazon " + fmtEuro(row.price_eur) + " · " + Number(row.cex_net_roi_percent).toFixed(0) +
+      "% ROI · exact " + row.match_confidence.replaceAll("_", " ") :
+      "Amazon " + fmtEuro(row.price_eur) + " · usual " + fmtEuro(row.reference_eur ?? row.median_eur) +
+      " · " + Number(row.drop_percent).toFixed(0) + "% off";
+    card.appendChild(make("p", details, "hint"));
+    card.appendChild(make("p", "Seller, condition and checkout not checked. Open listing to verify.", "hint"));
+    root.appendChild(card);
+  }
+}
+
 function renderDeals(deals) {
   if (!deals || !deals.generated_at) return;
   const summary = document.getElementById("deals-summary");
@@ -972,6 +1064,7 @@ function renderDeals(deals) {
       `${Number(progress.cex_matched || 0).toLocaleString("en-IE")} confirmed CeX matches.`;
   }
   renderGeneralDrops(deals);
+  renderOpportunityRadar(deals);
   renderDeepDrops(deals);
   renderCex(deals);
   renderCexArbitrage(deals);
