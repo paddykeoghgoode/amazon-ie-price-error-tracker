@@ -145,11 +145,14 @@ function renderGeneralDropsPage() {
   const pagination = document.getElementById("general-drops-pagination");
   if (!table || !body || !summary) return;
   const min = Number(document.getElementById("drop-min")?.value || 10);
+  const minPrice = Number(document.getElementById("drop-min-price")?.value || 0);
+  const minSaving = Number(document.getElementById("drop-min-saving")?.value || 0);
   const section = document.getElementById("drop-section")?.value || "";
   const sort = document.getElementById("drop-sort")?.value || "percentage";
   const q = (document.getElementById("drop-search")?.value || "").toLowerCase().trim();
   const selected = generalDropRows.filter((r) => {
-    if (r.drop_percent < min || (section && r.section_id !== section)) return false;
+    if (r.drop_percent < min || r.price_eur < minPrice || r.savings_eur < minSaving ||
+        (section && r.section_id !== section)) return false;
     return !q || [r.title, r.asin, r.category, r.section_name]
       .some((v) => String(v || "").toLowerCase().includes(q));
   });
@@ -228,7 +231,7 @@ function renderGeneralDrops(deals) {
 }
 
 function setupGeneralDropControls() {
-  for (const id of ["drop-min", "drop-section", "drop-sort", "drop-search"]) {
+  for (const id of ["drop-min", "drop-min-price", "drop-min-saving", "drop-section", "drop-sort", "drop-search"]) {
     document.getElementById(id)?.addEventListener("input", () => {
       generalDropPage = 0;
       renderGeneralDropsPage();
