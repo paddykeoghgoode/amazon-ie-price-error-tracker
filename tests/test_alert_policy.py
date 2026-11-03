@@ -61,5 +61,55 @@ class TestQuietTelegram(unittest.TestCase):
         self.assertEqual(AlertPolicy().max_alerts_per_run, 3)
 
 
+
+
+class TestWatchlistHistory(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+        from app import database as db
+        from app.config import settings
+        self.temp = tempfile.TemporaryDirectory()
+        self.old_database = settings.database_path
+        settings.database_path = Path(self.temp.name) / "data.db"
+        db.init_db()
+        self.pid = db.add_product("B000000001", "https://www.amazon.ie/dp/B000000001", "Electronics")
+
+    def tearDown(self):
+        from app.config import settings
+        settings.database_path = self.old_database
+        self.temp.cleanup()
+
+    def observe(self, price):
+        from app.services.monitor import record_and_detect
+        from app.scraper.amazon_ie import ProductSnapshot
+        snap = ProductSnapshot(
+            asin="B000000001", url="https://www.amazon.ie/dp/B000000001",
+            title="Electronics", price_eur=price, currency="EUR",
+        )
+        return record_and_detect(
+            self.pid, snap, alert_policy=AlertPolicy(),
+            allow_high_value_history_lead=True,
+        )
+
+    def test_low_price_does_not_create_alert_but_history_survives(self):
+        from app import database as db
+        for _ in range(3):
+            self.assertIsNone(self.observe(100))
+        self.assertIsNone(self.observe(5))
+        self.assertEqual(db.price_history(self.pid, limit=3)[0]["price_eur"], 5)
+        self.assertIsNone(db.last_alert_for_product(self.pid))
+
+    def test_large_watchlist_cut_notifies_once_even_below_75pct(self):
+        from app import database as db
+        for _ in range(3):
+            self.assertIsNone(self.observe(500))
+        lead = self.observe(200)
+        self.assertIsNotNone(lead)
+        self.assertIn("Large Amazon price reduction", lead.message)
+        self.assertIn("RESEARCH ONLY", lead.message)
+        db.mark_alert_notified(lead.alert_id, telegram=True, whatsapp=False)
+        self.assertIsNone(self.observe(200), "unchanged lead must not repeat")
+
 if __name__ == "__main__":
     unittest.main()
