@@ -37,6 +37,10 @@ _SECTION_STORE_KEYS = (
     "new_alerts",
     "scan_status",
     "price_baselines",
+    "premium_drops",
+    "rapid_drops",
+    "premium_min_price_eur",
+    "premium_history_drop_percent",
 )
 
 
@@ -125,6 +129,8 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
                 row["found_at"] = original
 
     drops: list[dict] = []
+    premium_drops: list[dict] = []
+    rapid_drops: list[dict] = []
     cex_flips: list[dict] = []
     cex_arbitrage: list[dict] = []
     cex_near: list[dict] = []
@@ -142,6 +148,8 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
 
     for snap in sections.values():
         drops.extend(snap.get("drops") or [])
+        premium_drops.extend(snap.get("premium_drops") or [])
+        rapid_drops.extend(snap.get("rapid_drops") or [])
         cex_flips.extend(snap.get("cex_flips") or [])
         cex_arbitrage.extend(snap.get("cex_arbitrage") or [])
         cex_near.extend(snap.get("cex_near_margin") or [])
@@ -165,6 +173,8 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
             if not row.get("found_at"):
                 row["found_at"] = incoming.get("generated_at")
     drops = sorted(_dedupe_by_asin(drops), key=lambda r: r.get("drop_percent") or 0, reverse=True)
+    premium_drops = sorted(_dedupe_by_asin(premium_drops), key=lambda r: r.get("drop_percent") or 0, reverse=True)
+    rapid_drops = sorted(_dedupe_by_asin(rapid_drops), key=lambda r: r.get("drop_percent") or 0, reverse=True)
     cex_flips = sorted(
         _dedupe_by_asin(cex_flips), key=lambda r: r.get("cex_cash_profit_eur") or 0, reverse=True
     )
@@ -198,6 +208,12 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
         "errors": errors,
         "blocked": blocked,
         "drops": drops[:50],
+        "premium_drops": premium_drops[:30],
+        "rapid_drops": rapid_drops[:30],
+        "premium_min_price_eur": incoming.get("premium_min_price_eur", base.get("premium_min_price_eur", 100)),
+        "premium_history_drop_percent": incoming.get(
+            "premium_history_drop_percent", base.get("premium_history_drop_percent", 45)
+        ),
         "deep_drop_tiers": incoming.get("deep_drop_tiers") or base.get("deep_drop_tiers") or [40, 50, 66],
         "deep_drops": _merge_deep_drops(sections),
         "cex_enabled": incoming.get("cex_enabled", base.get("cex_enabled", True)),
@@ -248,6 +264,14 @@ def export_deals(
         "catalogue_stats": processed.catalogue_stats,
         "scan_status": "blocked" if result.blocked else ("partial" if result.errors else "completed"),
         "drops": [{**row, "found_at": datetime.now(timezone.utc).isoformat()} for row in processed.drops[:max_drops]],
+        "premium_drops": [
+            {**row, "found_at": datetime.now(timezone.utc).isoformat()} for row in processed.premium_drops[:30]
+        ],
+        "rapid_drops": [
+            {**row, "found_at": datetime.now(timezone.utc).isoformat()} for row in processed.rapid_drops[:30]
+        ],
+        "premium_min_price_eur": config.premium_min_price_eur if config else 100.0,
+        "premium_history_drop_percent": config.premium_history_drop_percent if config else 45.0,
         "alerts": db.recent_alerts(limit=50),
         "deep_drop_tiers": [int(t) for t in tiers],
         "deep_drops": tiered_deep_drops(processed.drops, tiers),

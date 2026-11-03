@@ -13,6 +13,12 @@ import httpx
 from app import database as db
 from app.scraper.amazon_ie import AMAZON_IE_BASE, ProductSnapshot, is_eligible_amazon_offer, eligible_offer_type, fetch_product
 from app.scraper.bestsellers import BestsellerItem, normalize_category_path, parse_bestseller_page
+from app.services.premium_drops import (
+    build_lead_alert,
+    observe_premium_history_drop,
+    observe_rapid_scan_drop,
+    observation_to_row,
+)
 from app.services.drop_tiers import drop_tier
 from app.services.monitor import DetectedAlert, notify_alert, record_and_detect, send_notification
 
@@ -29,6 +35,7 @@ class CategoryRoot:
     path: str
     depth: int = 1
     name: str | None = None
+    pages: int | None = None
 
 
 @dataclass
@@ -44,6 +51,14 @@ class CrawlConfig:
     history_per_product: int = 20
     baseline_max_age_days: int = 30
     report_drop_percent: float = 30.0
+    premium_min_price_eur: float = 100.0
+    premium_history_drop_percent: float = 45.0
+    rapid_drop_min_price_eur: float = 80.0
+    rapid_drop_percent: float = 20.0
+    rapid_drop_min_saving_eur: float = 30.0
+    premium_spot_check_limit: int = 6
+    premium_alerts_per_run: int = 8
+    discovery_feeds: list[CategoryRoot] = field(default_factory=list)
     daily_summary_hour: int | None = 9
     deep_drop_tiers: list[float] = field(default_factory=lambda: [40.0, 50.0, 66.0])
     verify_max_candidates: int = 35  # legacy configuration; progressive queue supersedes this
@@ -120,6 +135,8 @@ class ProcessResult:
     priced: int = 0
     with_history: int = 0
     alerts: list[DetectedAlert] = field(default_factory=list)
+    premium_drops: list[dict] = field(default_factory=list)
+    rapid_drops: list[dict] = field(default_factory=list)
     drops: list[dict] = field(default_factory=list)
     cex_lookups: list[dict] = field(default_factory=list)
     cex_flips: list[dict] = field(default_factory=list)
@@ -130,16 +147,26 @@ class ProcessResult:
     catalogue_stats: dict = field(default_factory=dict)
 
 
+def _parse_roots(entries: list) -> list[CategoryRoot]:
+    roots: list[CategoryRoot] = []
+    for entry in entries or []:
+        if isinstance(entry, dict):
+            roots.append(
+                CategoryRoot(
+                    path=normalize_category_path(entry["path"]),
+                    depth=int(entry.get("depth", 1)),
+                    name=entry.get("name"),
+                    pages=int(entry["pages"]) if entry.get("pages") is not None else None,
+                )
+            )
+        else:
+            roots.append(CategoryRoot(path=normalize_category_path(str(entry))))
+    return roots
+
+
 def load_config(path: Path) -> CrawlConfig:
     raw = json.loads(path.read_text(encoding="utf-8"))
-    roots = [
-        CategoryRoot(
-            path=normalize_category_path(entry["path"] if isinstance(entry, dict) else entry),
-            depth=int(entry.get("depth", 1)) if isinstance(entry, dict) else 1,
-            name=entry.get("name") if isinstance(entry, dict) else None,
-        )
-        for entry in raw.get("categories") or []
-    ]
+    roots = _parse_roots(raw.get("categories") or [])
     defaults = CrawlConfig(roots=[])
     return CrawlConfig(
         roots=roots,
@@ -153,6 +180,16 @@ def load_config(path: Path) -> CrawlConfig:
         history_per_product=int(raw.get("history_per_product", defaults.history_per_product)),
         baseline_max_age_days=max(1, int(raw.get("baseline_max_age_days", defaults.baseline_max_age_days))),
         report_drop_percent=float(raw.get("report_drop_percent", defaults.report_drop_percent)),
+        premium_min_price_eur=float(raw.get("premium_min_price_eur", defaults.premium_min_price_eur)),
+        premium_history_drop_percent=float(
+            raw.get("premium_history_drop_percent", defaults.premium_history_drop_percent)
+        ),
+        rapid_drop_min_price_eur=float(raw.get("rapid_drop_min_price_eur", defaults.rapid_drop_min_price_eur)),
+        rapid_drop_percent=float(raw.get("rapid_drop_percent", defaults.rapid_drop_percent)),
+        rapid_drop_min_saving_eur=float(raw.get("rapid_drop_min_saving_eur", defaults.rapid_drop_min_saving_eur)),
+        premium_spot_check_limit=max(0, int(raw.get("premium_spot_check_limit", defaults.premium_spot_check_limit))),
+        premium_alerts_per_run=max(0, int(raw.get("premium_alerts_per_run", defaults.premium_alerts_per_run))),
+        discovery_feeds=_parse_roots(raw.get("discovery_feeds") or []),
         daily_summary_hour=raw.get("daily_summary_hour", defaults.daily_summary_hour),
         deep_drop_tiers=[float(x) for x in raw.get("deep_drop_tiers", defaults.deep_drop_tiers)],
         verify_max_candidates=max(0, int(raw.get('verify_max_candidates', defaults.verify_max_candidates))),
@@ -226,7 +263,7 @@ async def crawl(fetch: Fetcher, config: CrawlConfig) -> CrawlResult:
                 continue
             visited.add(path)
             category_name = None
-            for page_no in range(1, config.pages_per_category + 1):
+            for page_no in range(1, (root.pages or config.pages_per_category) + 1):
                 if not budget_left():
                     break
                 url = f"{AMAZON_IE_BASE}{path}" + (f"?pg={page_no}" if page_no > 1 else "")
@@ -269,11 +306,14 @@ async def crawl(fetch: Fetcher, config: CrawlConfig) -> CrawlResult:
 
 def process_crawl(result: CrawlResult, config: CrawlConfig, *, allow_alerts: bool = False) -> ProcessResult:
     processed = ProcessResult()
+    premium_alert_budget = config.premium_alerts_per_run
     for asin, (item, category) in result.items.items():
         if item.price_eur is None:
             continue
         processed.priced += 1
         product_id = db.add_product(asin, item.url, item.title)
+        previous = db.latest_price_check(product_id)
+        previous_eur = float(previous["price_eur"]) if previous and previous.get("price_eur") is not None else None
         snap = ProductSnapshot(
             asin=asin,
             url=item.url,
@@ -292,6 +332,26 @@ def process_crawl(result: CrawlResult, config: CrawlConfig, *, allow_alerts: boo
         )
         if alert and allow_alerts:
             processed.alerts.append(alert)
+
+        rapid = observe_rapid_scan_drop(
+            asin=asin,
+            title=item.title,
+            url=item.url,
+            category=category,
+            rank=item.rank,
+            price_eur=float(item.price_eur),
+            previous_eur=previous_eur,
+            config=config,
+        )
+        if rapid:
+            processed.rapid_drops.append(observation_to_row(rapid))
+            if allow_alerts and premium_alert_budget > 0:
+                lead = build_lead_alert(
+                    product_id, rapid, cooldown_minutes=config.alert_cooldown_minutes
+                )
+                if lead:
+                    processed.alerts.append(lead)
+                    premium_alert_budget -= 1
 
         anchor = db.get_price_baseline(product_id)
         if not anchor:
@@ -320,7 +380,28 @@ def process_crawl(result: CrawlResult, config: CrawlConfig, *, allow_alerts: boo
                     "drop_tier": drop_tier(drop, config.deep_drop_tiers),
                 }
             )
+        premium = observe_premium_history_drop(
+            asin=asin,
+            title=item.title,
+            url=item.url,
+            category=category,
+            rank=item.rank,
+            price_eur=float(item.price_eur),
+            reference_eur=reference_eur,
+            config=config,
+        )
+        if premium:
+            processed.premium_drops.append(observation_to_row(premium))
+            if allow_alerts and premium_alert_budget > 0:
+                lead = build_lead_alert(
+                    product_id, premium, cooldown_minutes=config.alert_cooldown_minutes
+                )
+                if lead:
+                    processed.alerts.append(lead)
+                    premium_alert_budget -= 1
     processed.drops.sort(key=lambda d: d["drop_percent"], reverse=True)
+    processed.premium_drops.sort(key=lambda d: d["drop_percent"], reverse=True)
+    processed.rapid_drops.sort(key=lambda d: d["drop_percent"], reverse=True)
     db.prune_price_checks(config.history_per_product)
     return processed
 

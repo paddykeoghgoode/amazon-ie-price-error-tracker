@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     min_discount_percent: float = 75.0
     min_list_price_eur: float = 20.0
-    max_alert_price_eur: float = 500.0
+    max_alert_price_eur: float = 2500.0
     cooldown_minutes: int = 30
 
     host: str = "0.0.0.0"
