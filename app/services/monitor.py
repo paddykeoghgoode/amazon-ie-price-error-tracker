@@ -10,6 +10,9 @@ from app.detector.price_error import evaluate_price, should_notify_again
 from app.notifier.telegram import format_price_alert, send_telegram_message, send_whatsapp_message
 from app.scraper.amazon_ie import ProductSnapshot, extract_asin, fetch_product, normalize_product_url
 from app.services.price_history import observe_price_reference
+from app.services.alert_policy import (
+    AlertPolicy, load_alert_policy, qualifies_price_event,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +40,8 @@ def record_and_detect(
     known_title: str | None = None,
     cooldown_minutes: int | None = None,
     baseline_max_age_days: int = 30,
+    alert_policy: AlertPolicy | None = None,
+    emit_alert: bool = True,
 ) -> DetectedAlert | None:
     if snap.title and snap.title != known_title:
         db.update_product_title(product_id, snap.title)
@@ -49,6 +54,19 @@ def record_and_detect(
         snap.currency,
     )
 
+    if not emit_alert:
+        return None
+    if alert_policy is not None:
+        anchor = db.get_price_baseline(product_id) or {}
+        if not qualifies_price_event(
+            snap.price_eur,
+            historical_reference_eur=anchor.get("reference_eur"),
+            list_reference_eur=snap.list_price_eur,
+            policy=alert_policy,
+        ):
+            # Still store the observed price/history; just don't create a
+            # low-value alert record or wake the user via Telegram.
+            return None
     return detect_price_lead(
         product_id, snap, known_title=known_title,
         cooldown_minutes=cooldown_minutes,
@@ -156,7 +174,10 @@ async def check_product(client: httpx.AsyncClient, product: dict) -> ProductSnap
         db.record_price_check(product_id, None, None, None, raw_note=str(exc))
         return
 
-    alert = record_and_detect(product_id, snap, known_title=product.get("title"))
+    alert = record_and_detect(
+        product_id, snap, known_title=product.get("title"),
+        alert_policy=load_alert_policy(),
+    )
     if alert:
         await notify_alert(alert)
     return snap
