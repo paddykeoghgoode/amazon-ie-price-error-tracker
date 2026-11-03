@@ -1,7 +1,8 @@
-name: Fast checks for confirmed drops
+name: Fast checks for price-drop leads
 on:
   schedule:
-    - cron: "20,50 * * * *"
+    # Ten-minute targeted checks, staggered from full/watchlist ticks.
+    - cron: "0,10,20,30,40,50 * * * *"
   workflow_dispatch:
 permissions:
   contents: read
@@ -34,7 +35,7 @@ jobs:
           mkdir -p site
           curl -fsSL "$PAGES_URL/deals.json?t=$(date +%s)" -o site/deals.json || echo '{}' > site/deals.json
           curl -fsSL "$PAGES_URL/hotlist.json?t=$(date +%s)" -o site/previous-hotlist.json || echo '{}' > site/previous-hotlist.json
-      - name: Recheck recent verified drops
+      - name: Recheck recent observed price-drop leads
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -51,4 +52,4 @@ jobs:
         with:
           artifact_name: pages-hotlist-${{ github.run_attempt }}
       - name: Report scan time and counts
-        run: python -c "import json,os; d=json.load(open('docs/hotlist.json')); open(os.environ['GITHUB_STEP_SUMMARY'],'a').write('Hotlist checked %s, verified %s at %s UTC\\n' % (len(d['products']), d['price_read'], d['generated_at']))"
+        run: python -c "import json,os; d=json.load(open('docs/hotlist.json')); open(os.environ['GITHUB_STEP_SUMMARY'],'a').write('Hotlist checked %s, price read %s at %s UTC\\n' % (len(d['products']), d['price_read'], d['generated_at']))"

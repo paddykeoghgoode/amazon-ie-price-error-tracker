@@ -2,7 +2,10 @@ name: Scan and publish tracker
 
 on:
   schedule:
-    - cron: "5,35 * * * *"
+    # Regular discovery + watchlist: one bestseller section every 20 minutes.
+    - cron: "5,25,45 * * * *"
+    # Watchlist only between full ticks, giving a 10-minute cadence.
+    - cron: "15,35,55 * * * *"
   workflow_dispatch:
     inputs:
       crawl_section:
@@ -28,8 +31,10 @@ permissions:
   pages: write
   id-token: write
 
+# Keep expensive discovery runs serial, but let watchlist-only ticks
+# start without waiting for the full crawler; publishing is locked per job.
 concurrency:
-  group: tracker
+  group: tracker-${{ (github.event_name == 'issues' || (github.event_name == 'schedule' && github.event.schedule == '15,35,55 * * * *')) && 'watchlist' || 'main' }}
   cancel-in-progress: false
 
 env:
@@ -39,6 +44,10 @@ jobs:
   watchlist:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Prevent concurrent runs from racing on watchlist price history.
+    concurrency:
+      group: tracker-watchlist-scan
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
 
@@ -110,7 +119,9 @@ jobs:
       - name: Assemble site after watchlist scan
         run: |
           mkdir -p docs
-          cp incoming/watchlist-data.json docs/data.json
+          curl -fsSL "$PAGES_URL/data.json?t=$(date +%s)" -o docs/data.previous.json || echo '{}' > docs/data.previous.json
+          python3 -m scripts.publish_watchlist --previous docs/data.previous.json --incoming incoming/watchlist-data.json --output docs/data.json
+          rm docs/data.previous.json
           curl -fsSL "$PAGES_URL/deals.json?t=$(date +%s)" -o docs/deals.json || true
           test -s docs/deals.json || echo '{}' > docs/deals.json
           curl -fsSL "$PAGES_URL/hotlist.json?t=$(date +%s)" -o docs/hotlist.json || echo '{}' > docs/hotlist.json
@@ -130,7 +141,11 @@ jobs:
         inputs.crawl_section != 'all'
       ) ||
       github.event_name == 'push' ||
-      (github.event_name == 'schedule' && !github.event.repository.private)
+      (
+        github.event_name == 'schedule' &&
+        github.event.schedule == '5,25,45 * * * *' &&
+        !github.event.repository.private
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
