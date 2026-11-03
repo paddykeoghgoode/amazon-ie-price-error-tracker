@@ -342,21 +342,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-async def send_watchlist_summary(payload: dict) -> None:
-    products = payload.get("products") or []
-    price_errors = sum(1 for p in products if p.get("status") == "price_error")
-    fetch_errors = sum(1 for p in products if p.get("status") == "fetch_error")
-    url = payload.get("pages_url") or "https://github.io/"
-    message = (
-        "✅ Watchlist scan done\n\n"
-        f"Products watched: {len(products)}\n"
-        f"Price errors now: {price_errors}\n"
-        f"Fetch failed: {fetch_errors}\n\n"
-        f"{url}"
-    )
-    await send_notification(message)
-
-
 def main() -> None:
     args = parse_args()
     db.init_db()
@@ -405,8 +390,8 @@ def main() -> None:
     ))
     payload["watch_submissions"] = annotate_watch_submissions(issue_submissions, payload)
     write_snapshot(args.output, payload)
-    if not args.skip_fetch and not args.no_summary:
-        asyncio.run(send_watchlist_summary(payload))
+    # Silent routine scans. Individual large price errors are still
+    # alerted by monitor.check_product; scan status lives on the dashboard.
     if env_repo:
         asyncio.run(comment_on_new_watch_issue(repo, token, issue_submissions))
     if args.markdown:

@@ -1,12 +1,12 @@
 {
-  "_comment": "Broad discovery automatically queues the next rotating bestseller section after publishing; hourly frequency depends on run duration. Watchlist and priority-drop checks remain every 10 minutes. CeX quotes cached 72h matched / 7d no-match / 6h provider backoff; lower live CeX calls to 10 per broad scan because cycles now occur more often.",
+  "_comment": "Automatic scanning continues continuously, but Telegram is RESERVED for high-value research leads. No routine scan summaries or health digests. Default: Amazon now >= EUR120, reference >= EUR250, >=50% stable-history drop and >=EUR120 saved; list-price-only >=75% and >=EUR250 saved. CeX: exact model/EAN match, fresh quote, Amazon >= EUR100, estimated cash profit >= EUR45 and ROI >=25%. All smaller drops remain in the dashboard.",
   "max_items": 12000,
   "max_requests": 800,
   "pages_per_category": 2,
   "request_delay_seconds": 1.5,
-  "max_alerts_per_run": 15,
+  "max_alerts_per_run": 3,
   "alert_cooldown_minutes": 1440,
-  "daily_summary_hour": 9,
+  "daily_summary_hour": null,
   "deep_drop_tiers": [
     40,
     50,
@@ -207,7 +207,7 @@
   "rapid_drop_percent": 20,
   "rapid_drop_min_saving_eur": 30,
   "premium_spot_check_limit": 6,
-  "premium_alerts_per_run": 8,
+  "premium_alerts_per_run": 3,
   "discovery_feeds": [
     {
       "name": "Movers & shakers",
@@ -233,5 +233,19 @@
       "depth": 0,
       "pages": 1
     }
-  ]
+  ],
+  "cex_max_alerts_per_run": 2,
+  "cex_any_price_max_alerts_per_run": 2,
+  "telegram_min_amazon_price_eur": 120,
+  "telegram_min_reference_eur": 250,
+  "telegram_min_saving_eur": 120,
+  "telegram_min_history_drop_percent": 50,
+  "telegram_min_list_drop_percent": 75,
+  "telegram_min_list_saving_eur": 250,
+  "telegram_min_cex_buy_price_eur": 100,
+  "telegram_min_cex_cash_profit_eur": 45,
+  "telegram_min_cex_roi_percent": 25,
+  "telegram_max_alerts_per_run": 3,
+  "telegram_min_hotlist_extra_drop_eur": 25,
+  "telegram_min_hotlist_extra_drop_percent": 10
 }

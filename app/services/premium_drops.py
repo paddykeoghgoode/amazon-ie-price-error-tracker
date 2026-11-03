@@ -10,6 +10,9 @@ from app.config import settings
 from app.scraper.amazon_ie import ProductSnapshot
 from app.detector.price_error import should_notify_again
 from app.services.monitor import DetectedAlert
+from app.services.alert_policy import (
+    load_alert_policy, materially_cheaper_than_last, qualifies_observed_drop,
+)
 
 
 @dataclass(frozen=True)
@@ -140,6 +143,11 @@ def build_lead_alert(
     list_price_eur: float | None = None,
     cooldown_minutes: int | None = None,
 ) -> DetectedAlert | None:
+    previous = db.last_alert_for_product(product_id)
+    if previous and not materially_cheaper_than_last(
+        previous.get("price_eur"), obs.price_eur, load_alert_policy()
+    ):
+        return None
     if not should_notify_again(product_id, obs.price_eur, cooldown_minutes=cooldown_minutes):
         return None
     reason = lead_reason(obs)
@@ -178,7 +186,8 @@ async def spot_check_list_prices(
     from app.scraper.amazon_ie import fetch_product
 
     alerts: list[DetectedAlert] = []
-    budget = config.premium_alerts_per_run
+    policy = load_alert_policy()
+    budget = min(config.premium_alerts_per_run, policy.max_alerts_per_run)
     seen: set[str] = set()
     for row in rows:
         asin = row.get("asin")
@@ -199,7 +208,8 @@ async def spot_check_list_prices(
             rank=row.get("rank"),
             config=config,
         )
-        if obs and allow_alerts and budget > 0:
+        if (obs and allow_alerts and budget > 0
+            and qualifies_observed_drop(observation_to_row(obs), policy)):
             product_id = db.add_product(asin, snap.url, snap.title)
             lead = build_lead_alert(
                 product_id, obs, list_price_eur=snap.list_price_eur, cooldown_minutes=config.alert_cooldown_minutes

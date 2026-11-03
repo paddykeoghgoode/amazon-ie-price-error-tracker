@@ -31,6 +31,7 @@ from app.services.bestsellers import (
 from app.services.cex_arbitrage import enrich_with_cex
 from app.services.health import send_health_messages
 from app.services.premium_drops import spot_check_list_prices
+from app.services.alert_policy import load_alert_policy
 from app.services.monitor import BROWSER_HEADERS
 from app.services.catalogue import (
     make_section_catalogue, select_check_batch, apply_batch_results,
@@ -121,26 +122,6 @@ def resolve_section_id(args: argparse.Namespace, sections: list) -> str:
     return args.section
 
 
-async def send_section_summary(section_name: str, payload: dict, dashboard_url: str) -> None:
-    stats = payload.get("cex_stats") or {}
-    flips = int(stats.get("cash_flips") or 0)
-    arb = int(stats.get("arbitrage") or 0)
-    alerts = int(payload.get("new_alerts") or 0)
-    message = (
-        f"✅ {section_name} bestseller scan done\n\n"
-        f"Possible price-error leads this section: {alerts}\n"
-        f"High-ticket / rapid drops: {len(payload.get('premium_drops') or [])} premium · "
-        f"{len(payload.get('rapid_drops') or [])} rapid\n"
-        f"Possible CeX profit leads: {flips} (on sale) · {arb} (other)\n"
-        f"Catalogue processed: {int((payload.get('catalogue_stats') or {}).get('checked') or 0):,} / "
-        f"{int((payload.get('catalogue_stats') or {}).get('priced') or 0):,} priced listings\n"
-        f"CeX checks so far: {int((payload.get('catalogue_stats') or {}).get('cex_attempted') or 0):,}\n\n"
-        "⚠️ Observed Amazon prices only; seller/condition/checkout NOT verified.\n"
-        f"{dashboard_url}"
-    )
-    await send_notification(message)
-
-
 async def crawl_section(
     config,
     *,
@@ -165,12 +146,15 @@ async def crawl_section(
     # One scan of bestseller pages records thousands of observed prices. Seller
     # verification is intentionally DISABLED: it is not an eligibility gate
     # for price-drop leads, CeX matching or Telegram research alerts.
-    processed = process_crawl(result, config, allow_alerts=True)
-    spot_rows = (
-        processed.rapid_drops
-        + processed.premium_drops
-        + [d for d in processed.drops if float(d.get("price_eur") or 0) >= config.premium_min_price_eur]
-    )
+    processed = process_crawl(result, config, allow_alerts=notify)
+    min_interrupt_price = load_alert_policy().min_amazon_price_eur
+    spot_rows = [
+        row for row in (
+            processed.rapid_drops
+            + processed.premium_drops
+            + processed.drops
+        ) if float(row.get("price_eur") or 0) >= min_interrupt_price
+    ]
     async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=30.0) as spot_client:
         spot_alerts = await spot_check_list_prices(
             spot_client,
@@ -301,9 +285,15 @@ async def crawl_section(
             age = datetime.now(timezone.utc) - last_at
         except (TypeError, ValueError):
             return True
+        # Same-price opportunities must not re-alert every day. Only a
+        # further material discount warrants another phone notification.
+        prior_price = float(previous.get("price_eur") or 0)
+        current_price = float(row.get("price_eur") or 0)
         return (
-            age >= timedelta(hours=24)
-            or float(row.get("price_eur") or 0) < float(previous.get("price_eur") or 0) - 0.01
+            age >= timedelta(0)
+            and prior_price - current_price >= 25
+            and prior_price > 0
+            and (prior_price - current_price) / prior_price >= 0.10
         )
 
     def mark_cex_sent(row: dict) -> None:
@@ -338,9 +328,9 @@ async def crawl_section(
                 deep_drop=False, max_alerts=config.cex_any_price_max_alerts_per_run,
                 should_send=should_send_cex, on_sent=mark_cex_sent,
             )
-        if not args.skip_health:
-            await send_health_messages(result, processed, config, dashboard_url=dashboard_url)
-        await send_section_summary(section_name, payload, dashboard_url)
+        # Run status, health and all research leads are visible on GitHub/Pages.
+        # No Telegram/WhatsApp scan-complete, welcome, health or daily digests.
+        # The only messages are qualifying high-ticket drop/CeX leads.
     # export_deals was created before the async notifications. Refresh delivery
     # flags after sends so Pages doesn't say "Telegram pending" for sent alerts.
     payload["alerts"] = db.recent_alerts(limit=50)

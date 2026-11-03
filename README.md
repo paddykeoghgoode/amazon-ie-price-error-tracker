@@ -114,7 +114,7 @@ Each section examines up to **120 queued priced products per run**, in groups of
 
 You can tune \`catalogue_checks_per_run\` and \`catalogue_time_budget_seconds\` in \`bestsellers.json\`. Do not raise them dramatically without checking GitHub Action duration and Amazon/CeX throttling: all 12,000 products cannot be fetched safely in one job. The four sections rotate across sequential runs, so full first-pass CeX research of a large catalogue can take days. Listings without usable prices are still listed but cannot enter a CeX profit calculation until priced. Products dropping out of a bestseller ranking remain in the exported catalogue for up to 30 days as archived rows, but are not rechecked while absent. Updated price or product title clears old estimates, while reusable CeX box quotations are cached separately when the product identity remains unchanged; all current prices need checkout rechecking before buying. A failed or throttled section can resume from the last successful published checkpoint.
 
-Each **automatic** run crawls **one section** from [`bestsellers.json`](bestsellers.json) (~5–8 minutes, subject to provider response), **publishes that section**, sends a **section summary on Telegram**, and then **queues the next run**. The sequence is **gaming → home → lifestyle → general**, resuming from the last successfully published section rather than GitHub's run number. Broad scans use a serialized GitHub Actions queue and do not start while an earlier one is still active. Each section scan also pulls **Movers & Shakers** and **Most Wished** lists (see `discovery_feeds`) so you are not limited to sponsored bestseller charts alone.
+Each **automatic** run crawls **one section** from [`bestsellers.json`](bestsellers.json) (~5–8 minutes, subject to provider response), **publishes that section without a routine Telegram message**, and then **queues the next run**. The sequence is **gaming → home → lifestyle → general**, resuming from the last successfully published section rather than GitHub's run number. Broad scans use a serialized GitHub Actions queue and do not start while an earlier one is still active. Each section scan also pulls **Movers & Shakers** and **Most Wished** lists (see `discovery_feeds`) so you are not limited to sponsored bestseller charts alone.
 
 **High-ticket alerts:** items priced **≥€100** can Telegram-alert from **≥45%** below their stable reference (still research-only, below the 75% “price error” rule). Items **≥€80** that fall **≥20% since the previous scan** (minimum **€30** off) trigger **rapid drop** alerts. A handful of expensive candidates get a product-page check for struck-through “was” prices each run.
 
@@ -195,6 +195,44 @@ reduced-motion setting disables the animation. This is deliberate to avoid excee
 unauthenticated GitHub API rate limit. If GitHub rate-limits the browser,
 the panel keeps the last fetched state and reports that the status may be
 delayed. Scheduled scans and publishing continue independently.
+
+## Resale-first dashboard and quiet Telegram
+
+The dashboard's default **Top Deals** tab now leads with the most substantial
+observed Amazon reductions and model/barcode-matched **CeX cash margin research
+leads**, rather than operational logs. Cards distinguish **historical euro
+savings** (NOT resale profit) from **estimated CeX cash profit**. Only findings
+checked within the past 12 hours appear in this shortlist. Ordinary Amazon
+drops (including 10% reductions and lower-priced games) remain in **Amazon
+Drops**; you can filter those by current price, euro saving, discount,
+category and discovery time.
+
+**Routine Telegram messages are disabled:** no scan-finished summaries,
+watchlist completion, welcome messages, daily digest or health notifications
+from the automatic crawler. GitHub Actions and the dashboard continue showing
+all health/status information. Telegram and WhatsApp remain for qualifying
+high-value leads only, by default:
+
+- **Historical Amazon drop:** observed current price at least **€120**, a
+  stable historical reference at least **€250**, **50%** or more off and
+  at least **€120** saved. (A product-page advertised "was" price alone
+  needs **75%** off and at least **€250** apparent saving.)
+- **CeX resale:** Amazon price at least **€100**, estimated **net cash
+  profit €45+** after configured costs/haircut and **25%+ ROI**, with a
+  fresh CeX quote and exact **model or barcode match**. Title-only matches
+  remain visible on the dashboard but do not trigger Telegram.
+- At most **3** Amazon-drop alerts or **2** qualified CeX alerts per
+  section run. Old leads at unchanged prices do not send repeated daily
+  alerts; a further meaningful price cut is required.
+- Targeted fast checks only notify if an already substantial drop goes at
+  least another **€25 and 10%** lower.
+
+These are **research leads, not a buy recommendation**. Amazon's seller,
+variation, condition, shipping, checkout total and CeX's accepted grade/cash
+amount still require manual verification. A discount alone never guarantees
+resale demand or positive profit. You can adjust the alert thresholds with
+the `telegram_*` fields in `bestsellers.json`; the dashboard reads that
+same policy in the published scan output.
 
 ## Automatic scan scheduling (UTC)
 
