@@ -219,3 +219,48 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
   .drop-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .drops-heading { flex-wrap: wrap; }
 }
+
+/* Watchlist's optional exact-product competitor research. */
+.retail-setup {
+  margin: 1.15rem 0;
+  border: 1px solid #40506a;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+}
+.retail-setup summary { cursor: pointer; font-weight: 650; color: var(--text); }
+.retail-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+.retail-inputs label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.retail-inputs .span-all { grid-column: 1 / -1; }
+.retail-inputs input, .retail-inputs textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.7rem;
+  border: 1px solid #45526a;
+  border-radius: 8px;
+  color: var(--text);
+  background: #0e141d;
+  font: inherit;
+}
+.retail-product {
+  border-top: 1px solid #3a4658;
+  padding: 1rem 0;
+}
+.retail-product h3 { margin-top: 0; }
+.retail-product .retail-status-note { font-weight: 650; color: #a8c6e7; }
+.retail-offer-table { min-width: 610px; }
+.retail-offer-table td { vertical-align: top; }
+@media (max-width: 640px) {
+  .retail-inputs { grid-template-columns: 1fr; }
+}
