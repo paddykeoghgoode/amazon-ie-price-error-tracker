@@ -603,7 +603,7 @@ function cexStatusLine(deals) {
   const minPct = deals.cex_min_cash_profit_percent ?? 10;
   if (!lookups && !stats.deep_candidates && !stats.any_price_candidates) {
     return (
-      "No CeX data in this snapshot yet — wait for a bestseller section crawl (one runs every 30 minutes, ~5–8 min each)."
+      "No CeX data in this snapshot yet — the next bestseller section queues after the previous section publishes (usually several minutes per section)."
     );
   }
   if (!lookups) {

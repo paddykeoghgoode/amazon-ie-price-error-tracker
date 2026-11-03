@@ -2,7 +2,7 @@
 
 ### [Open the price tracker dashboard](https://paddykeoghgoode.github.io/amazon-ie-price-error-tracker/)
 
-Every 30 minutes, GitHub Actions checks Amazon.ie for price errors. It covers about 10,000 bestsellers plus your own watch list, and sends a **Telegram message as soon as a likely price error turns up**.
+GitHub Actions automatically queues the next bestseller section after the previous section successfully scans and publishes; the separate watchlist continues every 10 minutes. It covers about 10,000 bestsellers plus your own watch list, and sends a **Telegram message as soon as a likely price error turns up**.
 
 **Dashboard:** [paddykeoghgoode.github.io/amazon-ie-price-error-tracker](https://paddykeoghgoode.github.io/amazon-ie-price-error-tracker/) (times are Ireland / Europe/Dublin)
 
@@ -14,7 +14,7 @@ Every 30 minutes, GitHub Actions checks Amazon.ie for price errors. It covers ab
 2. Run **Actions → Scan and publish tracker → Run workflow** once. The manual default is now **all**: it scans Gaming, Home, Lifestyle and Books & media **one block at a time**, publishes each block as soon as it completes, and shows each block's status in GitHub Actions. You can choose **rotate** to run just one section. The watchlist also sends its own Telegram summary.
 3. After that it runs by itself at :05 and :35 past every hour. The dashboard and Telegram update **as each scan finishes** (watchlist and one bestseller section per run), not only when the whole workflow is done.
 
-Settings → Pages → Source must be **GitHub Actions**, and the repo must be **public**. Scheduled bestseller crawls take about 16 minutes each, which is only free on public repos. On a private repo, only manual runs crawl bestsellers.
+Settings → Pages → Source must be **GitHub Actions**, and the repo must be **public**. Continuous bestseller crawls use public-repository GitHub Actions runners; the exact completion-to-next-start delay depends on GitHub's queue. On a private repo, only manual runs crawl bestsellers.
 
 ### Telegram
 
@@ -93,10 +93,10 @@ The reference requires **three earlier consistent observations** and does not dr
 
 ### CeX caching, profit alerts and seller risk
 
-Amazon bestseller discovery runs on the **20-minute rotating section workflow** (each of four sections is revisited about every 80 minutes when jobs keep up). CeX is a **separate, much less frequent data source**:
+Amazon bestseller discovery now **queues the next rotating section only after successful scan and publication**, rather than using a 20-minute cron. The four-section cycle time depends on actual run and deployment durations. CeX is a **separate, much less frequent data source**:
 
 - A CeX product cash quote is stored in the published catalogue alongside its exact box ID and last successful quote time. Changing Amazon's observed price recalculates estimated resale profit using that cached quote; it **does not trigger another CeX search**.
-- Successful CeX matches are refreshed every **72 hours** by default; items with no match are searched again after **7 days**. Provider errors get **6 hours** of backoff, and live CeX searches are capped at **25 per section run** (approximately the same live-request budget per hour as the previous 30-minute schedule). HTTP 403/429/503 pauses further CeX calls in that run. Set these values in \`bestsellers.json\` and respect the provider's terms and rate limits.
+- Successful CeX matches are refreshed every **72 hours** by default; items with no match are searched again after **7 days**. Provider errors get **6 hours** of backoff, and live CeX searches are capped at **10 per section run** to avoid increasing its hourly request volume when scans complete more frequently. HTTP 403/429/503 pauses further CeX calls in that run. Set these values in \`bestsellers.json\` and respect the provider's terms and rate limits.
 - A potentially profitable research lead with a CeX quote older than **12 hours** triggers an isolated CeX SKU detail refresh where possible. If the fresh quote cannot be obtained, the cached value stays visible as **research only**, with a quote timestamp, **not** as a buying alert. A cached CeX price is never a guaranteed CeX trade-in payout.
 - A suspected Amazon bestseller price-error lead is created from an observed bestseller-card price after sufficient stable price history; no seller check is performed. Duplicate notifications are suppressed for 24 hours at the same or higher observed price; a deeper drop can alert again. Alerts explicitly warn that checkout terms are unverified.
 - **Amazon offer condition is not verified, and no buying is automatic.** Used – Like New does *not* guarantee CeX Grade B: CeX checks physical condition, box/accessories and functionality, and some categories use non-graded pricing or different console grades. It should be researched with a separate conservative Grade B/C scenario before inclusion.
@@ -112,9 +112,9 @@ A new scan creates a row for *all* items in its section, including seller-check 
 
 Each section examines up to **120 queued priced products per run**, in groups of 20, with a CeX research processing time budget of **360 seconds** after the bestseller crawl. These are *per-run* limits rather than a permanent shortlist. The queue always takes previously unexamined/oldest items first (plus a small priority lane for big fresh drops), with progress restored from the previously published catalogue. **Every priced listing in a batch** gets a CeX search **regardless of category, keyword, Amazon price, or whether the Amazon seller was recognised**. CeX matches are always **provisional research leads**. Potentially profitable ones can trigger an explicitly unverified Telegram alert when the CeX quote is fresh enough. Unmatched items remain in the queue. CeX cash prices are not guaranteed.
 
-You can tune \`catalogue_checks_per_run\` and \`catalogue_time_budget_seconds\` in \`bestsellers.json\`. Do not raise them dramatically without checking GitHub Action duration and Amazon/CeX throttling: all 12,000 products cannot be fetched safely in one job. The four sections rotate across scheduled runs, so full first-pass CeX research of a large catalogue can take days. Listings without usable prices are still listed but cannot enter a CeX profit calculation until priced. Products dropping out of a bestseller ranking remain in the exported catalogue for up to 30 days as archived rows, but are not rechecked while absent. Updated price or product title clears old estimates, while reusable CeX box quotations are cached separately when the product identity remains unchanged; all current prices need checkout rechecking before buying. A failed or throttled section can resume from the last successful published checkpoint.
+You can tune \`catalogue_checks_per_run\` and \`catalogue_time_budget_seconds\` in \`bestsellers.json\`. Do not raise them dramatically without checking GitHub Action duration and Amazon/CeX throttling: all 12,000 products cannot be fetched safely in one job. The four sections rotate across sequential runs, so full first-pass CeX research of a large catalogue can take days. Listings without usable prices are still listed but cannot enter a CeX profit calculation until priced. Products dropping out of a bestseller ranking remain in the exported catalogue for up to 30 days as archived rows, but are not rechecked while absent. Updated price or product title clears old estimates, while reusable CeX box quotations are cached separately when the product identity remains unchanged; all current prices need checkout rechecking before buying. A failed or throttled section can resume from the last successful published checkpoint.
 
-Each **scheduled** run crawls **one section** from [`bestsellers.json`](bestsellers.json) (~5–8 minutes), **publishes that section**, sends a **section summary on Telegram**, and rotates **gaming → home → lifestyle → general** every 20 minutes, resuming from the last successfully published section instead of GitHub's run number. A **manual Run workflow defaults to `all`** and starts four sequential jobs. Each job scans one section, advances CeX research without seller verification, merges just that section into the latest published `deals.json`, and deploys the updated site before the next section begins. The Actions view displays an independent job and timestamp for each block; the dashboard updates as each publish succeeds. Selecting `rotate` instead runs only one section.
+Each **automatic** run crawls **one section** from [`bestsellers.json`](bestsellers.json) (~5–8 minutes, subject to provider response), **publishes that section**, sends a **section summary on Telegram**, and then **queues the next run**. The sequence is **gaming → home → lifestyle → general**, resuming from the last successfully published section rather than GitHub's run number. Broad scans use a serialized GitHub Actions queue and do not start while an earlier one is still active. A **manual Run workflow defaults to `all`** and starts four sequential jobs. Each job scans one section, advances CeX research without seller verification, merges just that section into the latest published `deals.json`, and deploys the updated site before the next section begins. The Actions view displays an independent job and timestamp for each block; the dashboard updates as each publish succeeds. Selecting `rotate` instead runs only one section.
 
 - Bestseller pages don't show a "was" price, so each item is judged against **its own price history**. It needs **three prior, consistent price observations** (within 20% of their median) before a stable reference can be established. On the fourth observation, a price ≥75% below that reference (reference ≥€20) can trigger an alert. The reference is kept separate from the newest price, so a prolonged sale cannot immediately erase the original drop.
 - Items sold in several variants at different prices (for example "€9.99 – €24.99") are skipped, because their lowest price jumps between variants.
@@ -192,23 +192,26 @@ unauthenticated GitHub API rate limit. If GitHub rate-limits the browser,
 the panel keeps the last fetched state and reports that the status may be
 delayed. Scheduled scans and publishing continue independently.
 
-## Automatic scan schedule (UTC)
+## Automatic scan scheduling (UTC)
 
-| Scan | Scheduled times (UTC) | Target frequency |
+| Scan | Trigger | Target frequency |
 |---|---|---|
-| Watched products | :05, :15, :25, :35, :45, :55 | Every 10 minutes |
-| Targeted recent Amazon price drops | :02, :12, :22, :32, :42, :52 | Every 10 minutes |
-| Amazon bestseller discovery | :05, :25, :45 | One rotating section every 20 minutes |
-| CeX quotes | Separate cached data | Refresh only when due or when a promising lead needs a fresh quote |
+| Watched products | :05, :15, :25, :35, :45, :55 | Every 10 minutes, independently of broad scans |
+| Targeted recent Amazon price drops | :02, :12, :22, :32, :42, :52 | Every 10 minutes, independently |
+| Amazon bestseller discovery | Successful completion **and publication** of previous rotating section | Queue next section immediately; actual start depends on GitHub's runner availability |
+| Recovery watchdog | :13 and :43 (checks status, does **not** scan unless stale) | Recovers if no broad run is active and the latest broad run has been complete for ≥25 min |
+| CeX quotes | Existing cached data | Refresh only when due or for a promising lead; at most 10 live lookups per broad scan |
 
-These cron times are in UTC; Irish local hours change during summer time. GitHub Actions schedules can be delayed or omitted, so always consult Actions and the dashboard's scan timestamps before assuming coverage is current. Heavy scanning still publishes one section at a time; watchlist-only ticks do not perform expensive broad discovery. The CeX live-lookup allowance is reduced from 40 to 25 per section run to keep approximately the same total live-request volume per hour as before.
+All cron times are UTC; the Irish summer offset changes the displayed local hour. Broad discovery no longer has a 20-minute fixed schedule; each successful publish dispatches a new `workflow_dispatch` run with `auto_continue=true`, queued behind the current `tracker-main` lock. Watchlist-only schedule ticks and Watch issues never launch a bestseller crawl. Manually selecting `all` still publishes four sections sequentially, but does not create an endless chain.
+
+The separate **Recover stalled bestseller scans** workflow checks twice an hour: if the chain is missing and no broad scan is running or queued, it starts a replacement only once the last run is at least 25 minutes old. After three consecutive failures it pauses automatic recovery; fix the failing scan before manually restarting. Set repository variable `PAUSE_AUTOMATIC_SCAN=true` to stop new automated sections without disabling your watchlist or hotlist. GitHub Actions triggers and queues can be delayed or skipped, so this cannot guarantee an exact restart time. More frequent crawling may increase Amazon request pressure, so monitor timeouts, 429/503 responses and Actions usage; CeX requests are capped at 10 live lookups per broad run to limit that risk.
 
 ## Your own watch list
 
 - Open a [Watch issue](https://github.com/paddykeoghgoode/amazon-ie-price-error-tracker/issues/new?template=watch.yml) (or use the box on the dashboard), or
 - put URLs/ASINs in [`watchlist.json`](watchlist.json).
 
-Watched products are scheduled every **10 minutes** (regular tracker runs at :05, :25 and :45 UTC; watchlist-only runs at :15, :35 and :55 UTC), as well as immediately after opening or editing a Watch issue. Watchlist-only runs do **not** start a bestseller crawl. A price error there is a **≥75% drop** from the struck-through list price (was ≥ €20), or the same drop vs recent history for that ASIN.
+Watched products are scheduled every **10 minutes** (:05, :15, :25, :35, :45 and :55 UTC), as well as immediately after opening or editing a Watch issue. Watchlist-only runs do **not** start a bestseller crawl. A price error there is a **≥75% drop** from the struck-through list price (was ≥ €20), or the same drop vs recent history for that ASIN.
 
 GitHub's scheduler can start late, skip a tick, or queue behind another deployment. The 10-minute cron is a **target cadence, not a guaranteed alert time**. For tighter and more predictable checking, run the local server below.
 
