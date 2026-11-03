@@ -9,6 +9,7 @@ from app.config import settings
 from app.services.bestsellers import CrawlConfig, CrawlResult, ProcessResult
 from app.services.drop_tiers import tiered_deep_drops
 from app.services.alert_policy import load_alert_policy
+from app.services.resale_relevance import annotate_payload
 from app.snapshot import _fmt_dublin, _fmt_euro
 
 _SECTION_STORE_KEYS = (
@@ -133,12 +134,22 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
         sections[section_id]["section_name"] = incoming["section_name"]
     # Keep the first sighting time for the same ASIN and listing price while
     # a section is rescanned; a changed price is a new finding.
-    old_section = ((previous or {}).get("sections") or {}).get(section_id) or {}
     for kind in ("drops", "general_drops", "cex_flips", "cex_arbitrage"):
-        previous_findings = {
-            (row.get("asin"), row.get("price_eur")): row.get("found_at")
-            for row in old_section.get(kind) or []
-        }
+        previous_findings = {}
+        previous_times = {}
+        for old_section in [previous or {}, *((previous or {}).get("sections") or {}).values()]:
+            for row in old_section.get(kind) or []:
+                original = row.get("found_at")
+                try:
+                    stamp = datetime.fromisoformat(original or "")
+                    if stamp.tzinfo is None:
+                        continue
+                except (TypeError, ValueError):
+                    continue
+                key = (row.get("asin"), row.get("price_eur"))
+                if key not in previous_times or stamp < previous_times[key]:
+                    previous_times[key] = stamp
+                    previous_findings[key] = original
         for row in sections[section_id].get(kind) or []:
             original = previous_findings.get((row.get("asin"), row.get("price_eur")))
             if original:
@@ -258,7 +269,7 @@ def merge_section_deals(previous: dict | None, incoming: dict) -> dict:
         "price_baselines": {asin: row for snap in sections.values() for asin, row in (snap.get("price_baselines") or {}).items()},
         "alerts": incoming.get("alerts") or base.get("alerts") or [],
     }
-    return merged
+    return annotate_payload(merged)
 
 
 def export_deals(
@@ -333,7 +344,7 @@ def export_deals(
         payload["section_id"] = section_id
     if section_name:
         payload["section_name"] = section_name
-    return payload
+    return annotate_payload(payload)
 
 
 def render_deals_markdown(payload: dict[str, Any]) -> str:

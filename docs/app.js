@@ -929,6 +929,7 @@ function selectRadarLeads(deals, now = Date.now()) {
     return config[key] != null && Number.isFinite(value) ? value : fallback;
   };
   const drops = (deals.general_drops || deals.drops || []).filter(row => {
+    if (row.resale_eligible === false) return false;
     const nowPrice = Number(row.price_eur);
     const reference = Number(row.reference_eur ?? row.median_eur);
     const saved = reference - nowPrice;
@@ -941,6 +942,7 @@ function selectRadarLeads(deals, now = Date.now()) {
       Number.isFinite(observed) && now >= observed && now-observed <= 12*3600000;
   }).map(row => ({...row, radar_type:"drop", radar_value:Number(row.reference_eur ?? row.median_eur)-Number(row.price_eur)}));
   const cex = [...(deals.cex_flips || []),...(deals.cex_arbitrage || [])].filter(row => {
+    if (row.resale_eligible === false) return false;
     const observed=Date.parse(row.observed_at || row.last_scanned_at || deals.last_section_at || deals.generated_at);
     return Number(row.price_eur) >= threshold("min_cex_buy_price_eur",100) &&
       Number(row.cex_cash_profit_eur) >= threshold("min_cex_cash_profit_eur",45) &&
@@ -1012,6 +1014,11 @@ function renderOpportunityRadar(deals) {
   }
 }
 
+function researchLogRows(deals, includeUnrecognised = false) {
+  return (deals.drops || []).filter(row => includeUnrecognised || row.resale_eligible !== false)
+    .map(row => ({...row, found_at: Number.isFinite(Date.parse(row.found_at)) ? row.found_at : null}));
+}
+
 function renderDeals(deals) {
   if (!deals || !deals.generated_at) return;
   const summary = document.getElementById("deals-summary");
@@ -1022,7 +1029,10 @@ function renderDeals(deals) {
     (deals.blocked ? " · Amazon blocked part of a recent crawl" : "") +
     (fresh ? ` · ${fresh}` : "");
 
-  const alerts = deals.alerts || [];
+  const includeControl = document.getElementById("research-include-unrecognised");
+  const includeUnrecognised = includeControl?.checked || false;
+  if (includeControl) includeControl.onchange = () => renderDeals(deals);
+  const alerts = (deals.alerts || []).filter(row => includeUnrecognised || row.resale_eligible !== false);
   const list = document.getElementById("deals-alerts");
   list.innerHTML = "";
   list.hidden = !alerts.length;
@@ -1036,7 +1046,8 @@ function renderDeals(deals) {
     list.appendChild(li);
   }
 
-  const drops = deals.drops || [];
+  const drops = researchLogRows(deals, includeUnrecognised);
+  document.getElementById("research-log-empty").hidden = Boolean(drops.length || alerts.length);
   const table = document.getElementById("deals-table");
   const body = document.getElementById("deals-body");
   body.innerHTML = "";
@@ -1047,7 +1058,8 @@ function renderDeals(deals) {
       <td><a href="${escapeHtml(d.url)}" target="_blank" rel="noopener">${escapeHtml(d.title || d.asin)}</a><div class="hint">${escapeHtml(d.category || "")}</div></td>
       <td class="price">${fmtEuro(d.price_eur)}</td>
       <td class="was">${fmtEuro(d.median_eur)}</td>
-      <td>${escapeHtml(String(d.drop_percent))}%</td>`;
+      <td>${escapeHtml(String(d.drop_percent))}%</td>
+      <td class="time">${d.found_at ? fmtTime(d.found_at) : "Unknown"}</td>`;
     body.appendChild(tr);
   }
   renderSectionProgress(deals);

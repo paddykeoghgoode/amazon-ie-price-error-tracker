@@ -56,7 +56,7 @@ class TestDiscoveryChecks(unittest.TestCase):
         self.assertFalse(qualifies_cex_alert(lookup))
 
     def test_cold_start_research_without_price_history_is_bounded_and_rotates(self):
-        items = [{'asin': str(i), 'title': 'PC hardware', 'price_eur': 500 + i, 'active': True} for i in range(10)]
+        items = [{'asin': str(i), 'title': 'HP laptop', 'price_eur': 500 + i, 'active': True} for i in range(10)]
         items[-1]['identity_checked_at'] = '2026-11-03T12:00:00Z'
         cfg = CrawlConfig(roots=[], premium_spot_check_limit=3)
         rows = choose_detail_checks({'items': items}, [], [], config=cfg, policy=AlertPolicy())

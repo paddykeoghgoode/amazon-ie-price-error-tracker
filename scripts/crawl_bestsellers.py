@@ -34,6 +34,7 @@ from app.services.health import send_health_messages
 from app.services.premium_drops import spot_check_list_prices
 from app.services.discovery_checks import choose_detail_checks, apply_detail_checks
 from app.services.alert_policy import load_alert_policy
+from app.services.resale_relevance import relevance
 from app.services.monitor import BROWSER_HEADERS
 from app.services.catalogue import (
     make_section_catalogue, select_check_batch, apply_batch_results,
@@ -188,8 +189,14 @@ async def crawl_section(
                 seen_urgent.add(row["asin"])
             if len(urgent) >= 45:
                 break
+    relevant_items = []
+    for row in section_catalogue.get("items") or []:
+        allowed, reason, brand = relevance(row)
+        row.update(resale_eligible=allowed, resale_reason=reason, resale_brand=brand)
+        if allowed:
+            relevant_items.append(row)
     batch = select_check_batch(
-        section_catalogue, limit=config.catalogue_checks_per_run,
+        {**section_catalogue, "items": relevant_items}, limit=config.catalogue_checks_per_run,
         priority_asins=urgent,
     )
     drop_by_asin = {row["asin"]: row for row in processed.drops}
@@ -256,6 +263,11 @@ async def crawl_section(
         section_catalogue, detail_rows, snapshots, lookups, quote_cache,
     )
     flips = [row for row in lookups if row.get("cex_cash_flip")]
+    eligible_asins = {
+        asin for asin, (item, _) in result.items.items()
+        if relevance({"title": item.title})[0]
+    } | {row["asin"] for row in lookups if relevance(row)[0]}
+    processed.alerts = [alert for alert in processed.alerts if alert.asin in eligible_asins]
     logger.info("[%s] Product detail research: %s", section_id, detail_stats)
 
     apply_batch_results(
@@ -287,6 +299,7 @@ async def crawl_section(
         "errors": cex_state.get("errors", 0),
         "rate_limited": bool(cex_state.get("rate_limited", False)),
         "provisional_matches": len(lookups),
+        "brand_not_prioritised": len(section_catalogue["items"]) - len(relevant_items),
         "detail_checks": detail_stats,
         "exact_matches": sum(r.get("match_confidence") in ("barcode_verified", "model_verified") for r in lookups),
         "title_only_matches": sum(r.get("match_confidence") == "title_only" for r in lookups),
