@@ -19,14 +19,30 @@ class TestFasterSchedules(unittest.TestCase):
         self.pages = yaml.safe_load(Path(".github/workflows/pages.yml").read_text(encoding="utf-8"))
         self.hotlist = yaml.safe_load(Path(".github/workflows/hotlist.yml").read_text(encoding="utf-8"))
 
-    def test_watchlist_runs_10m_and_bestsellers_20m(self):
-        crons = [x["cron"] for x in self.pages.get("on", self.pages.get(True))["schedule"]]
-        self.assertEqual(crons, ["5,25,45 * * * *", "15,35,55 * * * *"])
+    def test_watchlist_runs_10m_and_broad_discovery_chains_only_after_publish(self):
+        triggers = self.pages.get("on", self.pages.get(True))
+        crons = [x["cron"] for x in triggers["schedule"]]
+        self.assertEqual(crons, ["5,15,25,35,45,55 * * * *"])
         minutes = sorted(int(i) for c in crons for i in c.split()[0].split(","))
         self.assertEqual(minutes, [5, 15, 25, 35, 45, 55])
+        self.assertIn("auto_continue", triggers["workflow_dispatch"]["inputs"])
+        self.assertFalse(triggers["workflow_dispatch"]["inputs"]["auto_continue"]["default"])
         jobs = self.pages["jobs"]
-        self.assertIn("github.event.schedule == '5,25,45 * * * *'", jobs["bestsellers"]["if"])
-        self.assertNotIn("15,35,55", jobs["bestsellers"]["if"])
+        self.assertNotIn("schedule", jobs["bestsellers"]["if"])
+        self.assertIn("github.event_name == 'push'", jobs["bestsellers"]["if"])
+        self.assertIn("inputs.auto_continue != true", jobs["watchlist"]["if"])
+        followup = jobs["queue-next-bestseller"]
+        self.assertIn("publish-bestsellers", followup["needs"])
+        self.assertIn("publish-watchlist", followup["needs"])
+        self.assertIn("always()", followup["if"])
+        self.assertIn("needs.publish-bestsellers.result == 'success'", followup["if"])
+        self.assertIn("inputs.auto_continue == true", followup["if"])
+        self.assertIn("PAUSE_AUTOMATIC_SCAN", followup["if"])
+        self.assertIn("auto_continue=true", followup["steps"][0]["run"])
+        self.assertIn("crawl_section=rotate", followup["steps"][0]["run"])
+        self.assertEqual(followup["permissions"]["actions"], "write")
+        self.assertEqual(self.pages["concurrency"]["queue"], "max")
+        self.assertEqual(jobs["watchlist"]["concurrency"]["queue"], "max")
         self.assertIn("tracker-watchlist-scan", jobs["watchlist"]["concurrency"]["group"])
         self.assertIn("tracker-", self.pages["concurrency"]["group"])
 
@@ -34,7 +50,7 @@ class TestFasterSchedules(unittest.TestCase):
         crons = [x["cron"] for x in self.hotlist.get("on", self.hotlist.get(True))["schedule"]]
         self.assertEqual(crons, ["2,12,22,32,42,52 * * * *"])
         config = json.loads(Path("bestsellers.json").read_text(encoding="utf-8"))
-        self.assertEqual(config["cex_live_lookups_per_run"], 25)
+        self.assertEqual(config["cex_live_lookups_per_run"], 10)
         self.assertLessEqual(config["catalogue_time_budget_seconds"], 360)
         self.assertGreaterEqual(config["cex_quote_ttl_hours"], 24)
 

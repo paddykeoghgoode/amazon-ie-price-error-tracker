@@ -1,0 +1,45 @@
+name: Recover stalled bestseller scans
+
+on:
+  schedule:
+    # Recovery only: scans normally chain immediately after publication.
+    - cron: "13,43 * * * *"
+  workflow_dispatch:
+    inputs:
+      force_start:
+        description: "Override the minimum recovery delay and failure circuit breaker (not the no-overlap check)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: tracker-bestseller-watchdog
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  recover:
+    if: ${{ !github.event.repository.private && vars.PAUSE_AUTOMATIC_SCAN != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check whether a broad scan really needs resuming
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FORCE_START: ${{ inputs.force_start || 'false' }}
+        run: python -m scripts.recover_bestseller_scans
+      - name: Queue the next bestseller section if stale
+        if: ${{ steps.check.outputs.dispatch == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh workflow run pages.yml --repo "$GH_REPO" --ref main \
+            -f crawl_section=rotate \
+            -f auto_continue=true
+          echo "Queued a recovery scan. Subsequent sections chain after each successful publish." >> "$GITHUB_STEP_SUMMARY"

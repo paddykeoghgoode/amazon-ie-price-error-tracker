@@ -2,10 +2,8 @@ name: Scan and publish tracker
 
 on:
   schedule:
-    # Regular discovery + watchlist: one bestseller section every 20 minutes.
-    - cron: "5,25,45 * * * *"
-    # Watchlist only between full ticks, giving a 10-minute cadence.
-    - cron: "15,35,55 * * * *"
+    # Lightweight watchlist refresh only. Broad discovery follows completion.
+    - cron: "5,15,25,35,45,55 * * * *"
   workflow_dispatch:
     inputs:
       crawl_section:
@@ -19,6 +17,10 @@ on:
           - home
           - lifestyle
           - general
+      auto_continue:
+        description: "Chain the next section automatically after this run? (automated dispatches use true)"
+        type: boolean
+        default: false
   push:
     branches: [main]
   issues:
@@ -31,23 +33,29 @@ permissions:
   pages: write
   id-token: write
 
-# Keep expensive discovery runs serial, but let watchlist-only ticks
-# start without waiting for the full crawler; publishing is locked per job.
+# Automatic discovery dispatches are queued before the current workflow
+# releases its lock. queue:max prevents GitHub cancelling an older pending
+# bestseller scan when another run is requested. Watchlist-only checks remain
+# independent and continue even while bestseller discovery is running.
 concurrency:
-  group: tracker-${{ (github.event_name == 'issues' || (github.event_name == 'schedule' && github.event.schedule == '15,35,55 * * * *')) && 'watchlist' || 'main' }}
+  group: tracker-${{ (github.event_name == 'issues' || github.event_name == 'schedule') && 'watchlist' || 'main' }}
   cancel-in-progress: false
+  queue: max
 
 env:
   PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
 
 jobs:
   watchlist:
+    # Chain-triggered bestseller runs do not repeat the 10-minute watchlist.
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.auto_continue != true }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Prevent concurrent runs from racing on watchlist price history.
     concurrency:
       group: tracker-watchlist-scan
       cancel-in-progress: false
+      queue: max
     steps:
       - uses: actions/checkout@v7
 
@@ -140,12 +148,7 @@ jobs:
         github.event_name == 'workflow_dispatch' &&
         inputs.crawl_section != 'all'
       ) ||
-      github.event_name == 'push' ||
-      (
-        github.event_name == 'schedule' &&
-        github.event.schedule == '5,25,45 * * * *' &&
-        !github.event.repository.private
-      )
+      github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -262,6 +265,39 @@ jobs:
           artifact_name: pages-bestsellers-${{ github.run_attempt }}
       - name: Published section summary
         run: python -m scripts.scan_summary --input docs/deals.json --summary "$GITHUB_STEP_SUMMARY" --published
+
+  queue-next-bestseller:
+    name: Queue next section after publishing
+    needs: [bestsellers, publish-bestsellers, watchlist, publish-watchlist]
+    # No chain after manually selecting 'all' (the four-section matrix has
+    # its own publishing flow), or after an unsuccessful publication.
+    if: >-
+      always() &&
+      needs.publish-bestsellers.result == 'success' &&
+      !github.event.repository.private &&
+      vars.PAUSE_AUTOMATIC_SCAN != 'true' &&
+      (
+        github.event_name == 'push' ||
+        (github.event_name == 'workflow_dispatch' && inputs.auto_continue == true)
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Queue next rotating section
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # workflow_dispatch events created by GITHUB_TOKEN are explicitly
+          # allowed to trigger new GitHub Actions runs. This new run waits
+          # behind this workflow's tracker-main concurrency lock.
+          gh workflow run pages.yml --repo "$GH_REPO" --ref main \
+            -f crawl_section=rotate \
+            -f auto_continue=true
+          echo "Next section queued after successful publishing." >> "$GITHUB_STEP_SUMMARY"
 
   bestsellers-all:
     name: Scan and publish ${{ matrix.section }}

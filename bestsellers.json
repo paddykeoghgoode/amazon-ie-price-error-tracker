@@ -1,5 +1,5 @@
 {
-  "_comment": "Amazon discovery runs every 20 min; watched items and fast recent drops every 10 min. CeX cash quotes persist in catalogue.json (72h positives, 7d misses, 6h error backoff). Keep live CeX limit at 25/section run to avoid increasing the previous hourly request budget.",
+  "_comment": "Broad discovery automatically queues the next rotating bestseller section after publishing; hourly frequency depends on run duration. Watchlist and priority-drop checks remain every 10 minutes. CeX quotes cached 72h matched / 7d no-match / 6h provider backoff; lower live CeX calls to 10 per broad scan because cycles now occur more often.",
   "max_items": 12000,
   "max_requests": 800,
   "pages_per_category": 2,
@@ -194,7 +194,7 @@
   ],
   "catalogue_checks_per_run": 120,
   "catalogue_time_budget_seconds": 360,
-  "cex_live_lookups_per_run": 25,
+  "cex_live_lookups_per_run": 10,
   "cex_quote_ttl_hours": 72,
   "cex_no_match_ttl_hours": 168,
   "cex_error_retry_hours": 6,
