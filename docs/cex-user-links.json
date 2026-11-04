@@ -1,0 +1,4 @@
+{
+  "_comment": "Optional CeX box ID to Amazon ASIN links you have confirmed. Commit this file so GitHub Actions scans reuse them on every publish. You can also export the same JSON from the CeX targets page after using Link match.",
+  "links": {}
+}

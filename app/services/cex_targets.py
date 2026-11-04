@@ -35,6 +35,10 @@ class TargetConfig:
     refreshes_per_run: int = 2
     query_refresh_hours: float = 24
     queries: tuple[str, ...] = ()
+    amazon_searches_per_run: int = 5
+    amazon_proposal_retry_hours: float = 12.0
+    amazon_proposal_min_catalogue_percent: int = 72
+    amazon_proposal_min_display_percent: int = 40
 
 
 def load_target_config(path: str | Path = "bestsellers.json") -> TargetConfig:
@@ -49,14 +53,63 @@ def load_target_config(path: str | Path = "bestsellers.json") -> TargetConfig:
         refreshes_per_run=max(0, min(2, int(raw.get("refreshes_per_run", 2)))),
         query_refresh_hours=max(24, float(raw.get("query_refresh_hours", 24))),
         queries=tuple(dict.fromkeys(q.strip() for q in raw.get("queries", []) if isinstance(q, str) and q.strip())),
+        amazon_searches_per_run=max(1, min(8, int(raw.get("amazon_searches_per_run", 5)))),
+        amazon_proposal_retry_hours=max(6, float(raw.get("amazon_proposal_retry_hours", 12))),
+        amazon_proposal_min_catalogue_percent=max(50, min(95, int(raw.get("amazon_proposal_min_catalogue_percent", 72)))),
+        amazon_proposal_min_display_percent=max(25, min(95, int(raw.get("amazon_proposal_min_display_percent", 40)))),
     )
 
 
 def target_state(published: dict) -> dict:
     state = copy.deepcopy(published.get("cex_targets") or {})
-    for name in ("items", "queries", "mappings"):
+    for name in ("items", "queries", "mappings", "proposed_links", "user_links"):
         state.setdefault(name, {})
     return state
+
+
+def load_user_links(path: str | Path = "docs/cex-user-links.json") -> dict[str, dict]:
+    try:
+        raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return {}
+    links = raw.get("links") if isinstance(raw, dict) else {}
+    cleaned: dict[str, dict] = {}
+    for box_id, entry in (links or {}).items():
+        if not isinstance(entry, dict):
+            continue
+        asin = str(entry.get("asin") or "").upper()
+        if not re.fullmatch(r"[A-Z0-9]{10}", asin):
+            continue
+        cleaned[str(box_id)] = {
+            "asin": asin,
+            "amazon_title": entry.get("amazon_title") or entry.get("title"),
+            "confirmed_at": entry.get("confirmed_at"),
+            "source": entry.get("source") or "user_file",
+        }
+    return cleaned
+
+
+def merge_user_links(state, path: str | Path = "docs/cex-user-links.json") -> None:
+    file_links = load_user_links(path)
+    merged = {**file_links, **(state.get("user_links") or {})}
+    state["user_links"] = merged
+
+
+def apply_user_links(items, state) -> None:
+    """Wire confirmed CeX box IDs onto Amazon catalogue rows."""
+    by_asin = {link["asin"]: box_id for box_id, link in (state.get("user_links") or {}).items()
+               if isinstance(link, dict) and link.get("asin")}
+    items_by_id = {str(r.get("quote", {}).get("box_id")): r for r in state.get("items", {}).values()}
+    for row in items:
+        asin = row.get("asin")
+        box_id = by_asin.get(asin)
+        if not box_id:
+            continue
+        row["cex_target_box_id"] = box_id
+        row["user_confirmed_cex"] = True
+        record = items_by_id.get(box_id)
+        if record and not row.get("cex_quote_cache"):
+            row["cex_quote_cache"] = {**copy.deepcopy(record), "title": row.get("title")}
 
 
 def import_target_seed(state, options, path="docs/cex-targets-seed.json", *, now=None):
@@ -205,9 +258,22 @@ def attach_target_quotes(items, state):
     A compatible title only earns a detail-research slot, never an exact map.
     When several grades match, use the lowest cash quote, not the best grade.
     """
+    apply_user_links(items, state)
+    user_by_asin = {link["asin"]: box_id for box_id, link in (state.get("user_links") or {}).items()
+                    if isinstance(link, dict) and link.get("asin")}
     targets = [(record, cache_price(record)) for record in state["items"].values()]
     for row in items:
+        asin = row.get("asin")
+        if asin in user_by_asin:
+            box_id = user_by_asin[asin]
+            row["cex_target_box_id"] = box_id
+            row["user_confirmed_cex"] = True
+            record = state["items"].get(box_id)
+            if record and not row.get("cex_quote_cache"):
+                row["cex_quote_cache"] = {**copy.deepcopy(record), "title": row.get("title")}
+            continue
         row.pop("cex_target_box_id", None)
+        row.pop("user_confirmed_cex", None)
         if (not row.get("active", True) or not row.get("price_eur") or
                 relevance(row)[1] == "explicitly_excluded_brand"):
             continue
@@ -262,6 +328,28 @@ def sync_mappings(state, sections, options, *, now=None):
         if _cache_version(prior.get("cex_quote_cache")) > _cache_version(cache):
             cache = prior["cex_quote_cache"]
         prices = cache_price(cache)
+        confirmed_box = next(
+            (box_id for box_id, link in (state.get("user_links") or {}).items()
+             if isinstance(link, dict) and link.get("asin") == asin),
+            None,
+        )
+        if confirmed_box:
+            if not prices or prices.box_id != confirmed_box:
+                record = state["items"].get(confirmed_box)
+                if record:
+                    cache = record
+                    prices = cache_price(cache)
+            if (not prices or cache.get("source") == "catalogue_search" or
+                    prices.cash_eur <= options.min_cash_eur):
+                continue
+            if not cex_ie.titles_match_for_trade_in(row.get("title"), prices.box_name):
+                continue
+            state["mappings"][asin] = {
+                **copy.deepcopy(row), "cex_quote_cache": copy.deepcopy(cache),
+                "cex_box_id": prices.box_id, "match_confidence": "user_confirmed",
+                "mapped_at": prior.get("mapped_at") or now.isoformat(),
+            }
+            continue
         if (not prices or cache.get("source") == "catalogue_search" or
                 prices.cash_eur <= options.min_cash_eur or not exact_target_match(row, prices) or
                 not row.get("identity_checked_at")):
@@ -316,7 +404,12 @@ def watch_rows(state, config, *, now=None, options=None):
         cache = mapping.get("cex_quote_cache") or {}
         prices = cache_price(cache)
         if (not prices or prices.cash_eur <= options.min_cash_eur or cache.get("source") == "catalogue_search" or
-                not _recent(mapping.get("last_seen_at"), now) or not exact_target_match(mapping, prices)):
+                not _recent(mapping.get("last_seen_at"), now)):
+            continue
+        if mapping.get("match_confidence") == "user_confirmed":
+            if not cex_ie.titles_match_for_trade_in(mapping.get("title"), prices.box_name):
+                continue
+        elif not exact_target_match(mapping, prices):
             continue
         row = build_cex_row(mapping, prices,
                             min_profit_eur=max(config.cex_min_cash_profit_eur, policy.min_cex_cash_profit_eur),
@@ -345,6 +438,10 @@ def target_funnel(state, config, *, now=None):
         "exact_mappings": saved,
         # Subset the fast hotlist can re-check this cycle (fresh quote + recent Amazon sighting).
         "alert_ready_mappings": len(rows),
+        "user_confirmed_mappings": sum(
+            1 for m in state.get("mappings", {}).values() if m.get("match_confidence") == "user_confirmed"
+        ),
+        "proposed_links": len(state.get("proposed_links", {})),
         "fresh_quotes": sum(r["cex_quote_fresh_for_alert"] for r in rows),
         "stale_quotes": sum(not r["cex_quote_fresh_for_alert"] for r in rows),
     }

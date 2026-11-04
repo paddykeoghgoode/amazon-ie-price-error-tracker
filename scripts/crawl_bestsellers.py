@@ -34,12 +34,12 @@ from app.services.cex_arbitrage import enrich_with_cex
 from app.services.health import send_health_messages
 from app.services.premium_drops import spot_check_list_prices
 from app.services.discovery_checks import choose_detail_checks, apply_detail_checks
-from app.services.amazon_target_discovery import discover_amazon_targets
+from app.services.amazon_target_discovery import propose_amazon_links
 from app.services.alert_policy import load_alert_policy
 from app.services.resale_relevance import relevance
 from app.services.cex_targets import (
     load_target_config, target_state, sync_mappings, refresh_mapped_quotes,
-    discover_targets, attach_target_quotes, target_funnel,
+    discover_targets, attach_target_quotes, target_funnel, merge_user_links, apply_user_links,
     import_target_seed,
 )
 from app.services.monitor import BROWSER_HEADERS
@@ -182,15 +182,20 @@ async def crawl_section(
     discovered = []
     if target_options.enabled:
         import_target_seed(targets, target_options)
+        merge_user_links(targets)
         sync_mappings(targets, list(((published_catalogue or {}).get("sections") or {}).values())
                       + [section_catalogue], target_options)
         if priority_section:
             async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=20.0) as client:
                 await refresh_mapped_quotes(targets, target_options, config, client, cex_state)
                 await discover_targets(targets, target_options, config, client, cex_state)
-                discovered, amazon_discovery_stats = await discover_amazon_targets(
+                existing_rows = [r for section in ((published_catalogue or {}).get('sections') or {}).values() for r in section.get('items', [])] + section_catalogue['items']
+                discovered, amazon_discovery_stats = await propose_amazon_links(
                     targets, config, client, cex_state,
-                    existing_rows=[r for section in ((published_catalogue or {}).get('sections') or {}).values() for r in section.get('items', [])] + section_catalogue['items'],
+                    existing_rows=existing_rows,
+                    max_searches=target_options.amazon_searches_per_run,
+                    proposal_retry_hours=target_options.amazon_proposal_retry_hours,
+                    min_catalogue_percent=target_options.amazon_proposal_min_catalogue_percent,
                 )
                 by_asin = {r['asin']: r for r in section_catalogue['items']}
                 for row in discovered:
@@ -199,6 +204,7 @@ async def crawl_section(
                     else:
                         section_catalogue['items'].append(row)
         attach_target_quotes(section_catalogue["items"], targets)
+        apply_user_links(section_catalogue["items"], targets)
     urgent = [
         row["asin"]
         for row in (processed.rapid_drops + processed.premium_drops + processed.drops)

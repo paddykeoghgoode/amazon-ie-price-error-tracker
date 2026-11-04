@@ -309,6 +309,27 @@ def titles_match_for_trade_in(amazon_title: str | None, cex_box_name: str | None
     return len(overlap) >= 2
 
 
+def title_match_score(amazon_title: str | None, cex_box_name: str | None) -> int:
+    """0–100 similarity for ranking Amazon search hits (UI and proposals)."""
+    if not amazon_title or not cex_box_name:
+        return 0
+    if not _variants_compatible(amazon_title, cex_box_name):
+        return 10
+    amazon_l = amazon_title.lower()
+    cex_l = cex_box_name.lower()
+    overlap = (_significant_tokens(amazon_l) & _significant_tokens(cex_l)) - _KNOWN_BRANDS
+    brand = leading_brand(amazon_title)
+    if brand and brand in overlap:
+        overlap.discard(brand)
+    union = _significant_tokens(amazon_l) | _significant_tokens(cex_l)
+    token_score = int(round(100 * len(overlap) / len(union))) if union else 0
+    if titles_match_for_trade_in(amazon_title, cex_box_name):
+        return min(100, max(72, token_score))
+    if token_score >= 35 and brand and brand in cex_l:
+        return min(69, token_score + 15)
+    return min(69, token_score)
+
+
 def pick_best_box_hit(amazon_title: str | None, hits: list[dict]) -> dict | None:
     for hit in hits:
         name = hit.get("boxName") or hit.get("box_name") or ""

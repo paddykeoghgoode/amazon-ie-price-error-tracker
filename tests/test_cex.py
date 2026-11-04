@@ -1,7 +1,7 @@
 import unittest
 
 from app.scraper.bestsellers import BestsellerItem
-from app.scraper.cex_ie import CexPrices, pick_best_box_hit, search_query_from_title, titles_match_for_trade_in
+from app.scraper.cex_ie import CexPrices, pick_best_box_hit, search_query_from_title, title_match_score, titles_match_for_trade_in
 from app.services.bestsellers import CrawlConfig, CrawlResult
 from app.services.cex_arbitrage import build_cex_row, required_cash_profit, select_any_price_candidates
 from app.services.drop_tiers import drop_tier, tiered_deep_drops
@@ -77,6 +77,19 @@ class TestCexTitleMatch(unittest.TestCase):
         amazon = "SteelSeries Arctis 7P Wireless Gaming Headset"
         cex = "SteelSeries Arctis 7P Headset Black"
         self.assertTrue(titles_match_for_trade_in(amazon, cex))
+        self.assertGreaterEqual(title_match_score(amazon, cex), 72)
+
+    def test_scores_rank_matching_titles_above_unrelated(self):
+        good = title_match_score(
+            "SteelSeries Arctis 7P Wireless Gaming Headset",
+            "SteelSeries Arctis 7P Headset Black",
+        )
+        bad = title_match_score(
+            "Ozeino Wireless Gaming Headset with Microphone for PS5",
+            "SteelSeries Arctis 7P Headset Black",
+        )
+        self.assertGreaterEqual(good, 72)
+        self.assertLess(bad, 40)
 
     def test_picks_second_hit_when_first_is_wrong(self):
         hits = [

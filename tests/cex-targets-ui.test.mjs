@@ -49,7 +49,7 @@ test('discovered ASINs link directly without becoming verified mappings',()=>{
   const row=ui.rows(cat,{},{},now)[0];
   assert.equal(row.mapping,undefined);assert.equal(row.profitable,false);
   assert.match(ui.renderRow(row),/amazon.ie\/dp\/B000000123/);
-  assert.match(ui.renderRow(row),/Possible match/);assert.match(ui.renderRow(row),/Not verified/);
+  assert.match(ui.renderRow(row),/Suggested match|Possible match/);assert.match(ui.renderRow(row),/Not verified/);
   candidate.identity_status='identity_mismatch';
   assert.match(ui.renderRow(ui.rows(cat,{},{},now)[0]),/Search Amazon/);
 });
