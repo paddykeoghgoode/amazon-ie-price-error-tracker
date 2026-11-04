@@ -21,6 +21,10 @@ caption { text-align:left; caption-side:bottom; padding-block:var(--space-sm); }
 
 .amazon-action { display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:.6rem .8rem; background:var(--accent); color:var(--accent-ink); border-radius:var(--radius); font-weight:600; text-decoration:none; }
 .amazon-action:hover { color:var(--accent-ink); filter:brightness(1.08); }
+.target-actions { display:flex; flex-wrap:wrap; gap:var(--space-sm); margin-top:var(--space-sm); }
+.target-confirm, .target-reject, #target-export-links { min-height:44px; padding:.45rem .75rem; border-radius:var(--radius); border:1px solid var(--rule); background:var(--card); cursor:pointer; font:inherit; }
+.target-confirm { background:var(--accent); color:var(--accent-ink); border-color:transparent; font-weight:600; }
+.target-toolbar { margin-bottom:var(--space-md); }
 @media(max-width:760px) {
   body { padding:16px; }
   .target-controls { display:grid; grid-template-columns:minmax(0,1fr); }

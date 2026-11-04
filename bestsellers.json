@@ -631,6 +631,10 @@
       "SteelSeries",
       "Corsair"
     ],
+    "amazon_searches_per_run": 5,
+    "amazon_proposal_retry_hours": 12,
+    "amazon_proposal_min_catalogue_percent": 72,
+    "amazon_proposal_min_display_percent": 40,
     "max_mappings": 1000,
     "priority_cash_eur": 150
   }

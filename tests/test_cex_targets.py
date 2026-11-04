@@ -73,7 +73,7 @@ class TestCexTargetCatalogue(unittest.TestCase):
             with patch('scripts.crawl_bestsellers.crawl', new_callable=AsyncMock, return_value=result), \
                  patch('scripts.crawl_bestsellers.process_crawl', return_value=ProcessResult()), \
                  patch('scripts.crawl_bestsellers.import_target_seed'), \
-                 patch('scripts.crawl_bestsellers.discover_amazon_targets', new_callable=AsyncMock, return_value=([], {'search_requests': 1, 'candidates': 0, 'status': 'no_new_candidates'})), \
+                 patch('scripts.crawl_bestsellers.propose_amazon_links', new_callable=AsyncMock, return_value=([], {'search_requests': 1, 'candidates': 0, 'status': 'no_new_candidates'})), \
                  patch('scripts.crawl_bestsellers.spot_check_list_prices', side_effect=check_details), \
                  patch('scripts.crawl_bestsellers.export_deals', return_value={}), \
                  patch('scripts.crawl_bestsellers.db.recent_alerts', return_value=[]), \
@@ -172,6 +172,18 @@ class TestCexTargetCatalogue(unittest.TestCase):
         prune_targets(state, OPTIONS, NOW)
         self.assertIn(row['asin'], state['mappings'])
         self.assertEqual(watch_rows(state, config(), now=NOW), [])
+
+    def test_user_confirmed_link_maps_without_model_barcode(self):
+        state = target_state({})
+        state['items']['sony'] = {**quote_entry(TITLE, PRICE, NOW), 'source': 'box_detail'}
+        state['user_links'] = {'sony': {'asin': 'B000000001', 'source': 'user_file'}}
+        row = item()
+        row['cex_quote_cache'] = quote_entry(TITLE, PRICE, NOW)
+        row['cex_target_box_id'] = 'sony'
+        row['user_confirmed_cex'] = True
+        sync_mappings(state, [{'items': [row]}], OPTIONS, now=NOW)
+        self.assertEqual(state['mappings']['B000000001']['match_confidence'], 'user_confirmed')
+        self.assertEqual(len(watch_rows(state, config(), now=NOW)), 1)
 
     def test_floor_change_requeues_cached_queries_within_budget_and_keeps_error_backoff(self):
         state = target_state({})

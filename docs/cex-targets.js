@@ -36,8 +36,28 @@ const TargetPage = (() => {
     if (/cpu|graphics|processor|laptop|comput|mouse|keyboard|memory/.test(s)) return 'computing';
     return 'other';
   };
-  function rows(catalogue, hotlist, seed = {}, now = Date.now()) {
+  const USER_LINKS_STORAGE = 'cexUserLinks.v1';
+  const REJECTED_STORAGE = 'cexUserRejected.v1';
+  const asinOk = asin => /^[A-Z0-9]{10}$/.test(asin || '');
+  function readLocalUserLinks() {
+    if (typeof localStorage === 'undefined') return {};
+    try { return JSON.parse(localStorage.getItem(USER_LINKS_STORAGE) || '{}'); } catch { return {}; }
+  }
+  function readRejected() {
+    if (typeof localStorage === 'undefined') return {};
+    try { return JSON.parse(localStorage.getItem(REJECTED_STORAGE) || '{}'); } catch { return {}; }
+  }
+  function exportUserLinksPayload(fileLinks = {}, localLinks = readLocalUserLinks()) {
+    const links = {};
+    for (const [boxId, entry] of Object.entries({...fileLinks, ...localLinks})) {
+      if (!entry || !asinOk(entry.asin)) continue;
+      links[boxId] = {asin: entry.asin, amazon_title: entry.amazon_title || entry.title || '', confirmed_at: entry.confirmed_at || new Date().toISOString(), source: entry.source || 'user'};
+    }
+    return {_comment: 'Commit as docs/cex-user-links.json so scans reuse these links.', links};
+  }
+  function rows(catalogue, hotlist, seed = {}, now = Date.now(), userLinksFile = {}, localUserLinks = readLocalUserLinks()) {
     const state = catalogue.cex_targets || {};
+    const userLinks = {...userLinksFile, ...localUserLinks};
     const seedAge = now - Date.parse(seed.generated_at || '');
     const freshSeed = seedAge >= 0 && seedAge <= 72*3600000;
     const items = {...(freshSeed ? seed.items : {}), ...state.items};
@@ -47,30 +67,41 @@ const TargetPage = (() => {
     const inventoryByAsin = new Map();
     for (const row of inventory) { if (!inventoryByAsin.has(row.asin)) inventoryByAsin.set(row.asin,[]); inventoryByAsin.get(row.asin).push(row); }
     const candidateByBox = new Map();
-    for (const row of candidates) if (/^[A-Z0-9]{10}$/.test(row.asin) && row.cex_target_box_id && (!candidateByBox.has(row.cex_target_box_id) || (row.last_seen_at || '') > (candidateByBox.get(row.cex_target_box_id).last_seen_at || ''))) candidateByBox.set(row.cex_target_box_id,row);
+    for (const row of candidates) if (asinOk(row.asin) && row.cex_target_box_id && (!candidateByBox.has(row.cex_target_box_id) || (row.last_seen_at || '') > (candidateByBox.get(row.cex_target_box_id).last_seen_at || ''))) candidateByBox.set(row.cex_target_box_id,row);
     const checks = new Map((hotlist.products || []).map(r => [r.asin, r]));
+    const rejected = readRejected();
     return Object.values(items).map(record => {
       let quote = record.quote || {};
+      const boxId = quote.box_id;
+      const userLink = userLinks[boxId];
+      const proposed = (state.proposed_links || {})[boxId];
       const mapping = maps.find(m => m.cex_box_id === quote.box_id);
       if (mapping?.cex_quote_cache?.quote && Date.parse(mapping.cex_quote_cache.checked_at || '') > Date.parse(record.checked_at || '')) {
         record = mapping.cex_quote_cache; quote = record.quote;
       }
       const saved = state.amazon_discovery?.[quote.box_id]?.candidate_products || [];
-      const candidate = candidateByBox.get(quote.box_id) || saved.find(r =>
-        /^[A-Z0-9]{10}$/.test(r.asin || '') &&
+      let candidate = candidateByBox.get(quote.box_id);
+      if (!candidate && proposed && asinOk(proposed.asin)) {
+        candidate = {asin: proposed.asin, title: proposed.amazon_title, match_percent: proposed.match_percent, last_seen_at: proposed.proposed_at};
+      }
+      if (!candidate) candidate = saved.find(r =>
+        asinOk(r.asin) &&
         !(inventoryByAsin.get(r.asin) || []).some(x => x.identity_status === 'identity_mismatch') &&
         now - Date.parse(r.last_seen_at || '') >= 0 && now - Date.parse(r.last_seen_at || '') <= 30*86400000);
-      const selected = mapping || candidate;
+      const userMapping = userLink && asinOk(userLink.asin) ? {asin: userLink.asin, cex_box_id: boxId, match_confidence: 'user_confirmed'} : null;
+      const selected = mapping || userMapping || candidate;
       const check = selected ? checks.get(selected.asin) : null;
       const history = historyFor(...(inventoryByAsin.get(selected?.asin) || []).filter(r => r.title === selected.title), selected, check);
       const checkedAge = now - Date.parse(check?.checked_at || '');
       const quoteAge = now - Date.parse(check?.cex_quote_checked_at || '');
       const fresh = checkedAge >= 0 && checkedAge <= 30*60000 && quoteAge >= 0 && quoteAge <= 12*3600000 && check?.cex_quote_fresh_for_alert === true;
       const read = !!mapping && fresh && ['profitable','above_buy_ceiling','below_minimum_buy'].includes(check?.status);
-      return {record, quote, mapping, candidate, check, history, observed:history.at(-1), fresh:read, group:category(quote),
-        profitable:read && check?.status === 'profitable', discovery:state.amazon_discovery?.[quote.box_id]};
-    }).filter(r => finite(r.quote.cash_eur) && r.quote.cash_eur > 10 && r.quote.box_id && !/non[ -]working|faulty|spares/i.test(r.quote.box_name || ''))
-      .sort((a,b) => Number(b.profitable)-Number(a.profitable) || Number(!!b.mapping)-Number(!!a.mapping) ||
+      const matchPercent = candidate?.match_percent ?? proposed?.match_percent ?? state.amazon_discovery?.[quote.box_id]?.best_match_percent;
+      return {record, quote, mapping, userMapping, userLink, proposed, candidate, check, history, observed:history.at(-1), fresh:read, group:category(quote),
+        matchPercent, profitable:read && check?.status === 'profitable', discovery:state.amazon_discovery?.[quote.box_id], boxId};
+    }).filter(r => finite(r.quote.cash_eur) && r.quote.cash_eur > 10 && r.quote.box_id && !/non[ -]working|faulty|spares/i.test(r.quote.box_name || '') && !rejected[r.boxId])
+      .sort((a,b) => Number(b.profitable)-Number(a.profitable) || Number(!!b.userMapping)-Number(!!a.userMapping) || Number(!!b.mapping)-Number(!!a.mapping) ||
+        (Number(b.matchPercent)||0)-(Number(a.matchPercent)||0) ||
         (['console','game'].includes(b.group) ? 1:0)-(['console','game'].includes(a.group) ? 1:0) || b.quote.cash_eur-a.quote.cash_eur)
       .slice(0,1000);
   }
@@ -79,15 +110,25 @@ const TargetPage = (() => {
       .sort((a,b) => b.price_eur-a.price_eur).slice(0,30);
   }
   function renderRow(r) {
-    const {quote:q,mapping:m,check:c} = r;
+    const {quote:q,mapping:m,check:c,userMapping:u,userLink:ul,proposed:p,candidate:can} = r;
     const cex = `https://ie.webuy.com/product-detail?id=${encodeURIComponent(q.box_id)}`;
-    const matched = m && /^[A-Z0-9]{10}$/.test(m.asin);
-    const asin = matched ? m.asin : r.candidate?.asin;
+    const matched = m && asinOk(m.asin);
+    const userConfirmed = u && asinOk(u.asin);
+    const asin = matched ? m.asin : userConfirmed ? u.asin : can?.asin;
     const amazon = asin ? `https://www.amazon.ie/dp/${asin}` : `https://www.amazon.ie/s?k=${encodeURIComponent(q.box_name.replace(/,\s*(?:[ABC]|mint|boxed|unboxed|discounted)\s*$/i, ''))}`;
-    const stage = matched ? 'Exact identity mapped' : asin ? 'Possible match · verify model and variant' : r.discovery?.status === 'candidates_found' ? 'Candidate found · needs verification' : 'Needs matching';
-    return `<tr><td><a href="${cex}" target="_blank" rel="noopener">${esc(q.box_name)}</a><span class="target-meta">${esc(q.category_name || 'CeX catalogue')} · ${esc(q.box_id)}</span></td><td><span class="target-money">${money(q.cash_eur)}</span><span class="target-meta">${r.record.source === 'catalogue_search' ? 'Index estimate' : 'Detail quote'} · ${esc(date(r.record.checked_at))}</span></td><td><a class="amazon-action" href="${amazon}" target="_blank" rel="noopener">${matched ? 'Open Amazon product' : asin ? 'Check possible Amazon match' : 'Search Amazon ↗'}</a><span class="target-meta">${esc(stage)}</span>${r.observed ? `<span class="target-money">${money(r.observed.price_eur)}</span><span class="target-meta">Last observed ${esc(date(r.observed.observed_at))} · ${matched ? 'mapped product' : 'candidate, unverified'}</span>` : '<span class="target-meta">Amazon price pending</span>'}${renderHistory(r.history || [])}</td><td class="${r.profitable ? 'target-good' : ''}">${r.fresh ? money(c.cex_cash_profit_eur) : 'Not verified'}<span class="target-meta">${r.profitable ? 'Meets alert margin' : r.fresh ? 'Below alert margin' : 'Awaiting a fresh comparable check'}</span></td><td>${esc(date(c?.checked_at || r.discovery?.checked_at))}<span class="target-meta">${esc(c?.status?.replaceAll('_',' ') || r.discovery?.status?.replaceAll('_',' ') || 'Amazon not checked')}</span></td></tr>`;
+    const pct = finite(r.matchPercent) ? `${Math.round(Number(r.matchPercent))}% title match` : '';
+    let stage = 'Needs matching · waiting for Amazon search';
+    if (matched) stage = 'Scanner-verified identity map';
+    else if (userConfirmed) stage = 'Your confirmed link · scans will reuse it';
+    else if (asin && pct) stage = `Suggested match · ${pct}`;
+    else if (asin) stage = 'Possible match · verify model and variant';
+    else if (r.discovery?.status === 'candidates_found') stage = 'Search ran · no strong hit yet';
+    const actions = (!matched && !userConfirmed && asinOk(can?.asin)) ? `<div class="target-actions"><button type="button" class="target-confirm" data-box="${esc(r.boxId)}" data-asin="${esc(can.asin)}" data-title="${esc(can.title || '')}">Link this match</button><button type="button" class="target-reject" data-box="${esc(r.boxId)}">Not this product</button></div>` : '';
+    const linkLabel = matched ? 'Open Amazon product' : userConfirmed ? 'Open your linked product' : asin ? 'Review suggested Amazon match' : 'Search Amazon ↗';
+    return `<tr data-box-id="${esc(r.boxId)}"><td><a href="${cex}" target="_blank" rel="noopener">${esc(q.box_name)}</a><span class="target-meta">${esc(q.category_name || 'CeX catalogue')} · ${esc(q.box_id)}</span></td><td><span class="target-money">${money(q.cash_eur)}</span><span class="target-meta">${r.record.source === 'catalogue_search' ? 'Index estimate' : 'Detail quote'} · ${esc(date(r.record.checked_at))}</span></td><td><a class="amazon-action" href="${amazon}" target="_blank" rel="noopener">${linkLabel}</a><span class="target-meta">${esc(stage)}</span>${pct && !userConfirmed ? `<span class="target-meta">${esc(pct)} (estimate only)</span>` : ''}${actions}${r.observed ? `<span class="target-money">${money(r.observed.price_eur)}</span><span class="target-meta">Last observed ${esc(date(r.observed.observed_at))} · ${matched ? 'mapped product' : userConfirmed ? 'your link' : 'candidate, unverified'}</span>` : '<span class="target-meta">Amazon price pending</span>'}${renderHistory(r.history || [])}</td><td class="${r.profitable ? 'target-good' : ''}">${r.fresh ? money(c.cex_cash_profit_eur) : 'Not verified'}<span class="target-meta">${r.profitable ? 'Meets alert margin' : r.fresh ? 'Below alert margin' : 'Awaiting a fresh comparable check'}</span></td><td>${esc(date(c?.checked_at || r.discovery?.checked_at || p?.proposed_at))}<span class="target-meta">${esc(c?.status?.replaceAll('_',' ') || r.discovery?.status?.replaceAll('_',' ') || (p ? 'proposal saved' : 'Amazon not checked'))}</span></td></tr>`;
   }
-  return {rows, coffee, renderRow, category, date, money, esc, historyFor, renderHistory};
+  return {rows, coffee, renderRow, category, date, money, esc, historyFor, renderHistory,
+    readLocalUserLinks, exportUserLinksPayload, USER_LINKS_STORAGE, REJECTED_STORAGE, asinOk};
 })();
 if (typeof module !== 'undefined') module.exports = TargetPage;
 if (typeof document !== 'undefined') {
@@ -97,20 +138,21 @@ if (typeof document !== 'undefined') {
     catch (error) { if (optional) return {}; throw error; }
   }
   async function load() {
-    const results = await Promise.allSettled([read('catalogue.json'),read('hotlist.json',true),read('cex-targets-seed.json',true)]);
+    const results = await Promise.allSettled([read('catalogue.json'),read('hotlist.json',true),read('cex-targets-seed.json',true),read('cex-user-links.json',true)]);
     const catalogue = results[0].status === 'fulfilled' ? results[0].value : {};
     const hotlist = results[1].status === 'fulfilled' ? results[1].value : {};
     const seed = results[2].status === 'fulfilled' ? results[2].value : {};
-    const rows = TargetPage.rows(catalogue,hotlist,seed);
+    const userFile = results[3].status === 'fulfilled' ? (results[3].value.links || {}) : {};
+    let rows = TargetPage.rows(catalogue,hotlist,seed,Date.now(),userFile);
     $('target-count').textContent = rows.length;
-    $('mapped-count').textContent = rows.filter(r=>r.mapping).length;
+    $('mapped-count').textContent = rows.filter(r=>r.mapping || r.userMapping).length;
     $('profitable-count').textContent = rows.filter(r=>r.profitable).length;
-    $('target-status').textContent = results[0].status === 'rejected' ? 'Live catalogue unavailable. Showing the dated discovery snapshot where available; mapping and profit are not verified.' : `Published ${TargetPage.date(catalogue.generated_at)}. ${rows.length} of up to 1,000 targets available. Matches fill as scans complete.`;
+    $('target-status').textContent = results[0].status === 'rejected' ? 'Live catalogue unavailable. Showing the dated discovery snapshot where available; mapping and profit are not verified.' : `Published ${TargetPage.date(catalogue.generated_at)}. Scans search Amazon from CeX titles and store a match %. Use Link this match, then export JSON into docs/cex-user-links.json so Actions reuse your links.`;
     let page = 0;
     const pageSize = 50;
     function render() {
       const query = $('target-search').value.toLowerCase().trim(), group=$('target-category').value, match=$('target-matching').value;
-      const visible=rows.filter(r=>(!query || `${r.quote.box_name} ${r.quote.box_id}`.toLowerCase().includes(query)) && (!group || r.group===group) && (!match || (match==='mapped' ? !!r.mapping : !r.mapping)));
+      const visible=rows.filter(r=>(!query || `${r.quote.box_name} ${r.quote.box_id}`.toLowerCase().includes(query)) && (!group || r.group===group) && (!match || (match==='mapped' ? !!(r.mapping || r.userMapping) : !(r.mapping || r.userMapping))));
       page = Math.min(page, Math.max(0, Math.ceil(visible.length/pageSize)-1));
       const start=page*pageSize;
       $('target-rows').innerHTML=visible.slice(start,start+pageSize).map(TargetPage.renderRow).join('');
@@ -122,6 +164,34 @@ if (typeof document !== 'undefined') {
     ['target-search','target-category','target-matching'].forEach(id=>$(id).addEventListener('input',()=>{page=0;render();}));
     $('target-prev').addEventListener('click',()=>{page--;render();});
     $('target-next').addEventListener('click',()=>{page++;render();});
+    $('target-rows').addEventListener('click', event => {
+      const confirm = event.target.closest('.target-confirm');
+      const reject = event.target.closest('.target-reject');
+      if (!confirm && !reject) return;
+      const boxId = (confirm || reject).dataset.box;
+      if (reject) {
+        const rejected = JSON.parse(localStorage.getItem(TargetPage.REJECTED_STORAGE) || '{}');
+        rejected[boxId] = true;
+        localStorage.setItem(TargetPage.REJECTED_STORAGE, JSON.stringify(rejected));
+        rows = TargetPage.rows(catalogue, hotlist, seed, Date.now(), userFile);
+        render();
+        return;
+      }
+      const links = TargetPage.readLocalUserLinks();
+      links[boxId] = {asin: confirm.dataset.asin, amazon_title: confirm.dataset.title, confirmed_at: new Date().toISOString(), source: 'browser'};
+      localStorage.setItem(TargetPage.USER_LINKS_STORAGE, JSON.stringify(links));
+      rows = TargetPage.rows(catalogue, hotlist, seed, Date.now(), userFile, links);
+      render();
+    });
+    const exportBtn = $('target-export-links');
+    if (exportBtn) exportBtn.addEventListener('click', () => {
+      const payload = TargetPage.exportUserLinksPayload(userFile, TargetPage.readLocalUserLinks());
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'cex-user-links.json'; a.click();
+      URL.revokeObjectURL(url);
+    });
     render();
     const coffee=TargetPage.coffee(catalogue);
     $('coffee-table').hidden=!coffee.length; $('coffee-empty').hidden=!!coffee.length;
