@@ -1,0 +1,98 @@
+{
+  "response": {
+    "ack": "Success",
+    "data": {
+      "boxDetails": [
+        {
+          "boxId": "5099206077836B",
+          "boxName": "Logitech G305 Lightspeed Wireless Gaming Mouse, B",
+          "cashPrice": 21,
+          "exchangePrice": 29,
+          "sellPrice": 50,
+          "boxWebBuyAllowed": 1,
+          "categoryName": "PC Mice",
+          "attributeInfo": [
+            {
+              "attributeId": 48,
+              "attributeName": "manufacturer",
+              "showOnPDP": 1,
+              "useAsMetaTag": 0,
+              "attributeFriendlyName": "Manufacturer",
+              "attributeValue": [
+                "Logitech"
+              ],
+              "dataTypeId": "2",
+              "order": "0",
+              "isVariant": "0"
+            },
+            {
+              "attributeId": 49,
+              "attributeName": "model_name",
+              "showOnPDP": 1,
+              "useAsMetaTag": 0,
+              "attributeFriendlyName": "Model Name",
+              "attributeValue": [
+                "Lightspeed"
+              ],
+              "dataTypeId": "2",
+              "order": "0",
+              "isVariant": "0"
+            },
+            {
+              "attributeId": 50,
+              "attributeName": "grade",
+              "showOnPDP": 1,
+              "useAsMetaTag": 0,
+              "attributeFriendlyName": "Grade",
+              "attributeValue": [
+                "B"
+              ],
+              "dataTypeId": "6",
+              "order": "0",
+              "isVariant": "0"
+            },
+            {
+              "attributeId": 77,
+              "attributeName": "model_number",
+              "showOnPDP": 1,
+              "useAsMetaTag": 0,
+              "attributeFriendlyName": "Model Number",
+              "attributeValue": [
+                "G305"
+              ],
+              "dataTypeId": "2",
+              "order": "0",
+              "isVariant": "0"
+            },
+            {
+              "attributeId": 80,
+              "attributeName": "accessory_type",
+              "showOnPDP": 1,
+              "useAsMetaTag": 0,
+              "attributeFriendlyName": "Accessory Type",
+              "attributeValue": [
+                "Optical Mouse"
+              ],
+              "dataTypeId": "2",
+              "order": "0",
+              "isVariant": "0"
+            },
+            {
+              "attributeId": 115,
+              "attributeName": "connectivity",
+              "showOnPDP": 1,
+              "useAsMetaTag": 0,
+              "attributeFriendlyName": "Connectivity",
+              "attributeValue": [
+                "Bluetooth"
+              ],
+              "dataTypeId": "2",
+              "order": "0",
+              "isVariant": "0"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

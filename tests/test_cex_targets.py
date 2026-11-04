@@ -65,12 +65,15 @@ class TestCexTargetCatalogue(unittest.TestCase):
         hit = {'boxId': PRICE.box_id, 'boxName': PRICE.box_name, 'cashBuyPrice': 300,
                'boxWebBuyAllowed': True, 'modelNumber': 'WH-1000XM5'}
         async def check_details(client, rows, *, snapshots, **kwargs):
-            self.assertLessEqual(len(rows), 6)
+            self.assertLessEqual(len(rows) + 1, 6)
             snapshots[card.asin] = snapshot(price=350)
+            kwargs['diagnostics'][card.asin] = 'price_read'
             return []
         async def go():
             with patch('scripts.crawl_bestsellers.crawl', new_callable=AsyncMock, return_value=result), \
                  patch('scripts.crawl_bestsellers.process_crawl', return_value=ProcessResult()), \
+                 patch('scripts.crawl_bestsellers.import_target_seed'), \
+                 patch('scripts.crawl_bestsellers.discover_amazon_targets', new_callable=AsyncMock, return_value=([], {'search_requests': 1, 'candidates': 0, 'status': 'no_new_candidates'})), \
                  patch('scripts.crawl_bestsellers.spot_check_list_prices', side_effect=check_details), \
                  patch('scripts.crawl_bestsellers.export_deals', return_value={}), \
                  patch('scripts.crawl_bestsellers.db.recent_alerts', return_value=[]), \
@@ -125,7 +128,7 @@ class TestCexTargetCatalogue(unittest.TestCase):
                 await search_boxes(client, 'Sony', strict=True)
         asyncio.run(go())
         self.assertEqual(bodies[0]['page'], 2)
-        self.assertIn('cashBuyPrice>150', bodies[0]['numericFilters'])
+        self.assertIn(['cashBuyPrice>150', 'cashPriceCalculated>150'], bodies[0]['numericFilters'])
         self.assertNotIn('page', bodies[1])
         self.assertEqual(bodies[1]['hitsPerPage'], 3)
 

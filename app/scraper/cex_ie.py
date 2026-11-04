@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
-from app.scraper.product_identity import catalog_barcodes, normalise_model
+from app.scraper.product_identity import catalog_barcodes, cex_model_number
 import re
+import math
 from dataclasses import dataclass
 
 import httpx
@@ -194,7 +195,7 @@ _MODEL_RE = re.compile(
 )
 _PLATFORM_RE = re.compile(
     r"\b(?:ps\s*[345]|playstation\s*[345]|xbox\s*(?:one|series\s*[sx])|"
-    r"nintendo\s+switch)\b",
+    r"nintendo\s+switch(?:\s*2)?|switch(?:\s*2)?(?=\s*(?:console|oled|lite|\)|\])))\b",
     re.I,
 )
 _GAME_EDITION_RE = re.compile(r"\b(?:fifa|fc|nba|nhl|wwe|f1)\s*(\d{2,4})\b", re.I)
@@ -213,6 +214,7 @@ def _identifiers(pattern: re.Pattern, title: str) -> set[str]:
     return {
         re.sub(r"\s+", "", match.group(0).lower())
         .replace("playstation", "ps")
+        .replace("nintendoswitch", "switch")
         .replace("disk", "disc")
         for match in pattern.finditer(title)
     }
@@ -235,12 +237,27 @@ def _variants_compatible(amazon_title: str, cex_title: str) -> bool:
     if _NON_TRADEABLE_RE.search(amazon_title):
         return False
 
+    # A brand alone must never join mouse mats, replacement pads or cases to
+    # the main device. These mismatches occurred in production research rows.
+    for pattern in (r"\bmouse\s*(?:pad|mat)\b", r"\bear\s*(?:pads?|cushions?)\b",
+                    r"\b(?:case|cover)\b", r"\b(?:replacement|compatible with)\b"):
+        if bool(re.search(pattern, amazon_title, re.I)) != bool(re.search(pattern, cex_title, re.I)):
+            return False
+    for pattern in (r"\bg\d{3,4}(?:\s*x)?\b", r"\bwh[ -]?1000xm\d\b"):
+        if _identifiers(re.compile(pattern, re.I), amazon_title) != _identifiers(re.compile(pattern, re.I), cex_title):
+            return False
+    colours = {"black", "white", "grey", "silver", "gold", "blue", "red", "green", "pink", "purple"}
+    a_colours = set(_tokens(amazon_title.lower().replace("gray", "grey"))) & colours
+    c_colours = set(_tokens(cex_title.lower().replace("gray", "grey"))) & colours
+    if a_colours and c_colours and a_colours != c_colours:
+        return False
+
     for pattern in (_CAPACITY_RE, _MODEL_RE, _PLATFORM_RE):
         if _identifiers(pattern, amazon_title) != _identifiers(pattern, cex_title):
             return False
 
-    amazon_years = {match.group(1) for match in _GAME_EDITION_RE.finditer(amazon_title)}
-    cex_years = {match.group(1) for match in _GAME_EDITION_RE.finditer(cex_title)}
+    amazon_years = {re.sub(r"\s+", "", match.group(0).lower()) for match in _GAME_EDITION_RE.finditer(amazon_title)}
+    cex_years = {re.sub(r"\s+", "", match.group(0).lower()) for match in _GAME_EDITION_RE.finditer(cex_title)}
     if amazon_years != cex_years:
         return False
 
@@ -258,16 +275,32 @@ def titles_match_for_trade_in(amazon_title: str | None, cex_box_name: str | None
     amazon_l = amazon_title.lower()
     cex_l = cex_box_name.lower()
     brand = leading_brand(amazon_title)
+    family = {'sony': r'\b(?:sony|playstation|ps[345])',
+              'microsoft': r'\b(?:microsoft|xbox)\b',
+              'nintendo': r'\b(?:nintendo|switch)\b'}
     if brand and len(brand) >= 4 and brand not in _SKIP_LEADING_BRAND:
-        if brand not in cex_l:
+        if brand not in cex_l and not (brand in family and re.search(family[brand], cex_l)):
             return False
 
     amazon_brands = _significant_tokens(amazon_l) & _KNOWN_BRANDS
     cex_brands = _significant_tokens(cex_l) & _KNOWN_BRANDS
+    for name, pattern in family.items():
+        if re.search(pattern, amazon_l):
+            amazon_brands.add(name)
+        if re.search(pattern, cex_l):
+            cex_brands.add(name)
     if amazon_brands and cex_brands and amazon_brands.isdisjoint(cex_brands):
         return False
 
-    overlap = _significant_tokens(amazon_l) & _significant_tokens(cex_l)
+    if _identifiers(_MODEL_RE, amazon_title):
+        # Model family, capacity, edition and platform already agree above.
+        return True
+    if _identifiers(_PLATFORM_RE, amazon_title) and re.search(r'\bconsole\b', amazon_l) and re.search(r'\bconsole\b', cex_l):
+        return True
+
+    overlap = (_significant_tokens(amazon_l) & _significant_tokens(cex_l)) - _KNOWN_BRANDS
+    if brand and _tokens(amazon_l)[0] == brand:
+        overlap.discard(brand)
     if not overlap:
         return False
     # One distinctive shared token (model number, product line) is enough once brand checks pass.
@@ -299,6 +332,7 @@ async def search_boxes(client: httpx.AsyncClient, query: str, *, hits_per_page: 
             "categoryName",
             "sellPrice",
             "cashBuyPrice",
+            "cashPriceCalculated", "popularityScore",
             "boxWebBuyAllowed",
             "ean", "upc", "gtin", "barcode", "barcodes", "modelNumber",
         ],
@@ -307,7 +341,8 @@ async def search_boxes(client: httpx.AsyncClient, query: str, *, hits_per_page: 
     if page:
         body["page"] = max(0, int(page))
     if min_cash_eur is not None:
-        body["numericFilters"].append(f"cashBuyPrice>{float(min_cash_eur):g}")
+        body["numericFilters"].append([f"cashBuyPrice>{float(min_cash_eur):g}",
+                                       f"cashPriceCalculated>{float(min_cash_eur):g}"])
     headers = {
         **CEX_HEADERS,
         "X-Algolia-Application-Id": ALGOLIA_APP_ID,
@@ -328,6 +363,18 @@ async def search_boxes(client: httpx.AsyncClient, query: str, *, hits_per_page: 
         if strict:
             raise
         return []
+
+
+def search_cash_price(hit: dict) -> float:
+    """CeX computes most normal buy offers; cashBuyPrice alone is often zero."""
+    for key in ("cashPriceCalculated", "cashBuyPrice"):
+        try:
+            value = float(hit.get(key) or 0)
+        except (TypeError, ValueError, OverflowError):
+            continue
+        if math.isfinite(value) and value > 0:
+            return value
+    return 0
 
 
 async def fetch_box_prices(client: httpx.AsyncClient, box_id: str, *, strict: bool = False) -> CexPrices | None:
@@ -370,5 +417,5 @@ async def fetch_box_prices(client: httpx.AsyncClient, box_id: str, *, strict: bo
         retail_eur=retail,
         url=product_url(str(box.get("boxId") or box_id)),
         barcodes=catalog_barcodes(box),
-        model_number=normalise_model(box.get('modelNumber') or box.get('manufacturerPartNumber')),
+        model_number=cex_model_number(box),
     )

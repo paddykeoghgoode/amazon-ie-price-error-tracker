@@ -188,9 +188,12 @@ async def recheck(deals, previous, limit=12, notify=True, *, catalogue=None, con
                             funnel['alerts_sent'] += 1
                 else:
                     funnel['unreadable'] += 1
+                    item['status'] = snap.parse_status
             except (httpx.HTTPError, ValueError, TypeError, OverflowError) as exc:
+                from app.scraper.amazon_ie import failure_reason
                 funnel['unreadable'] += 1
-                if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in (403, 429, 503):
+                item['status'] = failure_reason(exc)
+                if item['status'] == 'provider_blocked':
                     blocked = (now + timedelta(minutes=30)).isoformat()
             out[asin] = item
             if blocked:

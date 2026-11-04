@@ -182,9 +182,10 @@ async def spot_check_list_prices(
     allow_alerts: bool,
     delay_seconds: float,
     snapshots: dict[str, ProductSnapshot] | None = None,
+    diagnostics: dict[str, str] | None = None,
 ) -> list[DetectedAlert]:
     """Fetch a handful of product pages to read struck-through list prices on expensive items."""
-    from app.scraper.amazon_ie import fetch_product
+    from app.scraper.amazon_ie import fetch_product, failure_reason
 
     alerts: list[DetectedAlert] = []
     policy = load_alert_policy()
@@ -200,13 +201,18 @@ async def spot_check_list_prices(
         try:
             snap = await fetch_product(client, row["url"])
         except Exception as exc:
+            reason = failure_reason(exc)
+            if diagnostics is not None:
+                diagnostics[asin] = reason
             if delay_seconds:
                 await asyncio.sleep(delay_seconds)
-            if getattr(getattr(exc, 'response', None), 'status_code', None) in (403, 429, 503):
+            if reason == "provider_blocked":
                 break  # Provider blocks must not consume the remaining page budget.
             continue
         if snapshots is not None:
             snapshots[asin] = snap
+        if diagnostics is not None:
+            diagnostics[asin] = snap.parse_status
         obs = list_price_observation(
             snap,
             category=row.get("category"),

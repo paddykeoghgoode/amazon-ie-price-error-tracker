@@ -84,6 +84,7 @@ def quote_entry(title: str | None, prices: CexPrices, now: datetime) -> dict:
     return {
         "title": title,
         "status": "matched",
+        "identity_schema": 2,
         "checked_at": now.astimezone(timezone.utc).isoformat(),
         "quote": asdict(prices),
     }

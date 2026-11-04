@@ -1,0 +1,1806 @@
+{
+  "generated_at": "2026-11-04T00:02:26.239715+00:00",
+  "source": "CeX Ireland public catalogue, prod_cex_ie. PS5 and Nintendo Switch discovery queries. Index cash estimates; not live box-detail or sales-volume evidence.",
+  "items": {
+    "SPS5825GBW003": {
+      "title": "Playstation 5 Console, 825GB, White, Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5825GBW003",
+        "box_name": "Playstation 5 Console, 825GB, White, Discounted",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 430.0,
+        "voucher_eur": 0,
+        "retail_eur": 590.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5825GBW003",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5D825GBW003": {
+      "title": "Playstation 5 Digital Edition Console, 825GB, White, Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5D825GBW003",
+        "box_name": "Playstation 5 Digital Edition Console, 825GB, White, Discounted",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 423.0,
+        "voucher_eur": 0,
+        "retail_eur": 580.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5D825GBW003",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5S1TBW001": {
+      "title": "Playstation 5 Slim Console, 1TB, White, Boxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5S1TBW001",
+        "box_name": "Playstation 5 Slim Console, 1TB, White, Boxed",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 520.0,
+        "voucher_eur": 0,
+        "retail_eur": 650.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5S1TBW001",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5825GBW002": {
+      "title": "Playstation 5 Console, 825GB, White, Unboxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5825GBW002",
+        "box_name": "Playstation 5 Console, 825GB, White, Unboxed",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 438.0,
+        "voucher_eur": 0,
+        "retail_eur": 600.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5825GBW002",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5SD825GBW001": {
+      "title": "Playstation 5 Slim Digital Edition Console, 825GB, White, Boxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5SD825GBW001",
+        "box_name": "Playstation 5 Slim Digital Edition Console, 825GB, White, Boxed",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 438.0,
+        "voucher_eur": 0,
+        "retail_eur": 600.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5SD825GBW001",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5S1TBW003": {
+      "title": "Playstation 5 Slim Console, 1TB, White, Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5S1TBW003",
+        "box_name": "Playstation 5 Slim Console, 1TB, White, Discounted",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 504.0,
+        "voucher_eur": 0,
+        "retail_eur": 630.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5S1TBW003",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5SD825GBW003": {
+      "title": "Playstation 5 Slim Digital Edition Console, 825GB, White, Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5SD825GBW003",
+        "box_name": "Playstation 5 Slim Digital Edition Console, 825GB, White, Discounted",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 423.0,
+        "voucher_eur": 0,
+        "retail_eur": 580.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5SD825GBW003",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5825GBW001": {
+      "title": "Playstation 5 Console, 825GB, White, Boxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5825GBW001",
+        "box_name": "Playstation 5 Console, 825GB, White, Boxed",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 452.0,
+        "voucher_eur": 0,
+        "retail_eur": 620.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5825GBW001",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5SD825GBW002": {
+      "title": "Playstation 5 Slim Digital Edition Console, 825GB, White, Unboxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5SD825GBW002",
+        "box_name": "Playstation 5 Slim Digital Edition Console, 825GB, White, Unboxed",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 430.0,
+        "voucher_eur": 0,
+        "retail_eur": 590.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5SD825GBW002",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5SD1TBMB003": {
+      "title": "Playstation 5 Slim Digital Ed., 1TB, Midnight Black, Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5SD1TBMB003",
+        "box_name": "Playstation 5 Slim Digital Ed., 1TB, Midnight Black, Discounted",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 445.0,
+        "voucher_eur": 0,
+        "retail_eur": 610.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5SD1TBMB003",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5D825GBW002": {
+      "title": "Playstation 5 Digital Edition Console, 825GB, White, Unboxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5D825GBW002",
+        "box_name": "Playstation 5 Digital Edition Console, 825GB, White, Unboxed",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 430.0,
+        "voucher_eur": 0,
+        "retail_eur": 590.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5D825GBW002",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5SD1TBW001": {
+      "title": "Playstation 5 Slim Digital Edition Console, 1TB, White, Boxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5SD1TBW001",
+        "box_name": "Playstation 5 Slim Digital Edition Console, 1TB, White, Boxed",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 459.0,
+        "voucher_eur": 0,
+        "retail_eur": 630.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5SD1TBW001",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5SD1TBW003": {
+      "title": "Playstation 5 Slim Digital Edition Console, 1TB, White, Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5SD1TBW003",
+        "box_name": "Playstation 5 Slim Digital Edition Console, 1TB, White, Discounted",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 445.0,
+        "voucher_eur": 0,
+        "retail_eur": 610.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5SD1TBW003",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5825GBSM2002": {
+      "title": "Playstation 5 Console, 825GB, Spider-Man w/Spider-Man Controller, Unboxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5825GBSM2002",
+        "box_name": "Playstation 5 Console, 825GB, Spider-Man w/Spider-Man Controller, Unboxed",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 540.0,
+        "voucher_eur": 0,
+        "retail_eur": 740.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5825GBSM2002",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5S1TBW002": {
+      "title": "Playstation 5 Slim Console, 1TB, White, Unboxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5S1TBW002",
+        "box_name": "Playstation 5 Slim Console, 1TB, White, Unboxed",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 512.0,
+        "voucher_eur": 0,
+        "retail_eur": 640.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5S1TBW002",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5SD1TBW002": {
+      "title": "Playstation 5 Slim Digital Edition Console, 1TB, White, Unboxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5SD1TBW002",
+        "box_name": "Playstation 5 Slim Digital Edition Console, 1TB, White, Unboxed",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 452.0,
+        "voucher_eur": 0,
+        "retail_eur": 620.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5SD1TBW002",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5D825GBW001": {
+      "title": "Playstation 5 Digital Edition Console, 825GB, White, Boxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5D825GBW001",
+        "box_name": "Playstation 5 Digital Edition Console, 825GB, White, Boxed",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 438.0,
+        "voucher_eur": 0,
+        "retail_eur": 600.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5D825GBW001",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5P2TBW001": {
+      "title": "Playstation 5 Pro, 2TB, White, Boxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5P2TBW001",
+        "box_name": "Playstation 5 Pro, 2TB, White, Boxed",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 740.0,
+        "voucher_eur": 0,
+        "retail_eur": 925.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5P2TBW001",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5P2TBW002": {
+      "title": "Playstation 5 Pro, 2TB, White, Unboxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5P2TBW002",
+        "box_name": "Playstation 5 Pro, 2TB, White, Unboxed",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 720.0,
+        "voucher_eur": 0,
+        "retail_eur": 900.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5P2TBW002",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5S1TBGYG002": {
+      "title": "Playstation 5 Slim Console, 1TB, Ghost of Yotei Gold (No DLC), Unboxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5S1TBGYG002",
+        "box_name": "Playstation 5 Slim Console, 1TB, Ghost of Yotei Gold (No DLC), Unboxed",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 500.0,
+        "voucher_eur": 0,
+        "retail_eur": 625.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5S1TBGYG002",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "0454964NS32V2NE03": {
+      "title": "Switch Console, 32GB HAC-001-01 + Neon Red/Blue Joy-Con, Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "0454964NS32V2NE03",
+        "box_name": "Switch Console, 32GB HAC-001-01 + Neon Red/Blue Joy-Con, Discounted",
+        "category_name": "Switch Consoles",
+        "cash_eur": 72.0,
+        "voucher_eur": 0,
+        "retail_eur": 150.0,
+        "url": "https://ie.webuy.com/product-detail?id=0454964NS32V2NE03",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "0454964NS32NE01": {
+      "title": "Nintendo Switch Console, 32GB + Neon Red/Blue Joy-Con, Boxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "0454964NS32NE01",
+        "box_name": "Nintendo Switch Console, 32GB + Neon Red/Blue Joy-Con, Boxed",
+        "category_name": "Switch Consoles",
+        "cash_eur": 112.0,
+        "voucher_eur": 0,
+        "retail_eur": 235.0,
+        "url": "https://ie.webuy.com/product-detail?id=0454964NS32NE01",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "0454964NS32V2NE01": {
+      "title": "Switch Console, 32GB HAC-001-01 + Neon Red/Blue Joy-Con, Boxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "0454964NS32V2NE01",
+        "box_name": "Switch Console, 32GB HAC-001-01 + Neon Red/Blue Joy-Con, Boxed",
+        "category_name": "Switch Consoles",
+        "cash_eur": 120.0,
+        "voucher_eur": 0,
+        "retail_eur": 250.0,
+        "url": "https://ie.webuy.com/product-detail?id=0454964NS32V2NE01",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "0454964NS32NE02": {
+      "title": "Nintendo Switch Console, 32GB + Neon Red/Blue Joy-Con, Unboxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "0454964NS32NE02",
+        "box_name": "Nintendo Switch Console, 32GB + Neon Red/Blue Joy-Con, Unboxed",
+        "category_name": "Switch Consoles",
+        "cash_eur": 88.0,
+        "voucher_eur": 0,
+        "retail_eur": 185.0,
+        "url": "https://ie.webuy.com/product-detail?id=0454964NS32NE02",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "0454964NSL32TB03": {
+      "title": "Nintendo Switch Lite Console, 32GB Turquoise, Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "0454964NSL32TB03",
+        "box_name": "Nintendo Switch Lite Console, 32GB Turquoise, Discounted",
+        "category_name": "Switch Consoles",
+        "cash_eur": 62.0,
+        "voucher_eur": 0,
+        "retail_eur": 130.0,
+        "url": "https://ie.webuy.com/product-detail?id=0454964NSL32TB03",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "0454964NS32GR02": {
+      "title": "Nintendo Switch Console, 32GB + Grey Joy-Con, Unboxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "0454964NS32GR02",
+        "box_name": "Nintendo Switch Console, 32GB + Grey Joy-Con, Unboxed",
+        "category_name": "Switch Consoles",
+        "cash_eur": 86.0,
+        "voucher_eur": 0,
+        "retail_eur": 180.0,
+        "url": "https://ie.webuy.com/product-detail?id=0454964NS32GR02",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "0454964NS32V2NE02": {
+      "title": "Switch Console, 32GB HAC-001-01 + Neon Red/Blue Joy-Con, Unboxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "0454964NS32V2NE02",
+        "box_name": "Switch Console, 32GB HAC-001-01 + Neon Red/Blue Joy-Con, Unboxed",
+        "category_name": "Switch Consoles",
+        "cash_eur": 81.0,
+        "voucher_eur": 0,
+        "retail_eur": 170.0,
+        "url": "https://ie.webuy.com/product-detail?id=0454964NS32V2NE02",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "0454964NS32GR01": {
+      "title": "Nintendo Switch Console, 32GB + Grey Joy-Con, Boxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "0454964NS32GR01",
+        "box_name": "Nintendo Switch Console, 32GB + Grey Joy-Con, Boxed",
+        "category_name": "Switch Consoles",
+        "cash_eur": 120.0,
+        "voucher_eur": 0,
+        "retail_eur": 250.0,
+        "url": "https://ie.webuy.com/product-detail?id=0454964NS32GR01",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "0454964NS32NE03": {
+      "title": "Nintendo Switch Console, 32GB + Neon Red/Blue Joy-Con, Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "0454964NS32NE03",
+        "box_name": "Nintendo Switch Console, 32GB + Neon Red/Blue Joy-Con, Discounted",
+        "category_name": "Switch Consoles",
+        "cash_eur": 76.0,
+        "voucher_eur": 0,
+        "retail_eur": 160.0,
+        "url": "https://ie.webuy.com/product-detail?id=0454964NS32NE03",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "0454964NSL32TB02": {
+      "title": "Nintendo Switch Lite Console, 32GB Turquoise, Unboxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "0454964NSL32TB02",
+        "box_name": "Nintendo Switch Lite Console, 32GB Turquoise, Unboxed",
+        "category_name": "Switch Consoles",
+        "cash_eur": 69.0,
+        "voucher_eur": 0,
+        "retail_eur": 145.0,
+        "url": "https://ie.webuy.com/product-detail?id=0454964NSL32TB02",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "0454964NS32MX03": {
+      "title": "Nintendo Switch Console, 32GB + Mixed Joy-Con, Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "0454964NS32MX03",
+        "box_name": "Nintendo Switch Console, 32GB + Mixed Joy-Con, Discounted",
+        "category_name": "Switch Consoles",
+        "cash_eur": 76.0,
+        "voucher_eur": 0,
+        "retail_eur": 160.0,
+        "url": "https://ie.webuy.com/product-detail?id=0454964NS32MX03",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "0454964NSL32CP02": {
+      "title": "Nintendo Switch Lite Console, 32GB Coral Pink, Unboxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "0454964NSL32CP02",
+        "box_name": "Nintendo Switch Lite Console, 32GB Coral Pink, Unboxed",
+        "category_name": "Switch Consoles",
+        "cash_eur": 72.0,
+        "voucher_eur": 0,
+        "retail_eur": 150.0,
+        "url": "https://ie.webuy.com/product-detail?id=0454964NSL32CP02",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "0454964NSL32YE02": {
+      "title": "Nintendo Switch Lite Console, 32GB Yellow, Unboxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "0454964NSL32YE02",
+        "box_name": "Nintendo Switch Lite Console, 32GB Yellow, Unboxed",
+        "category_name": "Switch Consoles",
+        "cash_eur": 69.0,
+        "voucher_eur": 0,
+        "retail_eur": 145.0,
+        "url": "https://ie.webuy.com/product-detail?id=0454964NSL32YE02",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "0454964NSL32GR02": {
+      "title": "Nintendo Switch Lite Console, 32GB Grey, Unboxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "0454964NSL32GR02",
+        "box_name": "Nintendo Switch Lite Console, 32GB Grey, Unboxed",
+        "category_name": "Switch Consoles",
+        "cash_eur": 67.0,
+        "voucher_eur": 0,
+        "retail_eur": 140.0,
+        "url": "https://ie.webuy.com/product-detail?id=0454964NSL32GR02",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "0454964NS32GR03": {
+      "title": "Nintendo Switch Console, 32GB + Grey Joy-Con, Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "0454964NS32GR03",
+        "box_name": "Nintendo Switch Console, 32GB + Grey Joy-Con, Discounted",
+        "category_name": "Switch Consoles",
+        "cash_eur": 81.0,
+        "voucher_eur": 0,
+        "retail_eur": 170.0,
+        "url": "https://ie.webuy.com/product-detail?id=0454964NS32GR03",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "0454964NSL32TB01": {
+      "title": "Nintendo Switch Lite Console, 32GB Turquoise, Boxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "0454964NSL32TB01",
+        "box_name": "Nintendo Switch Lite Console, 32GB Turquoise, Boxed",
+        "category_name": "Switch Consoles",
+        "cash_eur": 100.0,
+        "voucher_eur": 0,
+        "retail_eur": 210.0,
+        "url": "https://ie.webuy.com/product-detail?id=0454964NSL32TB01",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "0454964NSL32CP03": {
+      "title": "Nintendo Switch Lite Console, 32GB Coral Pink, Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "0454964NSL32CP03",
+        "box_name": "Nintendo Switch Lite Console, 32GB Coral Pink, Discounted",
+        "category_name": "Switch Consoles",
+        "cash_eur": 67.0,
+        "voucher_eur": 0,
+        "retail_eur": 140.0,
+        "url": "https://ie.webuy.com/product-detail?id=0454964NSL32CP03",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "0454964NSL32BL01": {
+      "title": "Nintendo Switch Lite Console, 32GB Blue, Boxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "0454964NSL32BL01",
+        "box_name": "Nintendo Switch Lite Console, 32GB Blue, Boxed",
+        "category_name": "Switch Consoles",
+        "cash_eur": 98.0,
+        "voucher_eur": 0,
+        "retail_eur": 205.0,
+        "url": "https://ie.webuy.com/product-detail?id=0454964NSL32BL01",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "0454964NSL32ZG01": {
+      "title": "Nintendo Switch Lite Console, 32GB Zacian & Zamazenta Grey, Boxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "0454964NSL32ZG01",
+        "box_name": "Nintendo Switch Lite Console, 32GB Zacian & Zamazenta Grey, Boxed",
+        "category_name": "Switch Consoles",
+        "cash_eur": 118.0,
+        "voucher_eur": 0,
+        "retail_eur": 200.0,
+        "url": "https://ie.webuy.com/product-detail?id=0454964NSL32ZG01",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "0454964NSL32GR03": {
+      "title": "Nintendo Switch Lite Console, 32GB Grey, Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "0454964NSL32GR03",
+        "box_name": "Nintendo Switch Lite Console, 32GB Grey, Discounted",
+        "category_name": "Switch Consoles",
+        "cash_eur": 62.0,
+        "voucher_eur": 0,
+        "retail_eur": 130.0,
+        "url": "https://ie.webuy.com/product-detail?id=0454964NSL32GR03",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "884095225308": {
+      "title": "007 First Light",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "884095225308",
+        "box_name": "007 First Light",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 30.0,
+        "voucher_eur": 0,
+        "retail_eur": 60.0,
+        "url": "https://ie.webuy.com/product-detail?id=884095225308",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "3307216308904": {
+      "title": "Assassin's Creed Black Flag Resynced (No DLC)",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "3307216308904",
+        "box_name": "Assassin's Creed Black Flag Resynced (No DLC)",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 26.0,
+        "voucher_eur": 0,
+        "retail_eur": 52.0,
+        "url": "https://ie.webuy.com/product-detail?id=3307216308904",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "711719571681": {
+      "title": "Spider-Man 2 (No DLC)",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "711719571681",
+        "box_name": "Spider-Man 2 (No DLC)",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 21.0,
+        "voucher_eur": 0,
+        "retail_eur": 42.0,
+        "url": "https://ie.webuy.com/product-detail?id=711719571681",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "0711719073208": {
+      "title": "Wolverine",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "0711719073208",
+        "box_name": "Wolverine",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 41.0,
+        "voucher_eur": 0,
+        "retail_eur": 70.0,
+        "url": "https://ie.webuy.com/product-detail?id=0711719073208",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "711719835929": {
+      "title": "Spider-Man: Miles Morales (No DLC)",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "711719835929",
+        "box_name": "Spider-Man: Miles Morales (No DLC)",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 12.0,
+        "voucher_eur": 0,
+        "retail_eur": 25.0,
+        "url": "https://ie.webuy.com/product-detail?id=711719835929",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "5030934125406": {
+      "title": "Battlefield 6 (No DLC)",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "5030934125406",
+        "box_name": "Battlefield 6 (No DLC)",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 17.0,
+        "voucher_eur": 0,
+        "retail_eur": 35.0,
+        "url": "https://ie.webuy.com/product-detail?id=5030934125406",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "5026555439046": {
+      "title": "Mafia: The Old Country",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "5026555439046",
+        "box_name": "Mafia: The Old Country",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 15.0,
+        "voucher_eur": 0,
+        "retail_eur": 30.0,
+        "url": "https://ie.webuy.com/product-detail?id=5026555439046",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "5030938125525": {
+      "title": "EA Sports FC 27",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "5030938125525",
+        "box_name": "EA Sports FC 27",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 46.0,
+        "voucher_eur": 0,
+        "retail_eur": 70.0,
+        "url": "https://ie.webuy.com/product-detail?id=5030938125525",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "3391892043969": {
+      "title": "Blood of Dawnwalker, The",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "3391892043969",
+        "box_name": "Blood of Dawnwalker, The",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 42.0,
+        "voucher_eur": 0,
+        "retail_eur": 65.0,
+        "url": "https://ie.webuy.com/product-detail?id=3391892043969",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "711719020370": {
+      "title": "Ghost of Yotei",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "711719020370",
+        "box_name": "Ghost of Yotei",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 27.0,
+        "voucher_eur": 0,
+        "retail_eur": 55.0,
+        "url": "https://ie.webuy.com/product-detail?id=711719020370",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "0196388866236": {
+      "title": "Call of Duty: Modern Warfare 4 (No DLC)",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "0196388866236",
+        "box_name": "Call of Duty: Modern Warfare 4 (No DLC)",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 49.0,
+        "voucher_eur": 0,
+        "retail_eur": 68.0,
+        "url": "https://ie.webuy.com/product-detail?id=0196388866236",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "4012927152034": {
+      "title": "Silent Hill: Townfall",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "4012927152034",
+        "box_name": "Silent Hill: Townfall",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 29.0,
+        "voucher_eur": 0,
+        "retail_eur": 45.0,
+        "url": "https://ie.webuy.com/product-detail?id=4012927152034",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "3307216292654": {
+      "title": "Assassin's Creed Shadows (No DLC)",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "3307216292654",
+        "box_name": "Assassin's Creed Shadows (No DLC)",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 19.0,
+        "voucher_eur": 0,
+        "retail_eur": 38.0,
+        "url": "https://ie.webuy.com/product-detail?id=3307216292654",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "5055060905715": {
+      "title": "Onimusha: Way of the Sword",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "5055060905715",
+        "box_name": "Onimusha: Way of the Sword",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 38.0,
+        "voucher_eur": 0,
+        "retail_eur": 65.0,
+        "url": "https://ie.webuy.com/product-detail?id=5055060905715",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "5055060993477": {
+      "title": "Resident Evil Requiem (No DLC)",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "5055060993477",
+        "box_name": "Resident Evil Requiem (No DLC)",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 30.0,
+        "voucher_eur": 0,
+        "retail_eur": 60.0,
+        "url": "https://ie.webuy.com/product-detail?id=5055060993477",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "5030936125442": {
+      "title": "My Sims: Cosy Bundle",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "5030936125442",
+        "box_name": "My Sims: Cosy Bundle",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 14.0,
+        "voucher_eur": 0,
+        "retail_eur": 28.0,
+        "url": "https://ie.webuy.com/product-detail?id=5030936125442",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "5030931125263": {
+      "title": "UFC 5",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "5030931125263",
+        "box_name": "UFC 5",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 14.0,
+        "voucher_eur": 0,
+        "retail_eur": 28.0,
+        "url": "https://ie.webuy.com/product-detail?id=5030931125263",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "711719409199": {
+      "title": "God of War Ragnarok",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "711719409199",
+        "box_name": "God of War Ragnarok",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 19.0,
+        "voucher_eur": 0,
+        "retail_eur": 38.0,
+        "url": "https://ie.webuy.com/product-detail?id=711719409199",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "711719720690": {
+      "title": "Horizon Forbidden West (No DLC)",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "711719720690",
+        "box_name": "Horizon Forbidden West (No DLC)",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 14.0,
+        "voucher_eur": 0,
+        "retail_eur": 28.0,
+        "url": "https://ie.webuy.com/product-detail?id=711719720690",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "5051892257541": {
+      "title": "LEGO Batman: Legacy Of The Dark Knight",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "5051892257541",
+        "box_name": "LEGO Batman: Legacy Of The Dark Knight",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 25.0,
+        "voucher_eur": 0,
+        "retail_eur": 50.0,
+        "url": "https://ie.webuy.com/product-detail?id=5051892257541",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "4020628551063": {
+      "title": "Crimson Desert (No DLC)",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "4020628551063",
+        "box_name": "Crimson Desert (No DLC)",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 29.0,
+        "voucher_eur": 0,
+        "retail_eur": 58.0,
+        "url": "https://ie.webuy.com/product-detail?id=4020628551063",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "711719826590": {
+      "title": "Ratchet & Clank: Rift Apart",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "711719826590",
+        "box_name": "Ratchet & Clank: Rift Apart",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 12.0,
+        "voucher_eur": 0,
+        "retail_eur": 25.0,
+        "url": "https://ie.webuy.com/product-detail?id=711719826590",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "711719591122": {
+      "title": "Astro Bot",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "711719591122",
+        "box_name": "Astro Bot",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 27.0,
+        "voucher_eur": 0,
+        "retail_eur": 55.0,
+        "url": "https://ie.webuy.com/product-detail?id=711719591122",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "4012927150580": {
+      "title": "Silent Hill 2",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "4012927150580",
+        "box_name": "Silent Hill 2",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 24.0,
+        "voucher_eur": 0,
+        "retail_eur": 48.0,
+        "url": "https://ie.webuy.com/product-detail?id=4012927150580",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "5030917292453": {
+      "title": "Call of Duty: Black Ops Cold War (No DLC)",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "5030917292453",
+        "box_name": "Call of Duty: Black Ops Cold War (No DLC)",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 12.0,
+        "voucher_eur": 0,
+        "retail_eur": 25.0,
+        "url": "https://ie.webuy.com/product-detail?id=5030917292453",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "711719600367": {
+      "title": "Death Stranding 2: On the Beach",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "711719600367",
+        "box_name": "Death Stranding 2: On the Beach",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 27.0,
+        "voucher_eur": 0,
+        "retail_eur": 55.0,
+        "url": "https://ie.webuy.com/product-detail?id=711719600367",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "5056635611772": {
+      "title": "Black Myth: Wukong",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "5056635611772",
+        "box_name": "Black Myth: Wukong",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 31.0,
+        "voucher_eur": 0,
+        "retail_eur": 62.0,
+        "url": "https://ie.webuy.com/product-detail?id=5056635611772",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "5030917299674": {
+      "title": "Call of Duty: Modern Warfare III",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "5030917299674",
+        "box_name": "Call of Duty: Modern Warfare III",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 14.0,
+        "voucher_eur": 0,
+        "retail_eur": 28.0,
+        "url": "https://ie.webuy.com/product-detail?id=5030917299674",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "3512899968011": {
+      "title": "Warharmmer 40k: Space Marine II (No DLC)",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "3512899968011",
+        "box_name": "Warharmmer 40k: Space Marine II (No DLC)",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 14.0,
+        "voucher_eur": 0,
+        "retail_eur": 28.0,
+        "url": "https://ie.webuy.com/product-detail?id=3512899968011",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "5021290096806": {
+      "title": "Final Fantasy XVI",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "5021290096806",
+        "box_name": "Final Fantasy XVI",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 11.0,
+        "voucher_eur": 0,
+        "retail_eur": 22.0,
+        "url": "https://ie.webuy.com/product-detail?id=5021290096806",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "0711719714095": {
+      "title": "Ghost of Tsushima Director's Cut",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "0711719714095",
+        "box_name": "Ghost of Tsushima Director's Cut",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 24.0,
+        "voucher_eur": 0,
+        "retail_eur": 48.0,
+        "url": "https://ie.webuy.com/product-detail?id=0711719714095",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "196388560639": {
+      "title": "Indiana Jones and the Great Circle (No DLC)",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "196388560639",
+        "box_name": "Indiana Jones and the Great Circle (No DLC)",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 40.0,
+        "voucher_eur": 0,
+        "retail_eur": 80.0,
+        "url": "https://ie.webuy.com/product-detail?id=196388560639",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "5055060908778": {
+      "title": "Pragmata",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "5055060908778",
+        "box_name": "Pragmata",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 25.0,
+        "voucher_eur": 0,
+        "retail_eur": 50.0,
+        "url": "https://ie.webuy.com/product-detail?id=5055060908778",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "5055060953259": {
+      "title": "Resident Evil 4 Remake (No DLC)",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "5055060953259",
+        "box_name": "Resident Evil 4 Remake (No DLC)",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 17.0,
+        "voucher_eur": 0,
+        "retail_eur": 35.0,
+        "url": "https://ie.webuy.com/product-detail?id=5055060953259",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "3307216246626": {
+      "title": "Avatar: Frontiers of Pandora (No DLC)",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "3307216246626",
+        "box_name": "Avatar: Frontiers of Pandora (No DLC)",
+        "category_name": "Playstation5 Software",
+        "cash_eur": 11.0,
+        "voucher_eur": 0,
+        "retail_eur": 22.0,
+        "url": "https://ie.webuy.com/product-detail?id=3307216246626",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "045496429584": {
+      "title": "Nintendo Switch Sports (Game Only)",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "045496429584",
+        "box_name": "Nintendo Switch Sports (Game Only)",
+        "category_name": "Switch Software",
+        "cash_eur": 16.0,
+        "voucher_eur": 0,
+        "retail_eur": 32.0,
+        "url": "https://ie.webuy.com/product-detail?id=045496429584",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "045496313371": {
+      "title": "Metroid Prime 4: Beyond - Nintendo Switch 2 Edition",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "045496313371",
+        "box_name": "Metroid Prime 4: Beyond - Nintendo Switch 2 Edition",
+        "category_name": "Switch 2 Software",
+        "cash_eur": 25.0,
+        "voucher_eur": 0,
+        "retail_eur": 50.0,
+        "url": "https://ie.webuy.com/product-detail?id=045496313371",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "045496312664": {
+      "title": "Legend of Zelda: Breath of the Wild - Nintendo Switch 2 Edition",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "045496312664",
+        "box_name": "Legend of Zelda: Breath of the Wild - Nintendo Switch 2 Edition",
+        "category_name": "Switch 2 Software",
+        "cash_eur": 41.0,
+        "voucher_eur": 0,
+        "retail_eur": 70.0,
+        "url": "https://ie.webuy.com/product-detail?id=045496312664",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "045496313043": {
+      "title": "Pokemon Legends: Z-A - Nintendo Switch 2 Edition",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "045496313043",
+        "box_name": "Pokemon Legends: Z-A - Nintendo Switch 2 Edition",
+        "category_name": "Switch 2 Software",
+        "cash_eur": 26.0,
+        "voucher_eur": 0,
+        "retail_eur": 52.0,
+        "url": "https://ie.webuy.com/product-detail?id=045496313043",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "045496313913": {
+      "title": "Super Mario Bros. Wonder - Nintendo Switch 2 Edition",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "045496313913",
+        "box_name": "Super Mario Bros. Wonder - Nintendo Switch 2 Edition",
+        "category_name": "Switch 2 Software",
+        "cash_eur": 31.0,
+        "voucher_eur": 0,
+        "retail_eur": 62.0,
+        "url": "https://ie.webuy.com/product-detail?id=045496313913",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5PSP002": {
+      "title": "Playstation Portal Remote Player, White, Unboxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5PSP002",
+        "box_name": "Playstation Portal Remote Player, White, Unboxed",
+        "category_name": "Playstation5 Accessories",
+        "cash_eur": 97.0,
+        "voucher_eur": 0,
+        "retail_eur": 165.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5PSP002",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5P2TBW003": {
+      "title": "Playstation 5 Pro, 2TB, White, Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5P2TBW003",
+        "box_name": "Playstation 5 Pro, 2TB, White, Discounted",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 712.0,
+        "voucher_eur": 0,
+        "retail_eur": 890.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5P2TBW003",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5825GBSM2001": {
+      "title": "Playstation 5 Console, 825GB, Spider-Man w/Spider-Man Controller, Boxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5825GBSM2001",
+        "box_name": "Playstation 5 Console, 825GB, Spider-Man w/Spider-Man Controller, Boxed",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 554.0,
+        "voucher_eur": 0,
+        "retail_eur": 760.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5825GBSM2001",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5SD1TBVR003": {
+      "title": "Playstation 5 Slim Digital Ed., 1TB, Volcanic Red, Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5SD1TBVR003",
+        "box_name": "Playstation 5 Slim Digital Ed., 1TB, Volcanic Red, Discounted",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 445.0,
+        "voucher_eur": 0,
+        "retail_eur": 610.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5SD1TBVR003",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5SD1TBSS003": {
+      "title": "Playstation 5 Slim Digital Ed., 1TB, Sterling Silver, Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5SD1TBSS003",
+        "box_name": "Playstation 5 Slim Digital Ed., 1TB, Sterling Silver, Discounted",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 445.0,
+        "voucher_eur": 0,
+        "retail_eur": 610.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5SD1TBSS003",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5SD1TBCB003": {
+      "title": "Playstation 5 Slim Digital Ed., 1TB, Cobalt Blue, Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5SD1TBCB003",
+        "box_name": "Playstation 5 Slim Digital Ed., 1TB, Cobalt Blue, Discounted",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 445.0,
+        "voucher_eur": 0,
+        "retail_eur": 610.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5SD1TBCB003",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5SD1TB30G003": {
+      "title": "Playstation 5 Slim Digital Ed., 1TB, 30th Ann. Grey, Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5SD1TB30G003",
+        "box_name": "Playstation 5 Slim Digital Ed., 1TB, 30th Ann. Grey, Discounted",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 438.0,
+        "voucher_eur": 0,
+        "retail_eur": 600.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5SD1TB30G003",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5SD1TB30G002": {
+      "title": "Playstation 5 Slim Digital Ed., 1TB, 30th Ann. Grey, Unboxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5SD1TB30G002",
+        "box_name": "Playstation 5 Slim Digital Ed., 1TB, 30th Ann. Grey, Unboxed",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 456.0,
+        "voucher_eur": 0,
+        "retail_eur": 625.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5SD1TB30G002",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5SD1TB30G001": {
+      "title": "Playstation 5 Slim Digital Ed., 1TB, 30th Ann. Grey, Boxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5SD1TB30G001",
+        "box_name": "Playstation 5 Slim Digital Ed., 1TB, 30th Ann. Grey, Boxed",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 474.0,
+        "voucher_eur": 0,
+        "retail_eur": 650.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5SD1TB30G001",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5SD1TB30G000": {
+      "title": "Playstation 5 Slim Digital Ed., 1TB, 30th Ann. Grey, Mint",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5SD1TB30G000",
+        "box_name": "Playstation 5 Slim Digital Ed., 1TB, 30th Ann. Grey, Mint",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 492.0,
+        "voucher_eur": 0,
+        "retail_eur": 675.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5SD1TB30G000",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5S1TBVR003": {
+      "title": "Playstation 5 Slim Console, 1TB, Volcanic Red, Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5S1TBVR003",
+        "box_name": "Playstation 5 Slim Console, 1TB, Volcanic Red, Discounted",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 504.0,
+        "voucher_eur": 0,
+        "retail_eur": 630.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5S1TBVR003",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5S1TBSS003": {
+      "title": "Playstation 5 Slim Console, 1TB, Sterling Silver, Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5S1TBSS003",
+        "box_name": "Playstation 5 Slim Console, 1TB, Sterling Silver, Discounted",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 504.0,
+        "voucher_eur": 0,
+        "retail_eur": 630.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5S1TBSS003",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5S1TBMB003": {
+      "title": "Playstation 5 Slim Console, 1TB, Midnight Black, Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5S1TBMB003",
+        "box_name": "Playstation 5 Slim Console, 1TB, Midnight Black, Discounted",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 504.0,
+        "voucher_eur": 0,
+        "retail_eur": 630.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5S1TBMB003",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5S1TBGYG001": {
+      "title": "Playstation 5 Slim Console, 1TB, Ghost of Yotei Gold (No DLC), Boxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5S1TBGYG001",
+        "box_name": "Playstation 5 Slim Console, 1TB, Ghost of Yotei Gold (No DLC), Boxed",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 540.0,
+        "voucher_eur": 0,
+        "retail_eur": 675.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5S1TBGYG001",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5S1TBCB003": {
+      "title": "Playstation 5 Slim Console, 1TB, Cobalt Blue, Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5S1TBCB003",
+        "box_name": "Playstation 5 Slim Console, 1TB, Cobalt Blue, Discounted",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 504.0,
+        "voucher_eur": 0,
+        "retail_eur": 630.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5S1TBCB003",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5P2TBWY003": {
+      "title": "Playstation 5 Pro Console, 2TB, Wolverine Yellow, Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5P2TBWY003",
+        "box_name": "Playstation 5 Pro Console, 2TB, Wolverine Yellow, Discounted",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 712.0,
+        "voucher_eur": 0,
+        "retail_eur": 890.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5P2TBWY003",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5P2TBWS003": {
+      "title": "Playstation 5 Pro Console, 2TB, Wolverine Silver, Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5P2TBWS003",
+        "box_name": "Playstation 5 Pro Console, 2TB, Wolverine Silver, Discounted",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 712.0,
+        "voucher_eur": 0,
+        "retail_eur": 890.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5P2TBWS003",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5P2TB30G001": {
+      "title": "Playstation 5 Pro, 2TB, 30th Anniversary Grey, Boxed",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5P2TB30G001",
+        "box_name": "Playstation 5 Pro, 2TB, 30th Anniversary Grey, Boxed",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 880.0,
+        "voucher_eur": 0,
+        "retail_eur": 1100.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5P2TB30G001",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5P2TB30G000": {
+      "title": "Playstation 5 Pro, 2TB, 30th Anniversary Grey, Mint",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5P2TB30G000",
+        "box_name": "Playstation 5 Pro, 2TB, 30th Anniversary Grey, Mint",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 920.0,
+        "voucher_eur": 0,
+        "retail_eur": 1150.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5P2TB30G000",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    },
+    "SPS5D825GBWY003": {
+      "title": "Playstation 5 Slim Digital, 825GB, Wolverine Yellow (No DLC), Discounted",
+      "status": "matched",
+      "identity_schema": 2,
+      "checked_at": "2026-11-04T00:02:26.239715+00:00",
+      "quote": {
+        "box_id": "SPS5D825GBWY003",
+        "box_name": "Playstation 5 Slim Digital, 825GB, Wolverine Yellow (No DLC), Discounted",
+        "category_name": "Playstation5 Consoles",
+        "cash_eur": 430.0,
+        "voucher_eur": 0,
+        "retail_eur": 590.0,
+        "url": "https://ie.webuy.com/product-detail?id=SPS5D825GBWY003",
+        "barcodes": [],
+        "model_number": null
+      },
+      "source": "catalogue_search"
+    }
+  }
+}

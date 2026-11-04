@@ -59,6 +59,24 @@ def target_state(published: dict) -> dict:
     return state
 
 
+def import_target_seed(state, options, path="docs/cex-targets-seed.json", *, now=None):
+    """Bootstrap the visible 100-target shortlist once; never import old cash as a detail quote."""
+    now = now or datetime.now(timezone.utc)
+    try:
+        seed = json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return
+    stamp = seed.get('generated_at')
+    if state.get('seed_imported_at') == stamp or not _recent(stamp, now, 72):
+        return
+    for key, record in (seed.get('items') or {}).items():
+        prices = cache_price(record)
+        if prices and prices.cash_eur > options.min_cash_eur and key not in state['items']:
+            state['items'][key] = {**copy.deepcopy(record), 'source': 'catalogue_search'}
+    state['seed_imported_at'] = stamp
+    prune_targets(state, options, now)
+
+
 def exact_target_match(item, prices):
     """A model alone must not hide a quoted colour or network variant."""
     if not _compatible_quote(item, prices) or _match_level(item, prices) == "title_only":
@@ -110,7 +128,8 @@ def prune_targets(state, options, now):
             prices = cache_price(row if field == "items" else row.get("cex_quote_cache"))
             return prices.cash_eur if prices else 0
         if field == "items":
-            rows = [r for r in rows if cash(r) > options.min_cash_eur]
+            rows = [r for r in rows if cash(r) > options.min_cash_eur and not re.search(
+                r'\b(?:non[ -]working|faulty|spares)\b', (r.get('quote') or {}).get('box_name', ''), re.I)]
         # Keep unavailable/error mapping records so an older section cannot
         # resurrect a cash quote invalidated by a more recent box refresh.
         preferred = [r for r in rows if cash(r) >= options.priority_cash_eur]
@@ -126,12 +145,13 @@ async def discover_targets(state, options, config, client, run_state, *, now=Non
     now = now or datetime.now(timezone.utc)
     if not options.enabled or not config.cex_enabled:
         return
-    if state.get("cash_floor_eur") != options.min_cash_eur:
+    if state.get("cash_floor_eur") != options.min_cash_eur or state.get("cash_schema") != 2:
         # Revisit old queries after a scope change without bypassing backoff
         # or the two-search allowance. Don't wait a day on the old €150 filter.
         state["queries"] = {q: {"last_error_at": r["last_error_at"]}
                             for q, r in state["queries"].items() if r.get("last_error_at")}
         state["cash_floor_eur"] = options.min_cash_eur
+        state["cash_schema"] = 2
     queries = sorted(options.queries, key=lambda q: state["queries"].get(q, {}).get("checked_at") or "")
     used = 0
     for query in queries:
@@ -149,14 +169,16 @@ async def discover_targets(state, options, config, client, run_state, *, now=Non
         try:
             await asyncio.sleep(config.cex_request_delay_seconds)
             page = int(prior.get("next_page", 0))
-            hits = await cex_ie.search_boxes(client, query, hits_per_page=25, page=page,
+            hits = await cex_ie.search_boxes(client, query, hits_per_page=100, page=page,
                                             min_cash_eur=options.min_cash_eur, strict=True)
             for hit in hits:
                 if not isinstance(hit, dict) or str(hit.get("boxWebBuyAllowed", "")).lower() not in ("1", "true"):
                     continue
                 box_id, title = str(hit.get("boxId") or ""), str(hit.get("boxName") or "")
+                if re.search(r"\b(?:non[ -]working|faulty|spares)\b", title, re.I):
+                    continue
                 try:
-                    cash = float(hit.get("cashBuyPrice") or 0)
+                    cash = cex_ie.search_cash_price(hit)
                     retail = float(hit.get("sellPrice") or 0)
                 except (ValueError, TypeError, OverflowError):
                     continue
@@ -168,7 +190,7 @@ async def discover_targets(state, options, config, client, run_state, *, now=Non
                 state["items"][box_id] = {**quote_entry(title, prices, now),
                                           "source": "catalogue_search", "query": query}
             state["queries"][query] = {"checked_at": now.isoformat(),
-                                        "next_page": (page + 1) % 3 if len(hits) >= 25 else 0}
+                                        "next_page": (page + 1) % 3 if len(hits) >= 100 else 0}
         except (httpx.HTTPError, ValueError, TypeError, OverflowError) as exc:
             state["queries"][query] = {**prior, "last_error_at": now.isoformat()}
             run_state["errors"] = run_state.get("errors", 0) + 1

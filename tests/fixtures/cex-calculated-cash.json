@@ -1,0 +1,24 @@
+{
+  "hits": [
+    {
+      "boxId": "SPS5825GBW003",
+      "boxName": "Playstation 5 Console, 825GB, White, Discounted",
+      "categoryName": "Playstation5 Consoles",
+      "cashBuyPrice": 0,
+      "cashPriceCalculated": 430,
+      "sellPrice": 590,
+      "boxWebBuyAllowed": 1,
+      "boxVisibilityOnWeb": 1
+    },
+    {
+      "boxId": "SPS5D825GBW003",
+      "boxName": "Playstation 5 Digital Edition Console, 825GB, White, Discounted",
+      "categoryName": "Playstation5 Consoles",
+      "cashBuyPrice": 0,
+      "cashPriceCalculated": 423,
+      "sellPrice": 580,
+      "boxWebBuyAllowed": 1,
+      "boxVisibilityOnWeb": 1
+    }
+  ]
+}

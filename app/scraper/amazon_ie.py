@@ -32,6 +32,33 @@ class ProductSnapshot:
     condition: str = "unknown"
     barcode: str | None = None
     model_number: str | None = None
+    parse_status: str = "unknown"
+    price_source: str | None = None
+
+
+class AmazonBlockedError(ValueError):
+    """An HTTP-200 challenge page is a provider block, not an empty product."""
+
+
+def blocked_html(soup: BeautifulSoup) -> bool:
+    title = soup.title.get_text(" ", strip=True).lower() if soup.title else ""
+    return bool(soup.select_one('form[action*="validateCaptcha"], #captchacharacters')
+                or "robot check" in title or "amazon captcha" in title)
+
+
+def failure_reason(exc: Exception) -> str:
+    if isinstance(exc, AmazonBlockedError):
+        return "provider_blocked"
+    code = getattr(getattr(exc, "response", None), "status_code", None)
+    if code in (403, 429, 503):
+        return "provider_blocked"
+    if code:
+        return f"http_{code}"
+    if isinstance(exc, httpx.TimeoutException):
+        return "timeout"
+    if isinstance(exc, httpx.HTTPError):
+        return "network_error"
+    return "invalid_product_response"
 
 
 # Accept Amazon retail and explicitly Amazon-fulfilled marketplace offers.
@@ -206,36 +233,62 @@ def _first_price(soup: BeautifulSoup, selectors: list[str]) -> float | None:
     return None
 
 
+_CURRENT_PRICE_SELECTORS = (
+    "#corePriceDisplay_desktop_feature_div .a-offscreen",
+    "#corePrice_feature_div .a-offscreen",
+    "#corePriceDisplay_mobile_feature_div .a-offscreen",
+    "#apex_desktop .a-price .a-offscreen",
+    "#apex_mobile .a-price .a-offscreen",
+    "#price_inside_buybox", "#newBuyBoxPrice", "#priceblock_ourprice",
+    "#priceblock_dealprice", "#tp_price_block_total_price_ww .a-offscreen",
+)
+
+
+def _current_price(soup: BeautifulSoup) -> tuple[float | None, str | None]:
+    for selector in _CURRENT_PRICE_SELECTORS:
+        for el in soup.select(selector):
+            # RRP, unit prices and instalments must not become the current offer.
+            parents = [el, *list(el.parents)[:5]]
+            if any(set(p.get("class", [])) & {"a-text-price", "a-text-strike"}
+                   or p.get("data-a-strike") == "true" for p in parents):
+                continue
+            if any(re.search(r"(unitprice|installment|instalment)", str(p.get("id", "")), re.I)
+                   for p in parents):
+                continue
+            value = el.get_text(" ", strip=True)
+            if not re.search(r"€|\bEUR\b", value) or re.search(r"[$£]", value):
+                continue
+            price = _parse_price(value)
+            if price and price > 0:
+                return price, selector
+    return None, None
+
+
 def parse_product_html(html: str, asin: str, url: str) -> ProductSnapshot:
     soup = BeautifulSoup(html, "lxml")
 
     title_el = soup.select_one("#productTitle") or soup.select_one("span#title")
     title = title_el.get_text(strip=True) if title_el else None
 
-    price = _first_price(
-        soup,
-        [
-            "#corePriceDisplay_desktop_feature_div span.a-offscreen",
-            "#corePrice_feature_div span.a-offscreen",
-            "#corePriceDisplay_mobile_feature_div span.a-offscreen",
-            "#apex_desktop .a-price span.a-offscreen",
-            "#price_inside_buybox",
-            "#newBuyBoxPrice",
-            "#priceblock_ourprice",
-            "#priceblock_dealprice",
-            "span.a-price[data-a-color='price'] span.a-offscreen",
-            "span.a-price span.a-offscreen",
-        ],
-    )
+    price, price_source = _current_price(soup)
+    status = "price_read" if price else "current_offer_price_missing"
+    if not price and soup.select_one("#priceNotAvailable_feature_div"):
+        status = "price_hidden"
+    if not title:
+        status, price, price_source = "product_title_missing", None, None
+    if blocked_html(soup):
+        status, price, price_source = "provider_blocked", None, None
+    page_asin = soup.select_one('input#ASIN')
+    if page_asin and page_asin.get("value", "").upper() != asin.upper():
+        status, price, price_source = "asin_mismatch", None, None
 
     list_price = _first_price(
         soup,
         [
-            "span.a-price.a-text-price span.a-offscreen",
+            "#corePriceDisplay_desktop_feature_div .a-text-price .a-offscreen",
+            "#corePriceDisplay_mobile_feature_div .a-text-price .a-offscreen",
             "#basisPriceLegalMessage ~ span.a-price span.a-offscreen",
-            ".a-text-strike span.a-offscreen",
             "#listPrice",
-            "span[data-a-strike='true'] span.a-offscreen",
         ],
     )
 
@@ -244,6 +297,8 @@ def parse_product_html(html: str, asin: str, url: str) -> ProductSnapshot:
 
     avail_el = soup.select_one("#availability") or soup.select_one("#outOfStock")
     availability = avail_el.get_text(" ", strip=True) if avail_el else None
+    if availability and re.search(r"currently unavailable|out of stock|temporarily unavailable", availability, re.I):
+        status, price, price_source = "offer_unavailable", None, None
 
     seller, fulfilment = _offer_from_buybox(soup)
     barcode, model_number = amazon_identifiers(soup, asin)
@@ -266,6 +321,8 @@ def parse_product_html(html: str, asin: str, url: str) -> ProductSnapshot:
         condition=condition,
         barcode=barcode,
         model_number=model_number,
+        parse_status=status,
+        price_source=price_source,
     )
 
 
@@ -281,4 +338,7 @@ async def fetch_product(client: httpx.AsyncClient, url_or_asin: str) -> ProductS
     redirected_asin = extract_asin(str(resp.url))
     if redirected_asin and redirected_asin != asin:
         raise ValueError(f"Amazon redirected ASIN {asin} to {redirected_asin}")
-    return parse_product_html(resp.text, asin, str(resp.url))
+    snapshot = parse_product_html(resp.text, asin, str(resp.url))
+    if snapshot.parse_status == "provider_blocked":
+        raise AmazonBlockedError("Amazon returned a challenge page")
+    return snapshot

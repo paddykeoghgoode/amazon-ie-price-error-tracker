@@ -6,6 +6,7 @@ import logging
 import os
 import time
 from datetime import datetime, timedelta, timezone
+from dataclasses import replace
 from pathlib import Path
 
 import httpx
@@ -33,11 +34,13 @@ from app.services.cex_arbitrage import enrich_with_cex
 from app.services.health import send_health_messages
 from app.services.premium_drops import spot_check_list_prices
 from app.services.discovery_checks import choose_detail_checks, apply_detail_checks
+from app.services.amazon_target_discovery import discover_amazon_targets
 from app.services.alert_policy import load_alert_policy
 from app.services.resale_relevance import relevance
 from app.services.cex_targets import (
     load_target_config, target_state, sync_mappings, refresh_mapped_quotes,
     discover_targets, attach_target_quotes, target_funnel,
+    import_target_seed,
 )
 from app.services.monitor import BROWSER_HEADERS
 from app.services.catalogue import (
@@ -175,13 +178,21 @@ async def crawl_section(
     cex_state: dict = {}
     started = time.monotonic()
     priority_section = any(s.id == section_id and s.priority_rotation for s in load_sections(args.config))
+    amazon_discovery_stats = {"search_requests": 0, "candidates": 0, "status": "not_priority_section"}
+    discovered = []
     if target_options.enabled:
+        import_target_seed(targets, target_options)
         sync_mappings(targets, list(((published_catalogue or {}).get("sections") or {}).values())
                       + [section_catalogue], target_options)
         if priority_section:
             async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=20.0) as client:
                 await refresh_mapped_quotes(targets, target_options, config, client, cex_state)
                 await discover_targets(targets, target_options, config, client, cex_state)
+                discovered, amazon_discovery_stats = await discover_amazon_targets(
+                    targets, config, client, cex_state,
+                    existing_asins=[r['asin'] for r in section_catalogue['items']],
+                )
+                section_catalogue['items'].extend(discovered)
         attach_target_quotes(section_catalogue["items"], targets)
     urgent = [
         row["asin"]
@@ -266,20 +277,35 @@ async def crawl_section(
     # One shared detail-page budget serves CeX identity, known drops and
     # first-seen high-value list-price research. No separate verification crawl.
     policy = load_alert_policy()
+    detail_config = replace(config, premium_spot_check_limit=max(
+        0, config.premium_spot_check_limit - amazon_discovery_stats['search_requests']))
     detail_rows = choose_detail_checks(
         section_catalogue, lookups,
         processed.rapid_drops + processed.premium_drops + processed.drops,
-        config=config, policy=policy,
+        config=detail_config, policy=policy,
     )
+    direct_asins = {r['asin'] for r in discovered}
+    detail_rows = (discovered + [r for r in detail_rows if r['asin'] not in direct_asins])[:detail_config.premium_spot_check_limit]
+    if amazon_discovery_stats['status'] in ('provider_blocked', 'provider_cooldown'):
+        detail_rows = []
+    try:
+        blocked_until = datetime.fromisoformat(targets.get('amazon_blocked_until') or '')
+        if blocked_until.tzinfo and datetime.now(timezone.utc) < blocked_until:
+            detail_rows = []
+    except ValueError:
+        pass
     snapshots = {}
+    diagnostics = {}
     async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=30.0) as detail_client:
         processed.alerts.extend(await spot_check_list_prices(
-            detail_client, detail_rows, config=config, allow_alerts=notify,
-            delay_seconds=config.request_delay_seconds, snapshots=snapshots,
+            detail_client, detail_rows, config=detail_config, allow_alerts=notify,
+            delay_seconds=config.request_delay_seconds, snapshots=snapshots, diagnostics=diagnostics,
         ))
     detail_stats = apply_detail_checks(
-        section_catalogue, detail_rows, snapshots, lookups, quote_cache,
+        section_catalogue, detail_rows, snapshots, lookups, quote_cache, diagnostics=diagnostics,
     )
+    if 'provider_blocked' in diagnostics.values():
+        targets['amazon_blocked_until'] = (datetime.now(timezone.utc) + timedelta(minutes=30)).isoformat()
     flips = [row for row in lookups if row.get("cex_cash_flip")]
     eligible_asins = {
         asin for asin, (item, _) in result.items.items()
@@ -326,6 +352,7 @@ async def crawl_section(
                       "catalogue_candidates": len(target_candidates),
                       "catalogue_searches": cex_state.get("target_searches", 0),
                       "mapped_quote_refreshes": cex_state.get("mapped_quote_refreshes", 0)},
+        "amazon_target_discovery": amazon_discovery_stats,
         "exact_matches": sum(r.get("match_confidence") in ("barcode_verified", "model_verified") for r in lookups),
         "title_only_matches": sum(r.get("match_confidence") == "title_only" for r in lookups),
         "lookups": len(lookups),

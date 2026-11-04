@@ -25,8 +25,14 @@ jobs:
     if: ${{ !github.event.repository.private && vars.PAUSE_AUTOMATIC_SCAN != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: tracker-bestseller-dispatch
+      cancel-in-progress: false
+      queue: max
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: main
       - name: Check whether a broad scan really needs resuming
         id: check
         env:

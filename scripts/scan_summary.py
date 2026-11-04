@@ -53,6 +53,14 @@ def report(data: dict, published: bool = False) -> str:
             f"| {int(stats.get('arbitrage') or 0)} |"
         )
         detail = stats.get("detail_checks") or {}
+        if detail.get('failure_reasons'):
+            details.append('\nAmazon detail failures: ' + ', '.join(
+                f'{reason}: {count}' for reason, count in sorted(detail['failure_reasons'].items())))
+        discovery = stats.get('amazon_target_discovery') or {}
+        if discovery:
+            details.append(f"\nCeX-to-Amazon discovery: {discovery.get('status')}; "
+                           f"{discovery.get('search_requests', 0)} search pages, "
+                           f"{discovery.get('candidates', 0)} new candidates within the existing page budget.")
         first = stats.get("cex_first") or {}
         if first:
             details.append(f"\nCeX-first: {first.get('catalogue_skus', 0)} target SKUs; "
