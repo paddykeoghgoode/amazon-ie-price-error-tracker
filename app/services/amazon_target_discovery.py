@@ -14,6 +14,7 @@ from app.scraper.amazon_ie import AMAZON_IE_BASE, _parse_price, blocked_html, fa
 from app.scraper import cex_ie
 from app.services.cex_cache import age_hours, cache_price, quote_entry, retry_allowed
 from app.services.resale_relevance import relevance
+from app.services.public_price_history import record_price
 
 
 def parse_search_results(html: str, prices, *, limit=2) -> list[dict]:
@@ -123,6 +124,7 @@ async def discover_amazon_targets(state, config, client, run_state, *, existing_
                        first_seen_at=now.isoformat(), last_seen_at=now.isoformat(),
                        category="CeX target search", verification_status="disabled",
                        identity_status="not_checked", last_checked_at=None)
+            row['price_history'] = record_price([], row['price_eur'], now.isoformat(), 'search_card')
         history[box_id] = {"checked_at": now.isoformat(), "status": "candidates_found" if rows else "no_new_candidates",
                            "query": query, "candidates": len(rows)}
         stats.update(status=history[box_id]["status"], candidates=len(rows))

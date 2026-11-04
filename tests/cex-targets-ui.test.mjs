@@ -6,10 +6,10 @@ const require=createRequire(import.meta.url);
 const ui=require('../docs/cex-targets.js');
 const now=Date.parse('2026-11-04T12:00:00Z');
 const record={checked_at:'2026-11-04T11:00:00Z',source:'catalogue_search',quote:{box_id:'box',box_name:'Sony PS5 Console White, B',cash_eur:250,category_name:'Playstation5 Consoles'}};
-test('100-target limit and exclusive cash floor',()=>{
-  const items=Object.fromEntries(Array.from({length:120},(_,i)=>[i,{...record,quote:{...record.quote,box_id:String(i),cash_eur:i}}]));
+test('1,000-target limit and exclusive cash floor',()=>{
+  const items=Object.fromEntries(Array.from({length:1200},(_,i)=>[i,{...record,quote:{...record.quote,box_id:String(i),cash_eur:i}}]));
   const rows=ui.rows({cex_targets:{items}}, {}, {}, now);
-  assert.equal(rows.length,100);assert.ok(rows.every(r=>r.quote.cash_eur>10));
+  assert.equal(rows.length,1000);assert.ok(rows.every(r=>r.quote.cash_eur>10));
 });
 test('search links cannot masquerade as mapped products or profit',()=>{
   const row=ui.rows({cex_targets:{items:{box:record}}},{},{},now)[0];
@@ -29,11 +29,11 @@ test('untrusted product names and IDs cannot inject HTML or external destination
   const row=ui.rows({cex_targets:{items:{box:{...record,quote:{...record.quote,box_name:'<img src=x onerror=alert(1)>',box_id:'x" onclick="bad'}}}}},{},{},now)[0];
   const html=ui.renderRow(row);assert.doesNotMatch(html,/<img/);assert.match(html,/&lt;img/);assert.match(html,/https:\/\/ie.webuy.com/);
 });
-test('seed is dated, has exactly 100 real discovery rows and expires',()=>{
+test('seed is dated, has exactly 1,000 real discovery rows and expires',()=>{
   const seed=JSON.parse(readFileSync(new URL('../docs/cex-targets-seed.json',import.meta.url)));
-  assert.equal(Object.keys(seed.items).length,100);
+  assert.equal(Object.keys(seed.items).length,1000);
   const at=Date.parse(seed.generated_at)+1000;
-  assert.equal(ui.rows({}, {}, seed, at).length,100);
+  assert.equal(ui.rows({}, {}, seed, at).length,1000);
   assert.equal(ui.rows({}, {}, seed, at+73*3600000).length,0);
   assert.ok(Object.values(seed.items).every(r=>r.quote.cash_eur>10 && r.source==='catalogue_search'));
 });
@@ -52,4 +52,20 @@ test('discovered ASINs link directly without becoming verified mappings',()=>{
   assert.match(ui.renderRow(row),/Possible match/);assert.match(ui.renderRow(row),/Not verified/);
   candidate.identity_status='identity_mismatch';
   assert.match(ui.renderRow(ui.rows(cat,{},{},now)[0]),/Search Amazon/);
+});
+test('history shows real rises and falls, ordered by timestamp, without inventing points',()=>{
+  const points=ui.historyFor({price_history:[{price_eur:100,observed_at:'2026-11-01T12:00:00Z'},{price_eur:150,observed_at:'2026-11-02T12:00:00Z'},{price_eur:80,observed_at:'2026-11-03T12:00:00Z'},{price_eur:null,observed_at:'2026-11-04T12:00:00Z'}]});
+  assert.deepEqual(points.map(p=>p.price_eur),[100,150,80]);
+  assert.match(ui.renderHistory(points),/<svg/); assert.match(ui.renderHistory(points),/prices between checks are unknown/);
+  assert.doesNotMatch(ui.renderHistory(points.slice(0,1)),/<svg/);
+});
+test('candidate Amazon prices are dated and never establish profit',()=>{
+  const candidate={asin:'B000000123',title:'Sony PS5',active:true,cex_target_box_id:'box',price_eur:200,last_seen_at:'2026-11-04T11:00:00Z'};
+  const row=ui.rows({cex_targets:{items:{box:record}},sections:{tech:{items:[candidate]}}},{},{},now)[0];
+  assert.equal(row.observed.price_eur,200);assert.equal(row.profitable,false);
+  assert.match(ui.renderRow(row),/Last observed/);assert.match(ui.renderRow(row),/candidate, unverified/);
+});
+test('pagination markup preserves phone controls for a thousand targets',()=>{
+  const html=readFileSync(new URL('../docs/cex-targets.html',import.meta.url),'utf8');
+  assert.match(html,/id="target-prev"/);assert.match(html,/id="target-next"/);
 });

@@ -24,6 +24,7 @@ from app.services.cex_cache import cache_price
 from app.services.cex_targets import load_target_config, watch_rows, target_funnel, exact_target_match
 from app.snapshot import read_snapshot, write_snapshot
 from app.services.resale_relevance import relevance
+from app.services.public_price_history import record_price
 
 
 def candidates(deals, now, limit=12):
@@ -48,7 +49,7 @@ def select_fast_checks(drops, mapped, prior, limit=12):
 
     Six map slots go to the 24 nearest buy ceilings; two explore the rest so
     expensive products can still reveal sudden errors. No promise that all
-    300 mappings are checked on each ten-minute tick.
+    1,000 mappings are checked on each ten-minute tick.
     """
     limit = max(0, min(12, int(limit)))
     if not limit:
@@ -195,12 +196,17 @@ async def recheck(deals, previous, limit=12, notify=True, *, catalogue=None, con
                 item['status'] = failure_reason(exc)
                 if item['status'] == 'provider_blocked':
                     blocked = (now + timedelta(minutes=30)).isoformat()
+            if item['status'] in ('price_read', 'profitable', 'above_buy_ceiling', 'below_minimum_buy'):
+                history = earlier.get('price_history') or []
+                if not history and earlier.get('status') in ('price_read', 'profitable', 'above_buy_ceiling', 'below_minimum_buy'):
+                    history = record_price([], earlier.get('price_eur'), earlier.get('checked_at'), 'product_page')
+                item['price_history'] = record_price(history, item.get('price_eur'), item['checked_at'], 'product_page')
             out[asin] = item
             if blocked:
                 break
             await asyncio.sleep(config.request_delay_seconds)
-    # 300 mappings plus recent drop observations; no unbounded public state.
-    retained = sorted(out.values(), key=lambda r: r.get('checked_at') or '', reverse=True)[:500]
+    # Up to 1,000 mappings plus recent drop observations; bounded public state.
+    retained = sorted(out.values(), key=lambda r: r.get('checked_at') or '', reverse=True)[:1500]
     result = {'generated_at': now.isoformat(), 'scan_kind': 'hotlist', 'products': retained,
               'checked_this_run': funnel['amazon_attempted'], 'price_read': funnel['price_read'],
               'funnel': funnel, 'scan_status': 'provider_blocked' if blocked else 'completed'}

@@ -44,3 +44,15 @@ caption { text-align:left; caption-side:bottom; padding-block:var(--space-sm); }
   .amazon-action { display:flex; width:100%; box-sizing:border-box; }
   caption { display:block; }
 }
+.target-pagination { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:16px; margin-block:20px; }
+.target-pagination button:disabled { opacity:.45; cursor:default; }
+.price-history { margin-top:12px; min-width:0; max-width:360px; }
+.price-history summary { cursor:pointer; padding-block:8px; font-size:.875rem; }
+.price-history svg { display:block; width:100%; min-width:220px; height:auto; }
+.price-history text { fill:var(--muted); font-size:9px; }
+.chart-line { fill:none; stroke:var(--accent); stroke-width:2; }
+.chart-axis { fill:none; stroke:var(--rule); stroke-width:1; }
+.price-history circle { fill:var(--accent); }
+.price-observations { max-height:180px; overflow:auto; padding-left:20px; font-size:.8rem; }
+.price-observations li { margin-bottom:8px; }
+@media(max-width:760px) { .price-history { max-width:none; } .price-history svg { min-width:0; } }

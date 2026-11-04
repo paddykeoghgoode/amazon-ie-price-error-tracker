@@ -596,7 +596,7 @@
   },
   "cex_first": {
     "enabled": true,
-    "max_items": 300,
+    "max_items": 1000,
     "min_cash_eur": 10,
     "searches_per_run": 2,
     "refreshes_per_run": 2,
@@ -631,7 +631,7 @@
       "SteelSeries",
       "Corsair"
     ],
-    "max_mappings": 100,
+    "max_mappings": 1000,
     "priority_cash_eur": 150
   }
 }
