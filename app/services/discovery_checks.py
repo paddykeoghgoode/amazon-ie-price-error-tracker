@@ -43,7 +43,7 @@ def choose_detail_checks(catalogue, lookups, drops, *, config, policy):
     targets = sorted((r for r in items.values() if r.get('cex_target_box_id')
                       and relevance(r)[1] != 'explicitly_excluded_brand'
                       and r.get('identity_status') != 'confirmed'
-                      and float(r.get('price_eur') or 0) >= policy.min_cex_buy_price_eur),
+                      and (r.get('price_eur') is None or float(r.get('price_eur') or 0) >= policy.min_cex_buy_price_eur)),
                      key=lambda r: (r.get('identity_checked_at') or '', r['asin']))
     selected = targets[:config.premium_spot_check_limit // 2]
     seen = {r['asin'] for r in selected}
@@ -76,7 +76,7 @@ def apply_detail_checks(catalogue, selected, snapshots, lookups, quote_cache, di
             counts['failure_reasons'][reason] = counts['failure_reasons'].get(reason, 0) + 1
             continue
         counts['price_read'] += 1
-        if abs(snap.price_eur - float(row.get('price_eur') or 0)) > 0.01:
+        if row.get('price_eur') is not None and abs(snap.price_eur - float(row.get('price_eur') or 0)) > 0.01:
             row['identity_status'] = 'price_changed'
             counts['price_changed'] += 1
             rejected.add(asin)
@@ -88,6 +88,10 @@ def apply_detail_checks(catalogue, selected, snapshots, lookups, quote_cache, di
             counts['identity_mismatch'] += 1
             rejected.add(asin)
             continue
+        if row.get('price_eur') is None:
+            from app.services.public_price_history import record_price
+            row['price_eur'] = snap.price_eur
+            row['price_history'] = record_price(row.get('price_history') or [], snap.price_eur, now, 'product_detail')
         if not snap.barcode and not snap.model_number:
             row['identity_status'] = 'identifiers_missing'
             counts['identifiers_missing'] += 1

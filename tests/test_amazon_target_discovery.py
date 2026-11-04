@@ -4,7 +4,7 @@ from datetime import datetime, timezone, timedelta
 from unittest.mock import AsyncMock, patch
 import httpx
 
-from app.services.amazon_target_discovery import discover_amazon_targets, parse_search_results
+from app.services.amazon_target_discovery import discover_amazon_targets, parse_search_results, product_key
 from app.services.cex_targets import target_state
 from app.services.cex_cache import quote_entry
 from app.services.bestsellers import CrawlConfig
@@ -57,5 +57,58 @@ class AmazonTargetDiscoveryTests(unittest.TestCase):
     def test_wrong_models_and_recommendation_widgets_are_not_candidates(self):
         self.assertEqual(parse_search_results(html().replace('WH-1000XM5','WH-1000XM4'),QUOTE),[])
         with self.assertRaises(ValueError):parse_search_results('<html>unexpected document</html>',QUOTE)
+
+    def test_condition_group_preserves_variants(self):
+        self.assertEqual(product_key('PS5 1TB White, Boxed'), product_key('PS5 1TB White, Unboxed'))
+        self.assertEqual(product_key('Sony Headphones, A'), product_key('Sony Headphones, B'))
+        self.assertNotEqual(product_key('PS5 1TB White, Mint'), product_key('PS5 2TB White, Mint'))
+        self.assertNotEqual(product_key('Sony Black, B'), product_key('Sony White, B'))
+
+    def test_existing_catalogue_reused_for_multiple_grades_without_search(self):
+        async def go():
+            import copy
+            s=state();s['items']['sony']['source']='box_detail'
+            second=copy.deepcopy(s['items']['sony'])
+            second['quote'].update(box_id='sony-a',box_name=QUOTE.box_name[:-1]+'A')
+            s['items']['sony-a']=second
+            existing={'asin':'B000000123','title':'Sony WH-1000XM5 Headphones Black',
+                      'price_eur':300,'active':True,'last_seen_at':NOW.isoformat()}
+            client=AsyncMock()
+            rows,stats=await discover_amazon_targets(s,config(),client,{},existing_rows=[existing,existing],now=NOW)
+            self.assertEqual(len(rows),1);self.assertEqual(stats['search_requests'],0)
+            client.get.assert_not_awaited()
+            for key in ('sony','sony-a'):
+                self.assertEqual(s['amazon_discovery'][key]['candidate_products'][0]['asin'],existing['asin'])
+            self.assertNotIn('cex_target_box_id',existing)
+            rows,stats=await discover_amazon_targets(s,config(),client,{},existing_rows=[existing],now=NOW)
+            self.assertEqual(rows,[]);client.get.assert_not_awaited()
+            self.assertEqual(s['mappings'],{})
+        asyncio.run(go())
+
+    def test_unpriced_search_candidate_persists_without_fake_history(self):
+        async def go():
+            s=state();s['items']['sony']['source']='box_detail'
+            page=html(1).replace('€300','Price unavailable')
+            async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r:httpx.Response(200,text=page))) as client:
+                rows,stats=await discover_amazon_targets(s,config(),client,{},existing_asins=['B000000000'],now=NOW)
+            self.assertEqual(len(rows),1)
+            self.assertIsNone(rows[0]['price_eur']);self.assertEqual(rows[0]['price_history'],[])
+            self.assertEqual(s['amazon_discovery']['sony']['candidate_products'][0]['asin'],'B000000000')
+            self.assertEqual(s['mappings'],{})
+        asyncio.run(go())
+
+    def test_unpriced_target_receives_bounded_detail_slot(self):
+        from app.services.discovery_checks import choose_detail_checks, apply_detail_checks
+        from app.services.alert_policy import AlertPolicy
+        from app.scraper.amazon_ie import ProductSnapshot
+        row={'asin':'B000000123','title':'Sony WH-1000XM5 Headphones Black','price_eur':None,
+             'cex_target_box_id':'sony','active':True}
+        cat={'items':[row]}
+        selected=choose_detail_checks(cat,[],[],config=config(),policy=AlertPolicy())
+        self.assertEqual(selected,[row])
+        snap=ProductSnapshot(row['asin'],'https://www.amazon.ie/dp/'+row['asin'],row['title'],300,None,'EUR',None,model_number='wh1000xm5')
+        counts=apply_detail_checks(cat,selected,{row['asin']:snap},[],{})
+        self.assertEqual(counts['price_read'],1);self.assertEqual(row['price_eur'],300)
+        self.assertEqual(len(row['price_history']),1)
 
 if __name__=='__main__':unittest.main()
