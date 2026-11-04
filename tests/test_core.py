@@ -34,12 +34,12 @@ class TestParseHtml(unittest.TestCase):
         html = """
         <html><body>
           <span id="productTitle">Test Widget</span>
-          <span class="a-price" data-a-color="price">
+          <div id="corePriceDisplay_desktop_feature_div"><span class="a-price" data-a-color="price">
             <span class="a-offscreen">€12.99</span>
           </span>
           <span class="a-price a-text-price">
             <span class="a-offscreen">€129.99</span>
-          </span>
+          </span></div>
         </body></html>
         """
         snap = parse_product_html(html, "B0TEST1234", "https://www.amazon.ie/dp/B0TEST1234")

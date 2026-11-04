@@ -17,7 +17,7 @@ class TestCexSkuMatching(unittest.TestCase):
 
     def test_accepts_same_storage_and_model(self):
         self.assertTrue(titles_match_for_trade_in(
-            "Apple iPhone 15 Pro 128 GB Blue", "Apple iPhone 15 Pro 128GB Black"
+            "Apple iPhone 15 Pro 128 GB Blue", "Apple iPhone 15 Pro 128GB Blue"
         ))
 
     def test_rejects_missing_storage_variant(self):

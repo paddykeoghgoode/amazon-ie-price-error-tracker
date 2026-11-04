@@ -122,9 +122,9 @@ def _compatible_quote(item: dict[str, Any], prices: cex_ie.CexPrices) -> bool:
 
 
 def _match_level(item: dict[str, Any], prices: cex_ie.CexPrices) -> str:
-    if normalise_barcode(item.get("barcode")) and prices.barcodes:
+    if normalise_barcode(item.get("barcode")) in prices.barcodes:
         return "barcode_verified"
-    if normalise_model(item.get("model_number")) and prices.model_number:
+    if prices.model_number and normalise_model(item.get("model_number")) == prices.model_number:
         return "model_verified"
     return "title_only"
 
@@ -242,6 +242,8 @@ async def enrich_with_cex(
             quote_fresh = age is not None and age <= alert_ttl
             needs_refresh = (
                 force_refresh or not usable or prices is None or
+                (prices is not None and not prices.barcodes and not prices.model_number
+                 and (prior or {}).get("identity_schema", 0) < 2) or
                 (prior or {}).get("source") == "catalogue_search" or
                 (high_interest and not quote_fresh)
             )

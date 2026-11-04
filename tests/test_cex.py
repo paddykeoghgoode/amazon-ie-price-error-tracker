@@ -81,9 +81,9 @@ class TestCexTitleMatch(unittest.TestCase):
     def test_picks_second_hit_when_first_is_wrong(self):
         hits = [
             {"boxId": "1", "boxName": "SteelSeries Arctis 7 Headset"},
-            {"boxId": "2", "boxName": "Ozeino Pro Wireless Gaming Headset"},
+            {"boxId": "2", "boxName": "Ozeino ZW1000 Pro Wireless Gaming Headset"},
         ]
-        picked = pick_best_box_hit("Ozeino Pro Wireless Gaming Headset USB", hits)
+        picked = pick_best_box_hit("Ozeino ZW1000 Pro Wireless Gaming Headset USB", hits)
         self.assertIsNotNone(picked)
         self.assertEqual(picked["boxId"], "2")
 

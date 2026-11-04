@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>100 CeX targets · Resale Radar</title>
+  <meta name="description" content="CeX Ireland cash targets, Amazon matching progress and branded coffee-machine research.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css"><link rel="stylesheet" href="cex-targets.css">
+</head>
+<body>
+  <header>
+    <div class="brand-row"><div class="brand-icon" aria-hidden="true">€</div><div><p class="brand-context">Resale Radar / CeX Ireland</p><h1>100 resale targets</h1></div><a class="header-action" href="index.html">Back to tracker</a></div>
+    <p class="tagline">Start with what CeX buys. Find the same product on Amazon. Compare the cash margin.</p>
+    <p id="target-status" class="status" role="status">Loading the CeX shortlist…</p>
+  </header>
+  <main>
+    <section class="target-intro" aria-label="Target progress">
+      <div><span>CeX targets over €10 cash</span><strong id="target-count">—</strong></div>
+      <div><span>Exact Amazon matches</span><strong id="mapped-count">—</strong></div>
+      <div><span>Fresh profitable checks</span><strong id="profitable-count">—</strong></div>
+    </section>
+    <section class="card">
+      <div class="target-heading"><div><h2>CeX → Amazon shortlist</h2><p class="hint">Consoles, physical games and recognisable electronics. Every colour, capacity and CeX grade is a separate listing. These are discovery targets; sales volumes are not available.</p></div><a href="#coffee">Branded coffee machines ↓</a></div>
+      <div class="target-controls">
+        <label>Search<input type="search" id="target-search" placeholder="PlayStation, Switch, Sony…"></label>
+        <label>Category<select id="target-category"><option value="">All categories</option><option value="console">Consoles</option><option value="game">Video games</option><option value="audio">Audio</option><option value="computing">Computing</option><option value="other">Other electronics</option></select></label>
+        <label>Matching<select id="target-matching"><option value="">All stages</option><option value="mapped">Exact match</option><option value="unmapped">Needs matching</option></select></label>
+      </div>
+      <p id="target-result-count" class="hint" aria-live="polite"></p>
+      <div class="table-wrap"><table id="target-table" hidden><caption class="hint">Cash estimates use CeX Ireland. Index quotes require a fresh CeX detail check before alerts.</caption><thead><tr><th>CeX product / grade</th><th>Cash offer</th><th>Amazon</th><th>Buffered profit</th><th>Last checked</th></tr></thead><tbody id="target-rows"></tbody></table></div>
+      <p id="target-empty" class="empty" hidden>No targets match these filters.</p>
+      <p class="hint">Mapping progresses within the existing scan allowance. “Search Amazon” opens a search, not a verified match. Profit is an estimate after the configured buffer and costs; check delivery, condition, accessories and current CeX acceptance.</p>
+    </section>
+    <section class="card" id="coffee">
+      <div class="target-heading"><div><h2>Branded coffee machines</h2><p class="hint">Sage, De’Longhi, Nespresso and other recognised brands from the coffee scan. Amazon price-drop research; CeX acceptance is not established.</p></div><a href="index.html#amazon-drops">All Amazon reductions →</a></div>
+      <div class="table-wrap"><table id="coffee-table" hidden><thead><tr><th>Amazon product</th><th>Observed price</th><th>Last observed</th></tr></thead><tbody id="coffee-rows"></tbody></table></div>
+      <p id="coffee-empty" class="empty">Waiting for branded coffee-machine listings to be published.</p>
+    </section>
+  </main>
+  <footer>Prices and cash offers can change. Times shown in Ireland time. <a href="index.html#cex">CeX research and scan diagnostics</a></footer>
+  <script src="cex-targets.js" defer></script>
+</body>
+</html>

@@ -51,23 +51,29 @@ def choose_detail_checks(catalogue, lookups, drops, *, config, policy):
     return selected[:config.premium_spot_check_limit]
 
 
-def apply_detail_checks(catalogue, selected, snapshots, lookups, quote_cache):
+def apply_detail_checks(catalogue, selected, snapshots, lookups, quote_cache, diagnostics=None):
     """Promote only matching identity evidence; never make title-only alerts eligible."""
     now = datetime.now(timezone.utc).isoformat()
     inventory = {r['asin']: r for r in catalogue.get('items') or []}
     by_asin = {r['asin']: r for r in lookups}
     rejected = set()
-    counts = {'attempted': len(selected), 'price_read': 0, 'identity_confirmed': 0,
+    counts = {'selected': len(selected), 'attempted': len(diagnostics) if diagnostics is not None else len(selected), 'price_read': 0, 'identity_confirmed': 0,
               'price_changed': 0, 'identity_mismatch': 0, 'identifiers_missing': 0,
-              'unreadable': 0}
+              'unreadable': 0, 'not_attempted': 0, 'failure_reasons': {}}
     for candidate in selected:
         asin = candidate['asin']
         row = inventory[asin]
+        if diagnostics is not None and asin not in diagnostics:
+            counts['not_attempted'] += 1
+            continue
         row['identity_checked_at'] = now
         row['identity_status'] = 'unreadable'
+        row['detail_read_status'] = (diagnostics or {}).get(asin, 'unknown')
         snap = snapshots.get(asin)
         if not snap or snap.asin != asin or not snap.price_eur or snap.currency != 'EUR':
             counts['unreadable'] += 1
+            reason = row['detail_read_status']
+            counts['failure_reasons'][reason] = counts['failure_reasons'].get(reason, 0) + 1
             continue
         counts['price_read'] += 1
         if abs(snap.price_eur - float(row.get('price_eur') or 0)) > 0.01:

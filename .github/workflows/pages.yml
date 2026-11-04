@@ -61,6 +61,8 @@ jobs:
       queue: max
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: main
 
       - uses: actions/setup-python@v7
         with:
@@ -121,6 +123,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: main
 
       - uses: actions/download-artifact@v8
         with:
@@ -156,6 +160,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: main
 
       - uses: actions/setup-python@v7
         with:
@@ -234,6 +240,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: main
 
       # The Python merge command imports app.config, which requires installed dependencies.
       - uses: actions/setup-python@v7
@@ -288,8 +296,21 @@ jobs:
     permissions:
       actions: write
       contents: read
+    concurrency:
+      group: tracker-bestseller-dispatch
+      cancel-in-progress: false
+      queue: max
     steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - name: Check for an existing successor
+        id: successor
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 -m scripts.recover_bestseller_scans --successor
       - name: Queue next rotating section
+        if: ${{ steps.successor.outputs.dispatch == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -322,6 +343,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: main
 
       - uses: actions/setup-python@v7
         with:

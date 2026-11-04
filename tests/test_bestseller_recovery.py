@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import unittest
+import io
+import json
+from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import yaml
 
-from scripts.recover_bestseller_scans import WATCHDOG_DELAY, decide_recovery
+from scripts.recover_bestseller_scans import WATCHDOG_DELAY, decide_recovery, decide_successor, fetch_runs
 
 
 NOW = datetime(2026, 11, 3, 2, 0, tzinfo=timezone.utc)
@@ -30,6 +33,32 @@ def broad(
 
 
 class TestRecoveryDecisions(unittest.TestCase):
+    def test_old_active_runs_on_later_pages_are_not_hidden_by_recent_history(self):
+        requests=[]
+        def respond(request, **kwargs):
+            uri=request.full_url;requests.append(uri)
+            batch=[broad(100,status='in_progress')] if '&status=' not in uri else []
+            link=''
+            if '&status=pending' in uri and '&page=1' in uri:
+                link='<https://api.github.com/next>; rel="next"'
+            if '&status=pending' in uri and '&page=2' in uri:
+                batch=[broad(1,status='pending')]
+            stream=io.BytesIO(json.dumps({'workflow_runs':batch}).encode())
+            stream.headers={'Link':link}
+            return stream
+        with patch('scripts.recover_bestseller_scans.urlopen',side_effect=respond):
+            runs=fetch_runs('owner/repo','test-token')
+        self.assertFalse(decide_successor(runs,100)[0])
+        self.assertTrue(any('&status=pending' in u and '&page=2' in u for u in requests))
+
+    def test_successor_does_not_multiply_existing_scan_chains(self):
+        current=broad(100,status='in_progress')
+        self.assertTrue(decide_successor([current],100)[0])
+        for status in ('queued','pending','in_progress','waiting','requested'):
+            self.assertFalse(decide_successor([current,broad(99,status=status)],100)[0])
+        self.assertTrue(decide_successor([current,broad(99,status='completed'),broad(101,event='schedule',status='queued')],100)[0])
+        self.assertFalse(decide_successor([],100)[0])
+
     def test_empty_repo_bootstraps_broad_discovery(self):
         self.assertTrue(decide_recovery([], NOW)[0])
 
@@ -95,6 +124,10 @@ class TestRecoveryWorkflow(unittest.TestCase):
         self.assertEqual(yml["permissions"]["actions"], "write")
         self.assertEqual(yml["concurrency"]["queue"], "max")
         job = yml["jobs"]["recover"]
+        pages=yaml.safe_load(Path('.github/workflows/pages.yml').read_text())
+        successor=pages['jobs']['queue-next-bestseller']
+        self.assertEqual(job['concurrency']['group'],successor['concurrency']['group'])
+        self.assertIn('successor.outputs.dispatch',successor['steps'][-1]['if'])
         self.assertIn("PAUSE_AUTOMATIC_SCAN", job["if"])
         assert job["steps"][0]["uses"].startswith("actions/checkout@")
         self.assertIn("scripts.recover_bestseller_scans", job["steps"][1]["run"])

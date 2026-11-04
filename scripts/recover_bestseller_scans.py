@@ -18,6 +18,37 @@ BROAD_EVENTS = frozenset(("push", "workflow_dispatch"))
 FAILED_CONCLUSIONS = frozenset(("failure", "timed_out", "cancelled", "action_required"))
 
 
+def decide_successor(runs: list[dict], current_run_id: int) -> tuple[bool, str]:
+    """A waiting broad run will continue the chain; do not add another."""
+    current = next((r for r in runs if r.get('id') == current_run_id), None)
+    if not current or current.get('head_branch') != 'main':
+        return False, 'Cannot verify the current main-branch run; leaving recovery to the watchdog.'
+    for run in runs:
+        if (run.get('id') != current_run_id and run.get('head_branch') == 'main'
+                and run.get('event') in BROAD_EVENTS and run.get('status') != 'completed'):
+            return False, f"Broad run {run['id']} already exists; no extra successor."
+    return True, 'No other broad run is waiting; queue one successor.'
+
+
+def fetch_runs(repo: str, token: str) -> list[dict]:
+    """Inspect recent history plus ALL active pages, including old pending runs."""
+    runs = {}
+    base = f'https://api.github.com/repos/{repo}/actions/workflows/pages.yml/runs?branch=main&per_page=100'
+    for status in ('', 'queued', 'pending', 'in_progress', 'waiting', 'requested'):
+        for page in range(1, 11):
+            uri = base + f'&page={page}' + (f'&status={status}' if status else '')
+            request = Request(uri, headers={'Accept': 'application/vnd.github+json',
+                              'Authorization': f'Bearer {token}', 'X-GitHub-Api-Version': '2022-11-28'})
+            with urlopen(request, timeout=25) as response:
+                data = json.load(response)
+                runs.update((r['id'], r) for r in data['workflow_runs'])
+                if not status or 'rel="next"' not in response.headers.get('Link', ''):
+                    break
+        else:
+            raise RuntimeError('Active run listing truncated; refusing another dispatch')
+    return list(runs.values())
+
+
 def parse_timestamp(raw: str | None) -> datetime | None:
     if not raw:
         return None
@@ -82,17 +113,11 @@ def main() -> None:
     force = os.environ.get("FORCE_START", "").lower() == "true"
     if not repo or "/" not in repo or not token:
         raise SystemExit("GITHUB_REPOSITORY and GITHUB_TOKEN are required")
-    uri = f"https://api.github.com/repos/{repo}/actions/workflows/pages.yml/runs?branch=main&per_page=100"
-    request = Request(uri, headers={
-        "Accept": "application/vnd.github+json",
-        "Authorization": f"Bearer {token}",
-        "X-GitHub-Api-Version": "2022-11-28",
-    })
-    with urlopen(request, timeout=25) as response:
-        data = json.load(response)
-    allowed, reason = decide_recovery(
-        data.get("workflow_runs") or [], datetime.now(timezone.utc), force=force
-    )
+    runs = fetch_runs(repo, token)
+    if '--successor' in sys.argv:
+        allowed, reason = decide_successor(runs, int(os.environ['GITHUB_RUN_ID']))
+    else:
+        allowed, reason = decide_recovery(runs, datetime.now(timezone.utc), force=force)
     print(f"Recovery decision: {'DISPATCH' if allowed else 'SKIP'} — {reason}")
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:

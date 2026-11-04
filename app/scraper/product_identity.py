@@ -3,23 +3,50 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from bs4 import BeautifulSoup
 
 _BARCODE_LABELS = {"ean", "upc", "gtin", "barcode", "product ean"}
 _MODEL_LABELS = {"item model number", "model number", "model", "manufacturer reference",
-                 "manufacturer part number", "part number"}
+                 "manufacturer part number", "part number", "mfr part number"}
 _DETAIL_SELECTORS = (
     "#productDetails_techSpec_section_1",
     "#productDetails_detailBullets_sections1",
     "#detailBullets_feature_div",
     "#productOverview_feature_div",
+    "#productDetails_feature_div",
+    "#productDetails_techSpec_section_2",
 )
+
+
+def clean_field(value: object) -> str:
+    return "".join(c for c in str(value) if unicodedata.category(c) != "Cf").strip()
+
+
+def cex_model_number(mapping: dict) -> str | None:
+    """Read explicit CeX attributes; box IDs and product titles are not models."""
+    for key in ("modelNumber", "manufacturerPartNumber"):
+        if model := normalise_model(mapping.get(key)):
+            return model
+    for attr in mapping.get("attributeInfo") or []:
+        if not isinstance(attr, dict):
+            continue
+        label = str(attr.get("attributeName") or "").lower()
+        if label not in {"model_number", "manufacturer_part_number", "mpn"}:
+            continue
+        values = attr.get("attributeValue") or []
+        if isinstance(values, str):
+            values = [values]
+        models = {normalise_model(v) for v in values} - {None}
+        if len(models) == 1:
+            return models.pop()
+    return None
 
 
 def normalise_barcode(value: object) -> str | None:
     if value is None:
         return None
-    raw = re.sub(r"[\s-]", "", str(value).strip())
+    raw = re.sub(r"[\s-]", "", clean_field(value))
     if not raw.isdigit() or len(raw) not in (8, 12, 13, 14):
         return None
     total = 0
@@ -72,7 +99,7 @@ def amazon_identifiers(soup: BeautifulSoup, asin: str) -> tuple[str | None, str 
     barcode = None
     model = None
     for label, value in _label_values(soup):
-        clean = label.lower().strip(" :\u200e")
+        clean = clean_field(label).lower().strip(" :")
         if clean in _BARCODE_LABELS and not barcode:
             barcode = normalise_barcode(value)
         if clean in _MODEL_LABELS and not model:

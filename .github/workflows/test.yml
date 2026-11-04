@@ -19,4 +19,6 @@ jobs:
       - run: node --check docs/scan-activity.js
       - run: node --test tests/scan-activity-ui.test.mjs
       - run: node --test tests/dashboard-ui.test.mjs
+      - run: node --check docs/cex-targets.js
+      - run: node --test tests/cex-targets-ui.test.mjs
       - run: python -m compileall -q app scripts
