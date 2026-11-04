@@ -80,10 +80,10 @@ class CrawlConfig:
     cex_error_retry_hours: int = 6
     cex_alert_quote_max_age_hours: int = 12
     cex_min_cash_profit_eur: float = 5.0
-    cex_min_cash_profit_percent: float = 10.0
+    cex_min_cash_profit_percent: float = 0.0
     cex_extra_cost_eur: float = 0.0
     cex_delivery_eur: float = 0.0
-    cex_min_roi_percent: float = 10.0
+    cex_min_roi_percent: float = 0.0
     cex_payout_haircut_percent: float = 0.0
     cex_max_alerts_per_run: int = 5
     cex_scan_any_price: bool = True
