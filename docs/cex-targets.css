@@ -18,3 +18,29 @@
 .target-money { font-weight:600; white-space:nowrap; }
 caption { text-align:left; caption-side:bottom; padding-block:var(--space-sm); }
 @media(max-width:680px) { .target-heading { display:block; } .target-intro { grid-template-columns:1fr; } .target-intro > div { flex-direction:row; justify-content:space-between; align-items:center; padding:var(--space-md) 0; } .target-intro > div + div { border-left:0; border-top:1px solid var(--rule-soft); } .target-intro strong { font-size:1.75rem; } }
+
+.amazon-action { display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:.6rem .8rem; background:var(--accent); color:var(--accent-ink); border-radius:var(--radius); font-weight:600; text-decoration:none; }
+.amazon-action:hover { color:var(--accent-ink); filter:brightness(1.08); }
+@media(max-width:760px) {
+  body { padding:16px; }
+  .target-controls { display:grid; grid-template-columns:minmax(0,1fr); }
+  .target-controls label:first-child { min-width:0; }
+  .target-controls input, .target-controls select { width:100%; min-width:0; box-sizing:border-box; }
+  .table-wrap { overflow:visible; }
+  #target-table, #coffee-table { display:block; min-width:0; width:100%; }
+  #target-table[hidden], #coffee-table[hidden] { display:none; }
+  #target-table thead, #coffee-table thead { display:none; }
+  #target-table tbody, #coffee-table tbody { display:grid; gap:16px; }
+  #target-table tr, #coffee-table tr { display:block; border:1px solid var(--rule-soft); border-radius:var(--radius); padding:16px; background:var(--card); }
+  #target-table td, #coffee-table td { display:block; position:static; width:auto; min-width:0; max-width:none; padding:10px 0; border:0; white-space:normal; overflow-wrap:anywhere; background:transparent; }
+  #target-table td:first-child, #coffee-table td:first-child { padding-top:0; font-size:1.05rem; }
+  #target-table td::before, #coffee-table td::before { display:block; color:var(--muted); font-size:.8rem; margin-bottom:6px; }
+  #target-table td:nth-child(2)::before { content:'CeX cash offer'; }
+  #target-table td:nth-child(3)::before { content:'Amazon'; }
+  #target-table td:nth-child(4)::before { content:'Buffered profit'; }
+  #target-table td:nth-child(5)::before { content:'Last checked'; }
+  #coffee-table td:nth-child(2)::before { content:'Observed Amazon price'; }
+  #coffee-table td:nth-child(3)::before { content:'Last observed'; }
+  .amazon-action { display:flex; width:100%; box-sizing:border-box; }
+  caption { display:block; }
+}

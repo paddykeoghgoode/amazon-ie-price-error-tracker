@@ -43,3 +43,13 @@ test('coffee stays Amazon-only and respects branded review and price criteria',(
   const html=readFileSync(new URL('../docs/cex-targets.html',import.meta.url),'utf8');
   assert.match(html,/CeX acceptance is not established/);
 });
+test('discovered ASINs link directly without becoming verified mappings',()=>{
+  const candidate={asin:'B000000123',active:true,cex_target_box_id:'box',identity_status:'identifiers_missing'};
+  const cat={cex_targets:{items:{box:record}},sections:{tech:{items:[candidate]}}};
+  const row=ui.rows(cat,{},{},now)[0];
+  assert.equal(row.mapping,undefined);assert.equal(row.profitable,false);
+  assert.match(ui.renderRow(row),/amazon.ie\/dp\/B000000123/);
+  assert.match(ui.renderRow(row),/Possible match/);assert.match(ui.renderRow(row),/Not verified/);
+  candidate.identity_status='identity_mismatch';
+  assert.match(ui.renderRow(ui.rows(cat,{},{},now)[0]),/Search Amazon/);
+});
