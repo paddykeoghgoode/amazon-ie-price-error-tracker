@@ -1,5 +1,5 @@
 {
-  "_comment": "Automatic scanning continues continuously, but Telegram is RESERVED for high-value research leads. No routine scan summaries or health digests. Default: Amazon now >= EUR120, reference >= EUR250, >=50% stable-history drop and >=EUR120 saved; list-price-only >=75% and >=EUR250 saved. CeX: exact model/EAN match, fresh quote, positive Amazon price, estimated cash profit >= EUR5 and ROI >=25%. All smaller drops remain in the dashboard. Exception: stable-history errors with reference >= EUR500, >=75% off and >=EUR250 saved may alert below the EUR120 current-price floor. The existing six detail checks per section now also gather exact CeX identifiers and inspect first-seen expensive items. CeX catalogue discovery includes Irish cash buy quotes strictly over EUR10; this is a payout floor, not a profit threshold. High-value Amazon price-drop discovery remains independent of CeX.",
+  "_comment": "Automatic scanning continues continuously, but Telegram is RESERVED for high-value research leads. No routine scan summaries or health digests. Default: Amazon now >= EUR120, reference >= EUR250, >=50% stable-history drop and >=EUR120 saved; list-price-only >=75% and >=EUR250 saved. CeX: exact model/EAN match, fresh quote, positive Amazon price, estimated net cash profit >= EUR5 with no percentage-profit or ROI minimum. All smaller drops remain in the dashboard. Exception: stable-history errors with reference >= EUR500, >=75% off and >=EUR250 saved may alert below the EUR120 current-price floor. The existing six detail checks per section now also gather exact CeX identifiers and inspect first-seen expensive items. CeX catalogue discovery includes Irish cash buy quotes strictly over EUR10; this is a payout floor, not a profit threshold. High-value Amazon price-drop discovery remains independent of CeX.",
   "max_items": 12000,
   "max_requests": 800,
   "pages_per_category": 2,
@@ -14,10 +14,10 @@
   ],
   "cex_enabled": true,
   "cex_min_cash_profit_eur": 5,
-  "cex_min_cash_profit_percent": 10,
+  "cex_min_cash_profit_percent": 0,
   "cex_extra_cost_eur": 5,
   "cex_delivery_eur": 0,
-  "cex_min_roi_percent": 15,
+  "cex_min_roi_percent": 0,
   "cex_payout_haircut_percent": 10,
   "cex_scan_any_price": true,
   "sections": [
@@ -390,7 +390,7 @@
   "telegram_min_list_saving_eur": 250,
   "telegram_min_cex_buy_price_eur": 0.01,
   "telegram_min_cex_cash_profit_eur": 5,
-  "telegram_min_cex_roi_percent": 25,
+  "telegram_min_cex_roi_percent": 0,
   "telegram_max_alerts_per_run": 3,
   "telegram_min_hotlist_extra_drop_eur": 25,
   "telegram_min_hotlist_extra_drop_percent": 10,

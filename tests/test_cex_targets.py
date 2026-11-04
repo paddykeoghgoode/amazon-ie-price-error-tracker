@@ -244,7 +244,7 @@ class TestCexTargetCatalogue(unittest.TestCase):
         self.assertEqual(len(cat['cex_targets']['mappings']), 1)
         rows = watch_rows(cat['cex_targets'], config(), now=NOW)
         self.assertFalse(rows[0]['cex_cash_flip'])
-        self.assertEqual(rows[0]['cex_max_buy_eur'], 212)
+        self.assertEqual(rows[0]['cex_max_buy_eur'], 260)
         fragment = {'section_id': 'pc', 'generated_at': NOW.isoformat(), 'items': [item()], **cat}
         published = merge_catalogue({}, fragment)
         self.assertEqual(len(published['cex_targets']['mappings']), 1)
@@ -311,9 +311,18 @@ class TestCexFastChecks(unittest.TestCase):
         row = out['products'][0]
         self.assertEqual(row['status'], 'profitable')
         self.assertEqual(row['cex_cash_profit_eur'], 85)
-        self.assertEqual(row['cex_max_buy_eur'], 212)
+        self.assertEqual(row['cex_max_buy_eur'], 260)
         self.assertEqual(row['found_at'], NOW.isoformat())
         self.assertEqual(row['last_cex_alert_price_eur'], 180)
+
+    def test_five_euro_net_alerts_even_with_low_roi(self):
+        out, fetched, sent = self.run_check(snap=snapshot(price=260), notify=True)
+        row = out['products'][0]
+        self.assertEqual((fetched, sent), (1, 1))
+        self.assertEqual(row['cex_cash_profit_eur'], 5)
+        self.assertLess(row['cex_net_roi_percent'], 2)
+        out, _, sent = self.run_check(snap=snapshot(price=260.01), notify=True)
+        self.assertEqual(sent, 0)
 
     def test_wrong_model_missing_identifiers_wrong_currency_and_asin_never_alert(self):
         bad = [snapshot(model='wh1000xm4'), snapshot(model=None), snapshot(asin='B000000002')]
