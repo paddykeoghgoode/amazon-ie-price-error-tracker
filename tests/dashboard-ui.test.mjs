@@ -142,7 +142,7 @@ test("CeX target view reports funnel, timestamps and stale observations honestly
   const end = js.indexOf("\nfunction renderCexTargets(", start);
   const view = vm.runInNewContext(js.slice(start, end) + "\ncexTargetView;");
   const now = Date.parse("2026-11-03T20:00:00Z");
-  const data = {funnel: {catalogue_skus: 250, exact_mappings: 30, fresh_quotes: 25,
+  const data = {funnel: {catalogue_skus: 250, saved_mappings: 30, alert_ready_mappings: 12, fresh_quotes: 25,
     amazon_attempted: 12, price_read: 10, identity_mismatch: 2, profitable: 1, stale_quotes: 5},
     products: [
       {asin:"new",scan_lane:"cex_target",status:"profitable",checked_at:"2026-11-03T19:55:00Z",found_at:"2026-11-03T19:55:00Z"},
@@ -151,8 +151,9 @@ test("CeX target view reports funnel, timestamps and stale observations honestly
     ]};
   const result = view(data, now);
   assert.equal(result.rows.length, 2);
-  assert.match(result.summary, /250 CeX target SKUs/);
-  assert.match(result.diagnostics, /12 pages checked/);
+  assert.match(result.summary, /250 CeX catalogue SKUs/);
+  assert.match(result.summary, /30 saved Amazon links/);
+  assert.match(result.diagnostics, /12 pages,/);
   assert.equal(result.rows[0].result_label, "Meets cash margin");
   assert.equal(result.rows[1].result_label, "Awaiting a fresh check");
   assert.equal(result.rows[0].found_at, data.products[0].found_at);

@@ -10,7 +10,8 @@ def report(data: dict, published: bool = False) -> str:
         lines = ["## CeX targets and fast price checks", "",
                  f"Checked at {data.get('generated_at')} · {data.get('scan_status')}", "",
                  "| Stage | Count |", "| --- | ---: |"]
-        for key, label in (("catalogue_skus", "CeX target SKUs"), ("exact_mappings", "Exact ASIN mappings"),
+        for key, label in (("catalogue_skus", "CeX target SKUs"), ("saved_mappings", "Saved ASIN mappings"),
+                           ("alert_ready_mappings", "Alert-ready mappings"),
                            ("fresh_quotes", "Fresh cash quotes"), ("stale_quotes", "Quotes awaiting refresh"),
                            ("amazon_attempted", "Amazon pages attempted"), ("price_read", "Prices read"),
                            ("identity_mismatch", "Identity missing or changed"),
@@ -64,7 +65,8 @@ def report(data: dict, published: bool = False) -> str:
         first = stats.get("cex_first") or {}
         if first:
             details.append(f"\nCeX-first: {first.get('catalogue_skus', 0)} target SKUs; "
-                           f"{first.get('exact_mappings', 0)} exact Amazon mappings; "
+                           f"{first.get('saved_mappings', first.get('exact_mappings', 0))} saved Amazon links; "
+                           f"{first.get('alert_ready_mappings', 0)} alert-ready; "
                            f"{first.get('fresh_quotes', 0)} fresh cash quotes. "
                            f"Used {first.get('catalogue_searches', 0)} catalogue searches and "
                            f"{first.get('mapped_quote_refreshes', 0)} mapped quote refreshes "

@@ -634,8 +634,8 @@ function cexTargetView(data, now = Date.now()) {
       return {...row, result_label: old ? "Awaiting a fresh check" : (labels[row.status] || "Research only")};
     });
   return {rows,
-    summary: `${Number(stats.catalogue_skus || 0)} CeX target SKUs · ${Number(stats.exact_mappings || 0)} exact Amazon matches · ${Number(stats.fresh_quotes || 0)} fresh cash quotes`,
-    diagnostics: `Last fast scan: ${Number(stats.amazon_attempted || 0)} pages checked, ${Number(stats.price_read || 0)} prices read, ${Number(stats.identity_mismatch || 0)} identity checks failed, ${Number(stats.profitable || 0)} qualifying margins. ${Number(stats.stale_quotes || 0)} quotes awaiting refresh.`,
+    summary: `${Number(stats.catalogue_skus || 0)} CeX catalogue SKUs · ${Number(stats.saved_mappings ?? stats.exact_mappings ?? 0)} saved Amazon links · ${Number(stats.alert_ready_mappings ?? 0)} alert-ready · ${Number(stats.fresh_quotes || 0)} fresh CeX quotes`,
+    diagnostics: `CeX SKUs are trade-in candidates only until an Amazon ASIN is linked with model/EAN evidence. Mapping is gradual (about one Amazon search per priority scan, six identity checks per section, twelve hotlist pages every ten minutes). Last fast scan: ${Number(stats.amazon_attempted || 0)} pages, ${Number(stats.price_read || 0)} prices read, ${Number(stats.identity_mismatch || 0)} identity failures, ${Number(stats.profitable || 0)} qualifying margins. ${Number(stats.stale_quotes || 0)} quotes need refresh.`,
   };
 }
 

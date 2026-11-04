@@ -336,6 +336,15 @@ def watch_rows(state, config, *, now=None, options=None):
 
 def target_funnel(state, config, *, now=None):
     rows = watch_rows(state, config, now=now)
-    return {"catalogue_skus": len(state.get("items", {})), "exact_mappings": len(rows),
-            "fresh_quotes": sum(r["cex_quote_fresh_for_alert"] for r in rows),
-            "stale_quotes": sum(not r["cex_quote_fresh_for_alert"] for r in rows)}
+    saved = len(state.get("mappings", {}))
+    return {
+        "catalogue_skus": len(state.get("items", {})),
+        # Persistent ASIN ↔ CeX box links (identity evidence saved in catalogue).
+        "saved_mappings": saved,
+        # Legacy key: same as saved_mappings (was incorrectly len(watch_rows)).
+        "exact_mappings": saved,
+        # Subset the fast hotlist can re-check this cycle (fresh quote + recent Amazon sighting).
+        "alert_ready_mappings": len(rows),
+        "fresh_quotes": sum(r["cex_quote_fresh_for_alert"] for r in rows),
+        "stale_quotes": sum(not r["cex_quote_fresh_for_alert"] for r in rows),
+    }
