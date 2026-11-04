@@ -18,6 +18,7 @@ const TargetPage = (() => {
     const freshSeed = seedAge >= 0 && seedAge <= 72*3600000;
     const items = {...(freshSeed ? seed.items : {}), ...state.items};
     const maps = Object.values(state.mappings || {});
+    const candidates = Object.values(catalogue.sections || {}).flatMap(s => s.items || []).filter(r => r.active !== false && r.identity_status !== 'identity_mismatch');
     const checks = new Map((hotlist.products || []).map(r => [r.asin, r]));
     return Object.values(items).map(record => {
       let quote = record.quote || {};
@@ -30,7 +31,8 @@ const TargetPage = (() => {
       const quoteAge = now - Date.parse(check?.cex_quote_checked_at || '');
       const fresh = checkedAge >= 0 && checkedAge <= 30*60000 && quoteAge >= 0 && quoteAge <= 12*3600000 && check?.cex_quote_fresh_for_alert === true;
       const read = fresh && ['profitable','above_buy_ceiling','below_minimum_buy'].includes(check?.status);
-      return {record, quote, mapping, check, fresh:read, group:category(quote),
+      const candidate = candidates.find(r => r.cex_target_box_id === quote.box_id && /^[A-Z0-9]{10}$/.test(r.asin));
+      return {record, quote, mapping, candidate, check, fresh:read, group:category(quote),
         profitable:read && check?.status === 'profitable', discovery:state.amazon_discovery?.[quote.box_id]};
     }).filter(r => finite(r.quote.cash_eur) && r.quote.cash_eur > 10 && r.quote.box_id && !/non[ -]working|faulty|spares/i.test(r.quote.box_name || ''))
       .sort((a,b) => Number(b.profitable)-Number(a.profitable) || Number(!!b.mapping)-Number(!!a.mapping) ||
@@ -44,10 +46,11 @@ const TargetPage = (() => {
   function renderRow(r) {
     const {quote:q,mapping:m,check:c} = r;
     const cex = `https://ie.webuy.com/product-detail?id=${encodeURIComponent(q.box_id)}`;
-    const asin = m && /^[A-Z0-9]{10}$/.test(m.asin) ? m.asin : null;
-    const amazon = asin ? `https://www.amazon.ie/dp/${asin}` : `https://www.amazon.ie/s?k=${encodeURIComponent(q.box_name.replace(/,\s*[ABC]$/, ''))}`;
-    const stage = asin ? 'Exact identity mapped' : r.discovery?.status === 'candidates_found' ? 'Candidate found · needs verification' : 'Needs matching';
-    return `<tr><td><a href="${cex}" target="_blank" rel="noopener">${esc(q.box_name)}</a><span class="target-meta">${esc(q.category_name || 'CeX catalogue')} · ${esc(q.box_id)}</span></td><td><span class="target-money">${money(q.cash_eur)}</span><span class="target-meta">${r.record.source === 'catalogue_search' ? 'Index estimate' : 'Detail quote'} · ${esc(date(r.record.checked_at))}</span></td><td><a href="${amazon}" target="_blank" rel="noopener">${asin ? 'Open Amazon product' : 'Search Amazon ↗'}</a><span class="target-meta">${esc(stage)}</span>${r.fresh ? `<span class="target-meta">Current read ${money(c.price_eur)}</span>` : ''}</td><td class="${r.profitable ? 'target-good' : ''}">${r.fresh ? money(c.cex_cash_profit_eur) : 'Not verified'}<span class="target-meta">${r.profitable ? 'Meets alert margin' : r.fresh ? 'Below alert margin' : 'Awaiting a fresh comparable check'}</span></td><td>${esc(date(c?.checked_at || r.discovery?.checked_at))}<span class="target-meta">${esc(c?.status?.replaceAll('_',' ') || r.discovery?.status?.replaceAll('_',' ') || 'Amazon not checked')}</span></td></tr>`;
+    const matched = m && /^[A-Z0-9]{10}$/.test(m.asin);
+    const asin = matched ? m.asin : r.candidate?.asin;
+    const amazon = asin ? `https://www.amazon.ie/dp/${asin}` : `https://www.amazon.ie/s?k=${encodeURIComponent(q.box_name.replace(/,\s*(?:[ABC]|mint|boxed|unboxed|discounted)\s*$/i, ''))}`;
+    const stage = matched ? 'Exact identity mapped' : asin ? 'Possible match · verify model and variant' : r.discovery?.status === 'candidates_found' ? 'Candidate found · needs verification' : 'Needs matching';
+    return `<tr><td><a href="${cex}" target="_blank" rel="noopener">${esc(q.box_name)}</a><span class="target-meta">${esc(q.category_name || 'CeX catalogue')} · ${esc(q.box_id)}</span></td><td><span class="target-money">${money(q.cash_eur)}</span><span class="target-meta">${r.record.source === 'catalogue_search' ? 'Index estimate' : 'Detail quote'} · ${esc(date(r.record.checked_at))}</span></td><td><a class="amazon-action" href="${amazon}" target="_blank" rel="noopener">${matched ? 'Open Amazon product' : asin ? 'Check possible Amazon match' : 'Search Amazon ↗'}</a><span class="target-meta">${esc(stage)}</span>${r.fresh ? `<span class="target-meta">Current read ${money(c.price_eur)}</span>` : ''}</td><td class="${r.profitable ? 'target-good' : ''}">${r.fresh ? money(c.cex_cash_profit_eur) : 'Not verified'}<span class="target-meta">${r.profitable ? 'Meets alert margin' : r.fresh ? 'Below alert margin' : 'Awaiting a fresh comparable check'}</span></td><td>${esc(date(c?.checked_at || r.discovery?.checked_at))}<span class="target-meta">${esc(c?.status?.replaceAll('_',' ') || r.discovery?.status?.replaceAll('_',' ') || 'Amazon not checked')}</span></td></tr>`;
   }
   return {rows, coffee, renderRow, category, date, money, esc};
 })();
