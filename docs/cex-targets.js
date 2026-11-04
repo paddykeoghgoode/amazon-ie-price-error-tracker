@@ -38,6 +38,7 @@ const TargetPage = (() => {
   };
   const USER_LINKS_STORAGE = 'cexUserLinks.v1';
   const REJECTED_STORAGE = 'cexUserRejected.v1';
+  const CEX_TARGET_LIMIT = 5000;
   const asinOk = asin => /^[A-Z0-9]{10}$/.test(asin || '');
   function readLocalUserLinks() {
     if (typeof localStorage === 'undefined') return {};
@@ -103,13 +104,47 @@ const TargetPage = (() => {
       .sort((a,b) => Number(b.profitable)-Number(a.profitable) || Number(!!b.userMapping)-Number(!!a.userMapping) || Number(!!b.mapping)-Number(!!a.mapping) ||
         (Number(b.matchPercent)||0)-(Number(a.matchPercent)||0) ||
         (['console','game'].includes(b.group) ? 1:0)-(['console','game'].includes(a.group) ? 1:0) || b.quote.cash_eur-a.quote.cash_eur)
-      .slice(0,1000);
+      .slice(0, CEX_TARGET_LIMIT);
+  }
+  function familyKey(boxName) {
+    let t = String(boxName || '');
+    t = t.replace(/,\s*(?:[ABC]|boxed|unboxed|discounted|mint)\s*$/i, '');
+    t = t.replace(/\s*-\s*(?:black|white|silver|gold|blue|red|green|pink|purple|grey|gray|midnight blue|cosmic red|volcanic red|glacier white|starlight|graphite|charcoal|navy|cream|natural|obsidian|frost|platinum|titanium|smoke|amber|copper|bronze|beige|lavender|indigo|orange|yellow|lime|teal|sand|snow|carbon|pebble|stone|ash|mocha|espresso|champagne|rose gold|violet|burgundy|maroon|cyan|ivory|pearl|chrome|gunmetal|slate|forest|emerald|ruby|sapphire|lilac|blush|taupe|sandstone|honey|sage|moss|mint|olive|mustard|wine|coral|teal|azure|indigo|magenta|peach|nude|clear|transparent)\b.*$/gi, '');
+    t = t.replace(/\s*\([^)]*\)\s*$/g, '');
+    return t.replace(/\s+/g, ' ').trim().toLowerCase();
+  }
+  function groupLabel(boxName) {
+    return String(boxName || '').replace(/,\s*(?:[ABC]|boxed|unboxed|discounted|mint)\s*$/i, '')
+      .replace(/\s*-\s*(?:black|white|silver|gold|blue|red|green|pink|purple|grey|gray|midnight blue|cosmic red|volcanic red|glacier white|starlight|graphite|charcoal|navy|cream|natural|obsidian|frost|platinum|titanium|smoke|amber|copper|bronze|beige|lavender|indigo|orange|yellow|lime|teal|sand|snow|carbon|pebble|stone|ash|mocha|espresso|champagne|rose gold|violet|burgundy|maroon|cyan|ivory|pearl|chrome|gunmetal|slate|forest|emerald|ruby|sapphire|lilac|blush|taupe|sandstone|honey|sage|moss|mint|olive|mustard|wine|coral|teal|azure|indigo|magenta|peach|nude|clear|transparent)\b.*$/gi, '')
+      .replace(/\s+/g, ' ').trim();
+  }
+  function variantLabel(boxName) {
+    const full = String(boxName || '');
+    const base = groupLabel(full);
+    const tail = full.slice(base.length).replace(/^[\s,-]+/, '').replace(/,\s*[ABC]\s*$/i, '').trim();
+    return tail || full.replace(/,\s*[ABC]\s*$/i, '').trim();
+  }
+  function groupTargets(flat) {
+    const groups = new Map();
+    for (const row of flat) {
+      const key = familyKey(row.quote.box_name);
+      const bucket = groups.get(key) || {key, label: groupLabel(row.quote.box_name), variants: []};
+      bucket.variants.push(row);
+      groups.set(key, bucket);
+    }
+    return [...groups.values()].map((group) => {
+      group.variants.sort((a, b) => b.quote.cash_eur - a.quote.cash_eur || a.boxId.localeCompare(b.boxId));
+      return group;
+    }).sort((a, b) => {
+      const best = (g) => Math.max(...g.variants.map(v => v.quote.cash_eur));
+      return best(b) - best(a) || a.label.localeCompare(b.label);
+    });
   }
   function coffee(catalogue) {
     return ((catalogue.sections || {}).coffee?.items || []).filter(r => r.active !== false && r.resale_eligible === true && finite(r.price_eur) && r.price_eur >= 100 && (r.review_count || 0) >= 100)
       .sort((a,b) => b.price_eur-a.price_eur).slice(0,30);
   }
-  function renderRow(r) {
+  function renderRow(r, group) {
     const {quote:q,mapping:m,check:c,userMapping:u,userLink:ul,proposed:p,candidate:can} = r;
     const cex = `https://ie.webuy.com/product-detail?id=${encodeURIComponent(q.box_id)}`;
     const matched = m && asinOk(m.asin);
@@ -124,11 +159,16 @@ const TargetPage = (() => {
     else if (asin) stage = 'Possible match · verify model and variant';
     else if (r.discovery?.status === 'candidates_found') stage = 'Search ran · no strong hit yet';
     const actions = (!matched && !userConfirmed && asinOk(can?.asin)) ? `<div class="target-actions"><button type="button" class="target-confirm" data-box="${esc(r.boxId)}" data-asin="${esc(can.asin)}" data-title="${esc(can.title || '')}">Link this match</button><button type="button" class="target-reject" data-box="${esc(r.boxId)}">Not this product</button></div>` : '';
+    const variants = group && group.variants.length > 1 ? `<div class="target-variants" role="group" aria-label="CeX grades and colours">${group.variants.map(v => {
+      const active = v.boxId === r.boxId ? ' target-variant-active' : '';
+      return `<button type="button" class="target-variant${active}" data-group="${esc(group.key)}" data-box="${esc(v.boxId)}" title="${esc(v.quote.box_name)}">${esc(variantLabel(v.quote.box_name) || v.quote.box_id)} · ${money(v.quote.cash_eur)}</button>`;
+    }).join('')}</div>` : '';
     const linkLabel = matched ? 'Open Amazon product' : userConfirmed ? 'Open your linked product' : asin ? 'Review suggested Amazon match' : 'Search Amazon ↗';
-    return `<tr data-box-id="${esc(r.boxId)}"><td><a href="${cex}" target="_blank" rel="noopener">${esc(q.box_name)}</a><span class="target-meta">${esc(q.category_name || 'CeX catalogue')} · ${esc(q.box_id)}</span></td><td><span class="target-money">${money(q.cash_eur)}</span><span class="target-meta">${r.record.source === 'catalogue_search' ? 'Index estimate' : 'Detail quote'} · ${esc(date(r.record.checked_at))}</span></td><td><a class="amazon-action" href="${amazon}" target="_blank" rel="noopener">${linkLabel}</a><span class="target-meta">${esc(stage)}</span>${pct && !userConfirmed ? `<span class="target-meta">${esc(pct)} (estimate only)</span>` : ''}${actions}${r.observed ? `<span class="target-money">${money(r.observed.price_eur)}</span><span class="target-meta">Last observed ${esc(date(r.observed.observed_at))} · ${matched ? 'mapped product' : userConfirmed ? 'your link' : 'candidate, unverified'}</span>` : '<span class="target-meta">Amazon price pending</span>'}${renderHistory(r.history || [])}</td><td class="${r.profitable ? 'target-good' : ''}">${r.fresh ? money(c.cex_cash_profit_eur) : 'Not verified'}<span class="target-meta">${r.profitable ? 'Meets alert margin' : r.fresh ? 'Below alert margin' : 'Awaiting a fresh comparable check'}</span></td><td>${esc(date(c?.checked_at || r.discovery?.checked_at || p?.proposed_at))}<span class="target-meta">${esc(c?.status?.replaceAll('_',' ') || r.discovery?.status?.replaceAll('_',' ') || (p ? 'proposal saved' : 'Amazon not checked'))}</span></td></tr>`;
+    return `<tr data-box-id="${esc(r.boxId)}" data-group-key="${esc(group?.key || r.boxId)}"><td><a href="${cex}" target="_blank" rel="noopener">${esc(group?.label || q.box_name)}</a><span class="target-meta">${esc(q.category_name || 'CeX catalogue')} · ${group && group.variants.length > 1 ? `${group.variants.length} CeX listings` : esc(q.box_id)}</span>${variants}</td><td><span class="target-money">${money(q.cash_eur)}</span><span class="target-meta">${r.record.source === 'catalogue_search' ? 'Index estimate' : 'Detail quote'} · ${esc(date(r.record.checked_at))}</span></td><td><a class="amazon-action" href="${amazon}" target="_blank" rel="noopener">${linkLabel}</a><span class="target-meta">${esc(stage)}</span>${pct && !userConfirmed ? `<span class="target-meta">${esc(pct)} (estimate only)</span>` : ''}${actions}${r.observed ? `<span class="target-money">${money(r.observed.price_eur)}</span><span class="target-meta">Last observed ${esc(date(r.observed.observed_at))} · ${matched ? 'mapped product' : userConfirmed ? 'your link' : 'candidate, unverified'}</span>` : '<span class="target-meta">Amazon price pending</span>'}${renderHistory(r.history || [])}</td><td class="${r.profitable ? 'target-good' : ''}">${r.fresh ? money(c.cex_cash_profit_eur) : 'Not verified'}<span class="target-meta">${r.profitable ? 'Meets alert margin' : r.fresh ? 'Below alert margin' : 'Awaiting a fresh comparable check'}</span></td><td>${esc(date(c?.checked_at || r.discovery?.checked_at || p?.proposed_at))}<span class="target-meta">${esc(c?.status?.replaceAll('_',' ') || r.discovery?.status?.replaceAll('_',' ') || (p ? 'proposal saved' : 'Amazon not checked'))}</span></td></tr>`;
   }
-  return {rows, coffee, renderRow, category, date, money, esc, historyFor, renderHistory,
-    readLocalUserLinks, exportUserLinksPayload, USER_LINKS_STORAGE, REJECTED_STORAGE, asinOk};
+  return {rows, groupTargets, coffee, renderRow, category, date, money, esc, historyFor, renderHistory,
+    readLocalUserLinks, exportUserLinksPayload, USER_LINKS_STORAGE, REJECTED_STORAGE, asinOk, CEX_TARGET_LIMIT,
+    familyKey, variantLabel};
 })();
 if (typeof module !== 'undefined') module.exports = TargetPage;
 if (typeof document !== 'undefined') {
@@ -143,19 +183,28 @@ if (typeof document !== 'undefined') {
     const hotlist = results[1].status === 'fulfilled' ? results[1].value : {};
     const seed = results[2].status === 'fulfilled' ? results[2].value : {};
     const userFile = results[3].status === 'fulfilled' ? (results[3].value.links || {}) : {};
-    let rows = TargetPage.rows(catalogue,hotlist,seed,Date.now(),userFile);
-    $('target-count').textContent = rows.length;
-    $('mapped-count').textContent = rows.filter(r=>r.mapping || r.userMapping).length;
-    $('profitable-count').textContent = rows.filter(r=>r.profitable).length;
+    let flatRows = TargetPage.rows(catalogue,hotlist,seed,Date.now(),userFile);
+    let groups = TargetPage.groupTargets(flatRows);
+    const variantPick = new Map();
+    const activeRow = (group) => {
+      const pick = variantPick.get(group.key);
+      return group.variants.find(v => v.boxId === pick) || group.variants[0];
+    };
+    $('target-count').textContent = flatRows.length;
+    $('mapped-count').textContent = flatRows.filter(r=>r.mapping || r.userMapping).length;
+    $('profitable-count').textContent = flatRows.filter(r=>r.profitable).length;
     $('target-status').textContent = results[0].status === 'rejected' ? 'Live catalogue unavailable. Showing the dated discovery snapshot where available; mapping and profit are not verified.' : `Published ${TargetPage.date(catalogue.generated_at)}. Scans search Amazon from CeX titles and store a match %. Use Link this match, then export JSON into docs/cex-user-links.json so Actions reuse your links.`;
     let page = 0;
     const pageSize = 50;
     function render() {
-      const query = $('target-search').value.toLowerCase().trim(), group=$('target-category').value, match=$('target-matching').value;
-      const visible=rows.filter(r=>(!query || `${r.quote.box_name} ${r.quote.box_id}`.toLowerCase().includes(query)) && (!group || r.group===group) && (!match || (match==='mapped' ? !!(r.mapping || r.userMapping) : !(r.mapping || r.userMapping))));
+      const visible=groups.filter(g=>{
+        const row=activeRow(g);
+        const query = $('target-search').value.toLowerCase().trim(), groupCat=$('target-category').value, match=$('target-matching').value;
+        return (!query || `${g.label} ${row.quote.box_id}`.toLowerCase().includes(query)) && (!groupCat || row.group===groupCat) && (!match || (match==='mapped' ? !!(row.mapping || row.userMapping) : !(row.mapping || row.userMapping)));
+      });
       page = Math.min(page, Math.max(0, Math.ceil(visible.length/pageSize)-1));
       const start=page*pageSize;
-      $('target-rows').innerHTML=visible.slice(start,start+pageSize).map(TargetPage.renderRow).join('');
+      $('target-rows').innerHTML=visible.slice(start,start+pageSize).map(g=>TargetPage.renderRow(activeRow(g), g)).join('');
       $('target-page').textContent=`Page ${page+1} of ${Math.max(1,Math.ceil(visible.length/pageSize))}`;
       $('target-prev').disabled=page===0; $('target-next').disabled=start+pageSize>=visible.length;
       $('target-table').hidden=!visible.length; $('target-empty').hidden=!!visible.length;
@@ -165,6 +214,12 @@ if (typeof document !== 'undefined') {
     $('target-prev').addEventListener('click',()=>{page--;render();});
     $('target-next').addEventListener('click',()=>{page++;render();});
     $('target-rows').addEventListener('click', event => {
+      const variant = event.target.closest('.target-variant');
+      if (variant) {
+        variantPick.set(variant.dataset.group, variant.dataset.box);
+        render();
+        return;
+      }
       const confirm = event.target.closest('.target-confirm');
       const reject = event.target.closest('.target-reject');
       if (!confirm && !reject) return;
@@ -173,14 +228,16 @@ if (typeof document !== 'undefined') {
         const rejected = JSON.parse(localStorage.getItem(TargetPage.REJECTED_STORAGE) || '{}');
         rejected[boxId] = true;
         localStorage.setItem(TargetPage.REJECTED_STORAGE, JSON.stringify(rejected));
-        rows = TargetPage.rows(catalogue, hotlist, seed, Date.now(), userFile);
+        flatRows = TargetPage.rows(catalogue, hotlist, seed, Date.now(), userFile);
+        groups = TargetPage.groupTargets(flatRows);
         render();
         return;
       }
       const links = TargetPage.readLocalUserLinks();
       links[boxId] = {asin: confirm.dataset.asin, amazon_title: confirm.dataset.title, confirmed_at: new Date().toISOString(), source: 'browser'};
       localStorage.setItem(TargetPage.USER_LINKS_STORAGE, JSON.stringify(links));
-      rows = TargetPage.rows(catalogue, hotlist, seed, Date.now(), userFile, links);
+      flatRows = TargetPage.rows(catalogue, hotlist, seed, Date.now(), userFile, links);
+      groups = TargetPage.groupTargets(flatRows);
       render();
     });
     const exportBtn = $('target-export-links');

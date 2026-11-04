@@ -6,10 +6,18 @@ const require=createRequire(import.meta.url);
 const ui=require('../docs/cex-targets.js');
 const now=Date.parse('2026-11-04T12:00:00Z');
 const record={checked_at:'2026-11-04T11:00:00Z',source:'catalogue_search',quote:{box_id:'box',box_name:'Sony PS5 Console White, B',cash_eur:250,category_name:'Playstation5 Consoles'}};
-test('1,000-target limit and exclusive cash floor',()=>{
-  const items=Object.fromEntries(Array.from({length:1200},(_,i)=>[i,{...record,quote:{...record.quote,box_id:String(i),cash_eur:i}}]));
+test('5,000-target limit and exclusive cash floor',()=>{
+  const items=Object.fromEntries(Array.from({length:5200},(_,i)=>[i,{...record,quote:{...record.quote,box_id:String(i),cash_eur:i+11}}]));
   const rows=ui.rows({cex_targets:{items}}, {}, {}, now);
-  assert.equal(rows.length,1000);assert.ok(rows.every(r=>r.quote.cash_eur>10));
+  assert.equal(rows.length,5000);assert.ok(rows.every(r=>r.quote.cash_eur>10));
+});
+test('colour and grade variants collapse into one grouped row', () => {
+  const black = {...record, quote: {...record.quote, box_id: 'b1', box_name: 'Sony PS5 Pro 2TB - Black, B', cash_eur: 420}};
+  const white = {...record, quote: {...record.quote, box_id: 'b2', box_name: 'Sony PS5 Pro 2TB - White, A', cash_eur: 450}};
+  const groups = ui.groupTargets(ui.rows({cex_targets:{items:{b1:black,b2:white}}},{},{},now));
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].variants.length, 2);
+  assert.match(ui.renderRow(groups[0].variants[0], groups[0]), /target-variant/);
 });
 test('search links cannot masquerade as mapped products or profit',()=>{
   const row=ui.rows({cex_targets:{items:{box:record}}},{},{},now)[0];

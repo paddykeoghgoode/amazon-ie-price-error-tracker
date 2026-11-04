@@ -53,7 +53,7 @@
     </div>
     <div class="radar-footer">
       <p class="hint" id="radar-policy">Telegram is reserved for high-value price-error or model-matched resale leads.</p>
-      <div class="radar-links"><a href="#amazon-drops">Explore all Amazon drops</a><a href="cex-targets.html">Browse 1,000 CeX targets</a><a href="#cex">Explore CeX research</a></div>
+      <div class="radar-links"><a href="#amazon-drops">Explore all Amazon drops</a><a href="cex-targets.html">Browse CeX targets (€10+ cash)</a><a href="#cex">Explore CeX research</a></div>
     </div>
   </section>
   <section class="card scan-activity" aria-labelledby="scan-activity-title">
@@ -170,13 +170,18 @@
       </label>
       <label class="drop-control">Sort by
         <select id="drop-sort" aria-label="Sort price drops">
+          <option value="savings" selected>Biggest € saving</option>
           <option value="percentage">Largest % drop</option>
-          <option value="savings">Biggest € saving</option>
+          <option value="both">€ saving, then % drop</option>
           <option value="recent">Recently found</option>
         </select>
       </label>
+      <label class="drop-control drop-checkbox">
+        <input type="checkbox" id="drop-brands-only" checked />
+        Hide excluded / unrecognised brands
+      </label>
       <label class="drop-control search-control">Search
-        <input type="search" id="drop-search" placeholder="Product, category, ASIN…" aria-label="Search Amazon price drops" />
+        <input type="search" id="drop-search" placeholder="Product, ASIN, €50 saving, 30% drop…" aria-label="Search Amazon price drops" />
       </label>
     </div>
     <p id="general-drops-summary" class="hint" role="status">Loading price drop history…</p>
@@ -210,7 +215,7 @@
   </section>
     </div>
     <div role="tabpanel" id="panel-cex" aria-labelledby="tab-cex" hidden>
-      <p><a class="header-action" href="cex-targets.html">Browse 1,000 CeX → Amazon targets →</a></p>
+      <p><a class="header-action" href="cex-targets.html">Browse CeX → Amazon targets →</a></p>
     <section class="card">
       <h2>CeX target watchlist</h2>
       <p class="hint">Exact Amazon-to-CeX matches, watched before a sale appears. The ~1,000 CeX rows are catalogue trade-in quotes; most will stay unlinked until the same product is found on Amazon.ie with matching model/EAN. Buy ceilings include the cash payout buffer, costs and your alert margin. Checks rotate within the existing twelve-page fast scan.</p>

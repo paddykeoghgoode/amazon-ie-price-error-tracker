@@ -12,6 +12,10 @@ class TestResaleRelevance(unittest.TestCase):
         for title in ('Sony WH-1000XM5', 'Anker Prime charger', 'UGREEN NASync NAS', 'Sage Barista Pro'):
             self.assertTrue(relevance({'title': title}, self.policy)[0])
 
+    def test_excluded_brand_is_blocked(self):
+        policy = ResalePolicy(True, ('Sony',), ('Ozeino',))
+        self.assertFalse(relevance({'title': 'Ozeino wireless headset'}, policy)[0])
+
     def test_unfamiliar_spelling_and_compatibility_do_not_establish_value(self):
         for title in ('ZXQWER wireless earbuds', 'Generic compatible with Sony WH-1000XM5', 'Sonyish headphones'):
             self.assertFalse(relevance({'title': title}, self.policy)[0])
