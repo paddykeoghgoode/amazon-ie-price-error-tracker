@@ -1002,7 +1002,7 @@ function selectRadarLeads(deals, now = Date.now()) {
     if (row.resale_eligible === false) return false;
     const observed=Date.parse(row.observed_at || row.last_scanned_at || deals.last_section_at || deals.generated_at);
     return Number(row.price_eur) >= threshold("min_cex_buy_price_eur",0.01) &&
-      Number(row.cex_cash_profit_eur) >= threshold("min_cex_cash_profit_eur",45) &&
+      Number(row.cex_cash_profit_eur) >= threshold("min_cex_cash_profit_eur",5) &&
       Number(row.cex_net_roi_percent) >= threshold("min_cex_roi_percent",25) &&
       ["barcode_verified","model_verified"].includes(row.match_confidence) &&
       row.cex_quote_fresh_for_alert === true && row.cex_cash_flip !== false &&
@@ -1041,7 +1041,7 @@ function renderOpportunityRadar(deals) {
     "Telegram: large historical drops (from " + fmtEuro(p.min_amazon_price_eur ?? 120) +
     " Amazon price, " + fmtEuro(p.min_saving_eur ?? 120) + " saved, " +
     (p.min_history_drop_percent ?? 50) + "% off) or exact-model CeX margins of at least " +
-    fmtEuro(p.min_cex_cash_profit_eur ?? 45) + " and " + (p.min_cex_roi_percent ?? 25) +
+    fmtEuro(p.min_cex_cash_profit_eur ?? 5) + " and " + (p.min_cex_roi_percent ?? 25) +
     "% ROI. Always confirm seller, variant and checkout.";
   root.replaceChildren();
   const make = (tag, label, cls) => {

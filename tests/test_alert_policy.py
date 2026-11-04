@@ -35,7 +35,7 @@ class TestQuietTelegram(unittest.TestCase):
         self.assertTrue(qualifies_cex_alert(good))
         for changed in (
             {"match_confidence": "title_only"},
-            {"cex_cash_profit_eur": 10},
+            {"cex_cash_profit_eur": 4.99},
             {"cex_net_roi_percent": 12},
             {"cex_quote_fresh_for_alert": False},
             {"price_eur": 0},
@@ -46,12 +46,14 @@ class TestQuietTelegram(unittest.TestCase):
         from app.scraper.cex_ie import CexPrices
         from app.services.cex_arbitrage import build_cex_row
         prices = CexPrices('box', 'Sony headset', None, 80, 100, 120, 'https://ie.webuy.com')
-        row = build_cex_row({'price_eur':15}, prices, min_profit_eur=45, min_profit_percent=10,
+        row = build_cex_row({'price_eur':15}, prices, min_profit_eur=5, min_profit_percent=10,
                             min_roi_percent=25, extra_cost_eur=5, payout_haircut_percent=10)
         row.update(match_confidence='model_verified', cex_quote_fresh_for_alert=True)
         self.assertEqual(row['cex_cash_profit_eur'], 52)
         self.assertTrue(qualifies_cex_alert(row))
-        self.assertFalse(qualifies_cex_alert({**row, 'cex_cash_profit_eur':5}))
+        self.assertTrue(qualifies_cex_alert({**row, 'cex_cash_profit_eur':5, 'cex_net_roi_percent':25}))
+        self.assertFalse(qualifies_cex_alert({**row, 'cex_cash_profit_eur':4.99}))
+        self.assertFalse(qualifies_cex_alert({**row, 'cex_cash_profit_eur':5, 'cex_net_roi_percent':24.99}))
 
     def test_hotlist_requires_further_material_cut(self):
         row = {"price_eur": 200, "reference_eur": 700}
@@ -69,7 +71,8 @@ class TestQuietTelegram(unittest.TestCase):
     def test_policy_is_configured_at_strict_but_useful_thresholds(self):
         policy = load_alert_policy()
         self.assertGreaterEqual(policy.min_amazon_price_eur, 100)
-        self.assertGreaterEqual(policy.min_cex_cash_profit_eur, 40)
+        self.assertEqual(policy.min_cex_cash_profit_eur, 5)
+        self.assertEqual(AlertPolicy().min_cex_cash_profit_eur, 5)
         self.assertLessEqual(policy.max_alerts_per_run, 3)
         self.assertEqual(AlertPolicy().max_alerts_per_run, 3)
 

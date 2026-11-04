@@ -25,7 +25,7 @@ class AlertPolicy:
     # CeX resale is assessed by exact identity and net profit, independently
     # of the high-ticket Amazon-drop floor. A genuine error can be very cheap.
     min_cex_buy_price_eur: float = 0.01
-    min_cex_cash_profit_eur: float = 45.0
+    min_cex_cash_profit_eur: float = 5.0
     min_cex_roi_percent: float = 25.0
     max_alerts_per_run: int = 3
     min_hotlist_extra_drop_eur: float = 25.0
