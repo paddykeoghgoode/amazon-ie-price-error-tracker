@@ -190,9 +190,14 @@ async def crawl_section(
                 await discover_targets(targets, target_options, config, client, cex_state)
                 discovered, amazon_discovery_stats = await discover_amazon_targets(
                     targets, config, client, cex_state,
-                    existing_asins=[r['asin'] for r in section_catalogue['items']],
+                    existing_rows=[r for section in ((published_catalogue or {}).get('sections') or {}).values() for r in section.get('items', [])] + section_catalogue['items'],
                 )
-                section_catalogue['items'].extend(discovered)
+                by_asin = {r['asin']: r for r in section_catalogue['items']}
+                for row in discovered:
+                    if row['asin'] in by_asin:
+                        by_asin[row['asin']].update(row)
+                    else:
+                        section_catalogue['items'].append(row)
         attach_target_quotes(section_catalogue["items"], targets)
     urgent = [
         row["asin"]
@@ -239,7 +244,7 @@ async def crawl_section(
             "reference_eur": drop_by_asin.get(row["asin"], {}).get("reference_eur"),
             "observed_at": section_catalogue["generated_at"],
         }
-        for row in batch
+        for row in batch if float(row.get('price_eur') or 0) > 0
     ]
     # CeX quotes are cached independently of changing Amazon listing prices.
     quote_cache: dict[str, dict] = {

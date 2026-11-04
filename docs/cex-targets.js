@@ -55,7 +55,11 @@ const TargetPage = (() => {
       if (mapping?.cex_quote_cache?.quote && Date.parse(mapping.cex_quote_cache.checked_at || '') > Date.parse(record.checked_at || '')) {
         record = mapping.cex_quote_cache; quote = record.quote;
       }
-      const candidate = candidateByBox.get(quote.box_id);
+      const saved = state.amazon_discovery?.[quote.box_id]?.candidate_products || [];
+      const candidate = candidateByBox.get(quote.box_id) || saved.find(r =>
+        /^[A-Z0-9]{10}$/.test(r.asin || '') &&
+        !(inventoryByAsin.get(r.asin) || []).some(x => x.identity_status === 'identity_mismatch') &&
+        now - Date.parse(r.last_seen_at || '') >= 0 && now - Date.parse(r.last_seen_at || '') <= 30*86400000);
       const selected = mapping || candidate;
       const check = selected ? checks.get(selected.asin) : null;
       const history = historyFor(...(inventoryByAsin.get(selected?.asin) || []).filter(r => r.title === selected.title), selected, check);

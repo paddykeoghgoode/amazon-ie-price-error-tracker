@@ -69,3 +69,14 @@ test('pagination markup preserves phone controls for a thousand targets',()=>{
   const html=readFileSync(new URL('../docs/cex-targets.html',import.meta.url),'utf8');
   assert.match(html,/id="target-prev"/);assert.match(html,/id="target-next"/);
 });
+
+test('persisted candidates survive section replacement without implying profit',()=>{
+  const candidate={asin:'B000000123',title:'Sony PS5',price_eur:null,last_seen_at:'2026-11-04T11:00:00Z'};
+  const cat={cex_targets:{items:{box:record},amazon_discovery:{box:{candidate_products:[candidate]}}}};
+  let row=ui.rows(cat,{},{},now)[0];
+  assert.match(ui.renderRow(row),/amazon.ie\/dp\/B000000123/);
+  assert.match(ui.renderRow(row),/Amazon price pending/);
+  assert.equal(row.profitable,false);assert.equal(row.mapping,undefined);
+  cat.sections={x:{items:[{...candidate,identity_status:'identity_mismatch'}]}};
+  assert.match(ui.renderRow(ui.rows(cat,{},{},now)[0]),/Search Amazon/);
+});

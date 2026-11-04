@@ -43,8 +43,6 @@ def parse_search_results(html: str, prices, *, limit=2) -> list[dict]:
                 price = _parse_price(text)
                 if price and price > 0:
                     break
-        if not price or price <= 0:
-            continue
         seen.add(asin)
         rows.append({"asin": asin, "title": title, "price_eur": price,
                      "url": normalize_product_url(asin), "active": True,
@@ -54,7 +52,21 @@ def parse_search_results(html: str, prices, *, limit=2) -> list[dict]:
     return rows
 
 
-async def discover_amazon_targets(state, config, client, run_state, *, existing_asins=(), now=None):
+def product_key(title):
+    """Group condition grades only; preserve storage, colour, edition and bundles."""
+    title = re.sub(r",\s*(?:[ABC]|boxed|unboxed|discounted|mint)\s*$", "", title or "", flags=re.I)
+    return re.sub(r"\s+", " ", title).strip().casefold()
+
+
+def candidate_matches(row, prices):
+    if (not re.fullmatch(r"[A-Z0-9]{10}", row.get('asin') or '')
+            or row.get('active') is False or row.get('identity_status') == 'identity_mismatch'
+            or relevance(row)[1] == 'explicitly_excluded_brand'):
+        return False
+    return cex_ie.titles_match_for_trade_in(row.get('title') or '', prices.box_name)
+
+
+async def discover_amazon_targets(state, config, client, run_state, *, existing_asins=(), existing_rows=(), now=None):
     """One search, at most two candidates; no extra workflow or request allowance.
 
     A search hit is only a research candidate. Alert eligibility still needs a
@@ -73,10 +85,15 @@ async def discover_amazon_targets(state, config, client, run_state, *, existing_
     except ValueError:
         pass
     mapped = {r.get("cex_box_id") for r in state.get("mappings", {}).values()}
+    groups = {}
+    for key, record in state.get('items', {}).items():
+        groups.setdefault(product_key((record.get('quote') or {}).get('box_name')), []).append(key)
     due = []
     for box_id, record in state.get("items", {}).items():
         prices = cache_price(record)
-        prior = history.get(box_id) or {}
+        group = groups[product_key((record.get('quote') or {}).get('box_name'))]
+        prior = max((history.get(key) or {} for key in group),
+                    key=lambda r: max(r.get('checked_at') or '', r.get('last_error_at') or ''))
         age = age_hours(prior, now)
         if (not prices or box_id in mapped or (age is not None and age < 24)
                 or not retry_allowed(prior, now, config.cex_error_retry_hours)):
@@ -86,6 +103,10 @@ async def discover_amazon_targets(state, config, client, run_state, *, existing_
         return [], stats
     _, _, box_id, record = sorted(due)[0]
     prior = history.get(box_id) or {}
+    group = groups[product_key((record.get('quote') or {}).get('box_name'))]
+    def remember(value):
+        for key in group:
+            history[key] = copy.deepcopy(value)
     prices = cache_price(record)
     # Index hits lack CeX's attributeInfo. Hydrate one SKU from the same live
     # lookup budget, giving discovery a chance to obtain a real model number.
@@ -97,12 +118,12 @@ async def discover_amazon_targets(state, config, client, run_state, *, existing_
             await asyncio.sleep(config.cex_request_delay_seconds)
             prices = await cex_ie.fetch_box_prices(client, box_id, strict=True)
             if not prices or prices.cash_eur <= float(state.get('cash_floor_eur', 10)):
-                history[box_id] = {"checked_at": now.isoformat(), "status": "cex_unavailable"}
+                remember({"checked_at": now.isoformat(), "status": "cex_unavailable"})
                 return [], {**stats, "status": "cex_unavailable"}
             record = {**quote_entry(prices.box_name, prices, now), "source": "box_detail"}
             state["items"][box_id] = record
         except (httpx.HTTPError, ValueError, TypeError, OverflowError) as exc:
-            history[box_id] = {**prior, "last_error_at": now.isoformat(), "status": "cex_read_failed"}
+            remember({**prior, "last_error_at": now.isoformat(), "status": "cex_read_failed"})
             run_state["errors"] = run_state.get("errors", 0) + 1
             if failure_reason(exc) == "provider_blocked":
                 run_state["rate_limited"] = True
@@ -111,27 +132,41 @@ async def discover_amazon_targets(state, config, client, run_state, *, existing_
     # product-name queries remain provisional and cannot create exact mappings.
     query = (prices.barcodes[0].lstrip("0") if prices.barcodes else
              f"{cex_ie.leading_brand(prices.box_name) or ''} {prices.model_number}" if prices.model_number else
-             re.sub(r",\s*(?:[ABC]|boxed|unboxed|discounted)\s*$", "", prices.box_name, flags=re.I))
-    stats["search_requests"] = 1
+             product_key(prices.box_name))
     try:
-        await asyncio.sleep(config.request_delay_seconds)
-        response = await client.get(f"{AMAZON_IE_BASE}/s?{urlencode({'k': query})}", follow_redirects=True)
-        response.raise_for_status()
-        rows = parse_search_results(response.text, prices)
-        rows = [r for r in rows if r["asin"] not in set(existing_asins)]
+        # Reuse observations before spending an Amazon request. Deduplicate ASINs
+        # across sections; two provisional candidates maximum per product family.
+        inventory = {}
+        for row in existing_rows:
+            old = inventory.get(row.get('asin'))
+            if old is None or (row.get('last_seen_at') or '') >= (old.get('last_seen_at') or ''):
+                inventory[row.get('asin')] = row
+        rows = [copy.deepcopy(r) for r in inventory.values() if candidate_matches(r, prices)][:2]
+        if not rows:
+            stats['search_requests'] = 1
+            await asyncio.sleep(config.request_delay_seconds)
+            response = await client.get(f"{AMAZON_IE_BASE}/s?{urlencode({'k': query})}", follow_redirects=True)
+            response.raise_for_status()
+            rows = parse_search_results(response.text, prices)
+        # Existing ASINs remain candidates, even when already in this section.
+        # The caller updates its row in place rather than dropping the link.
         for row in rows:
-            row.update(cex_quote_cache={**copy.deepcopy(record), "title": row["title"]},
-                       first_seen_at=now.isoformat(), last_seen_at=now.isoformat(),
-                       category="CeX target search", verification_status="disabled",
-                       identity_status="not_checked", last_checked_at=None)
-            row['price_history'] = record_price([], row['price_eur'], now.isoformat(), 'search_card')
-        history[box_id] = {"checked_at": now.isoformat(), "status": "candidates_found" if rows else "no_new_candidates",
-                           "query": query, "candidates": len(rows)}
+            reused = row['asin'] in inventory
+            row.update(cex_target_box_id=box_id,
+                       cex_quote_cache={**copy.deepcopy(record), "title": row["title"]})
+            if not reused:
+                row.update(first_seen_at=now.isoformat(), last_seen_at=now.isoformat(),
+                           category="CeX target search", verification_status="disabled",
+                           identity_status="not_checked", last_checked_at=None)
+                row['price_history'] = record_price([], row.get('price_eur'), now.isoformat(), 'search_card') if row.get('price_eur') else []
+        remember({"checked_at": now.isoformat(), "status": "candidates_found" if rows else "no_candidates",
+                  "query": query, "candidates": len(rows),
+                  "candidate_products": [{k: r[k] for k in ('asin', 'title', 'url', 'price_eur', 'price_history', 'last_seen_at') if k in r} for r in rows]})
         stats.update(status=history[box_id]["status"], candidates=len(rows))
         return rows, stats
     except (httpx.HTTPError, ValueError, TypeError, OverflowError) as exc:
         reason = failure_reason(exc)
-        history[box_id] = {**prior, "last_error_at": now.isoformat(), "status": reason}
+        remember({**prior, "last_error_at": now.isoformat(), "status": reason})
         if reason == "provider_blocked":
             state["amazon_blocked_until"] = (now + timedelta(minutes=30)).isoformat()
         return [], {**stats, "status": reason}
