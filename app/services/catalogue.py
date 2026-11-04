@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from app.services.bestsellers import CrawlResult
+from app.services.public_price_history import record_price
 
 CSV_COLUMNS = (
     "section", "asin", "title", "url", "category", "rank", "price_eur", "active",
@@ -80,6 +81,10 @@ def make_section_catalogue(
             "cex_status": "not_checked" if price is not None else "not_applicable",
         }
         # CeX box cash prices are independent of the current Amazon price.
+        previous_history = prior.get('price_history', []) if prior.get('title') == item.title else []
+        if not previous_history and prior.get('title') == item.title:
+            previous_history = record_price([], prior.get('price_eur'), prior.get('last_seen_at'), 'search_card' if prior.get('discovery_source') == 'cex_target_search' else 'bestseller_card')
+        row['price_history'] = record_price(previous_history, price, stamp, 'bestseller_card')
         # Only preserve this quote when the product identity (title) is unchanged.
         if (prior.get("title") or "") == (item.title or ""):
             for key in ("barcode", "model_number", "identity_checked_at", "identity_status"):

@@ -27,8 +27,8 @@ from app.services.resale_relevance import relevance
 @dataclass(frozen=True)
 class TargetConfig:
     enabled: bool = False
-    max_items: int = 300
-    max_mappings: int = 100
+    max_items: int = 1000
+    max_mappings: int = 1000
     min_cash_eur: float = 10  # Exclusive floor: CeX must offer more than this.
     priority_cash_eur: float = 150
     searches_per_run: int = 2
@@ -41,8 +41,8 @@ def load_target_config(path: str | Path = "bestsellers.json") -> TargetConfig:
     raw = json.loads(Path(path).read_text(encoding="utf-8")).get("cex_first") or {}
     return TargetConfig(
         enabled=raw.get("enabled") is True,
-        max_items=max(1, min(500, int(raw.get("max_items", 300)))),
-        max_mappings=max(1, min(100, int(raw.get("max_mappings", 100)))),
+        max_items=max(1, min(1000, int(raw.get("max_items", 1000)))),
+        max_mappings=max(1, min(1000, int(raw.get("max_mappings", 1000)))),
         min_cash_eur=max(0, float(raw.get("min_cash_eur", 10))),
         priority_cash_eur=max(0, float(raw.get("priority_cash_eur", 150))),
         searches_per_run=max(0, min(2, int(raw.get("searches_per_run", 2)))),
