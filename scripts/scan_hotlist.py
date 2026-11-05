@@ -13,6 +13,7 @@ from pathlib import Path
 import httpx
 
 from app.scraper.amazon_ie import fetch_product
+from app.scraper import cex_ie
 from app.services.monitor import BROWSER_HEADERS, send_notification
 from app.services.alert_policy import (
     hotlist_further_drop_qualifies, load_alert_policy, qualifies_observed_drop,
@@ -21,7 +22,10 @@ from app.services.alert_policy import (
 from app.services.bestsellers import load_config
 from app.services.cex_arbitrage import _match_level, build_cex_row
 from app.services.cex_cache import cache_price
-from app.services.cex_targets import load_target_config, watch_rows, target_funnel, exact_target_match
+from app.services.cex_targets import (
+    load_target_config, watch_rows, target_funnel, exact_target_match,
+    proposal_compare_rows, sanitize_proposed_links,
+)
 from app.snapshot import read_snapshot, write_snapshot
 from app.services.resale_relevance import relevance
 from app.services.public_price_history import record_price
@@ -44,18 +48,19 @@ def candidates(deals, now, limit=12):
     return sorted(rows.values(), key=lambda r: -float(r.get("drop_percent") or 0))[:limit]
 
 
-def select_fast_checks(drops, mapped, prior, limit=12):
+def select_fast_checks(drops, mapped, proposals, prior, limit=12):
     """Normally 8 maps / 4 drops, borrowing empty slots. Rotate old attempts.
 
     Six map slots go to the 24 nearest buy ceilings; two explore the rest so
-    expensive products can still reveal sudden errors. No promise that all
-    1,000 mappings are checked on each ten-minute tick.
+    expensive products can still reveal sudden errors. Suggested CeX pairs without
+    a saved map still get Amazon product-page reads when slots allow.
     """
     limit = max(0, min(12, int(limit)))
     if not limit:
         return []
-    mapped = [r for r in mapped if r.get("cex_quote_fresh_for_alert")]
+    mapped = [dict(r, scan_lane=r.get('scan_lane', 'cex_target')) for r in mapped if r.get("cex_quote_fresh_for_alert")]
     mapping_ids = {r['asin'] for r in mapped}
+    proposals = [dict(r, scan_lane='cex_proposal') for r in proposals if r.get('asin') and r['asin'] not in mapping_ids]
     drops = [dict(r, scan_lane='drop') for r in drops if r['asin'] not in mapping_ids]
     def oldest(row):
         return (prior.get(row['asin'], {}).get('checked_at') or '', row['asin'])
@@ -65,14 +70,41 @@ def select_fast_checks(drops, mapped, prior, limit=12):
         return float(price or row.get('price_eur') or float('inf')) / max(float(row.get('cex_max_buy_eur') or 0), 0.01)
     drops.sort(key=oldest)
     drop_slots = min(len(drops), limit // 3)
-    map_slots = min(len(mapped), limit - drop_slots)
+    remaining = limit - drop_slots
+    prop_slots = min(len(proposals), remaining if not mapped else min(4, remaining // 2))
+    map_slots = min(len(mapped), remaining - prop_slots)
     near = sorted(mapped, key=lambda r: (distance(r), r['asin']))[:24]
     near.sort(key=oldest)
     chosen = near[:max(0, map_slots - min(2, map_slots))]
     seen = {r['asin'] for r in chosen}
     chosen += sorted((r for r in mapped if r['asin'] not in seen), key=oldest)[:map_slots-len(chosen)]
+    chosen += sorted(proposals, key=oldest)[:prop_slots]
     chosen += drops[:limit-len(chosen)]
     return chosen
+
+
+def evaluate_proposal_compare(row, snap, config):
+    """Margin estimate for a suggested pair; alerts still require a confirmed map."""
+    prices = cache_price(row.get('cex_quote_cache'))
+    if snap.asin != row['asin'] or not prices or not cex_ie.titles_match_for_trade_in(snap.title, prices.box_name):
+        return {'status': 'identity_mismatch', 'cex_cash_flip': False}
+    policy = load_alert_policy()
+    result = build_cex_row(
+        {**row, 'price_eur': snap.price_eur}, prices,
+        min_profit_eur=max(config.cex_min_cash_profit_eur, policy.min_cex_cash_profit_eur),
+        min_profit_percent=config.cex_min_cash_profit_percent,
+        min_roi_percent=max(config.cex_min_roi_percent, policy.min_cex_roi_percent),
+        delivery_eur=config.cex_delivery_eur, extra_cost_eur=config.cex_extra_cost_eur,
+        payout_haircut_percent=config.cex_payout_haircut_percent,
+    )
+    result['match_confidence'] = _match_level({**row, 'title': snap.title}, prices)
+    result['status'] = 'profitable' if qualifies_cex_alert(result, policy) else 'above_buy_ceiling'
+    if snap.price_eur < policy.min_cex_buy_price_eur:
+        result['status'] = 'below_minimum_buy'
+    allowed, reason, brand = relevance(result)
+    result.update(resale_eligible=allowed, resale_reason=reason, resale_brand=brand)
+    result.pop('cex_quote_cache', None)
+    return result
 
 
 def evaluate_target(row, snap, config):
@@ -106,11 +138,14 @@ async def recheck(deals, previous, limit=12, notify=True, *, catalogue=None, con
     config = config or load_config(Path('bestsellers.json'))
     options = load_target_config()
     state = (catalogue or {}).get('cex_targets') or {}
-    mapped = watch_rows(state, config, now=now) if options.enabled and config.cex_enabled else []
+    sanitize_proposed_links(state, options)
+    mapped = watch_rows(state, config, now=now, options=options) if options.enabled and config.cex_enabled else []
+    proposals = proposal_compare_rows(state, options, config, now=now) if options.enabled and config.cex_enabled else []
     prior = {r['asin']: dict(r) for r in (previous.get('products') or []) if r.get('asin')}
     funnel = target_funnel(state, config, now=now)
     funnel.update(selected=0, amazon_attempted=0, price_read=0, identity_mismatch=0,
-                  profitable=0, above_buy_ceiling=0, below_minimum_buy=0, unreadable=0, alerts_sent=0)
+                  profitable=0, above_buy_ceiling=0, below_minimum_buy=0, unreadable=0, alerts_sent=0,
+                  proposal_checks=0)
     try:
         blocked_until = datetime.fromisoformat(previous.get('blocked_until') or '')
         cooling_down = blocked_until.tzinfo is not None and now < blocked_until
@@ -121,7 +156,7 @@ async def recheck(deals, previous, limit=12, notify=True, *, catalogue=None, con
                 'price_read': 0, 'funnel': funnel, 'scan_status': 'provider_cooldown'}
     # Keep unselected mappings and successful alert fingerprints across ticks.
     out = dict(prior)
-    selected = select_fast_checks(candidates(deals, now, limit=500), mapped, prior, limit)
+    selected = select_fast_checks(candidates(deals, now, limit=500), mapped, proposals, prior, limit)
     funnel['selected'] = len(selected)
     blocked = None
     sent = 0
@@ -136,10 +171,13 @@ async def recheck(deals, previous, limit=12, notify=True, *, catalogue=None, con
             # Don't present a previous successful read as today's result.
             for key in ('price_eur', 'cex_cash_profit_eur', 'cex_net_roi_percent'):
                 item.pop(key, None)
-            if row.get('scan_lane') == 'cex_target':
-                for key in ('cex_title', 'cex_url', 'cex_cash_eur', 'cex_max_buy_eur', 'cex_quote_checked_at', 'cex_quote_fresh_for_alert'):
-                    item[key] = row.get(key)
+            if row.get('scan_lane') in ('cex_target', 'cex_proposal'):
+                for key in ('cex_title', 'cex_url', 'cex_cash_eur', 'cex_max_buy_eur', 'cex_quote_checked_at', 'cex_quote_fresh_for_alert', 'cex_box_id', 'match_percent'):
+                    if key in row:
+                        item[key] = row.get(key)
             funnel['amazon_attempted'] += 1
+            if row.get('scan_lane') == 'cex_proposal':
+                funnel['proposal_checks'] += 1
             message = None
             try:
                 snap = await fetch_product(client, asin)
@@ -168,6 +206,10 @@ async def recheck(deals, previous, limit=12, notify=True, *, catalogue=None, con
                                     'Check condition, accessories, delivered checkout and current CeX acceptance.\n'
                                     f"{row.get('url')}\n{item['cex_url']}"
                                 )
+                    elif row.get('scan_lane') == 'cex_proposal':
+                        item.update(evaluate_proposal_compare(row, snap, config))
+                        item['checked_at'] = now.isoformat()
+                        funnel[item['status']] += 1
                     else:
                         threshold = min(float(earlier.get('price_eur') or float('inf')),
                                         float(row.get('price_eur') or float('inf')))

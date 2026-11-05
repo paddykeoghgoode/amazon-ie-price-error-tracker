@@ -40,7 +40,7 @@ from app.services.resale_relevance import relevance
 from app.services.cex_targets import (
     load_target_config, target_state, sync_mappings, refresh_mapped_quotes,
     discover_targets, attach_target_quotes, target_funnel, merge_user_links, apply_user_links,
-    import_target_seed,
+    import_target_seed, refresh_proposal_amazon_prices, sanitize_proposed_links,
 )
 from app.services.monitor import BROWSER_HEADERS
 from app.services.catalogue import (
@@ -196,7 +196,14 @@ async def crawl_section(
                     max_searches=target_options.amazon_searches_per_run,
                     proposal_retry_hours=target_options.amazon_proposal_retry_hours,
                     min_catalogue_percent=target_options.amazon_proposal_min_catalogue_percent,
+                    min_display_percent=target_options.amazon_proposal_min_display_percent,
                 )
+                sanitize_proposed_links(targets, target_options)
+                proposal_prices = await refresh_proposal_amazon_prices(
+                    targets, target_options, config, client,
+                    limit=target_options.amazon_proposal_price_checks_per_run,
+                )
+                amazon_discovery_stats = {**amazon_discovery_stats, **proposal_prices}
                 by_asin = {r['asin']: r for r in section_catalogue['items']}
                 for row in discovered:
                     if row['asin'] in by_asin:

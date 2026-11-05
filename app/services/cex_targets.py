@@ -17,6 +17,7 @@ from pathlib import Path
 import httpx
 
 from app.scraper import cex_ie
+from app.scraper.amazon_ie import normalize_product_url
 from app.scraper.product_identity import catalog_barcodes, normalise_model
 from app.services.alert_policy import load_alert_policy
 from app.services.cex_arbitrage import _compatible_quote, _match_level, build_cex_row, enrich_with_cex
@@ -39,6 +40,7 @@ class TargetConfig:
     amazon_proposal_retry_hours: float = 12.0
     amazon_proposal_min_catalogue_percent: int = 72
     amazon_proposal_min_display_percent: int = 40
+    amazon_proposal_price_checks_per_run: int = 12
 
 
 def load_target_config(path: str | Path = "bestsellers.json") -> TargetConfig:
@@ -57,6 +59,7 @@ def load_target_config(path: str | Path = "bestsellers.json") -> TargetConfig:
         amazon_proposal_retry_hours=max(6, float(raw.get("amazon_proposal_retry_hours", 12))),
         amazon_proposal_min_catalogue_percent=max(50, min(95, int(raw.get("amazon_proposal_min_catalogue_percent", 72)))),
         amazon_proposal_min_display_percent=max(25, min(95, int(raw.get("amazon_proposal_min_display_percent", 40)))),
+        amazon_proposal_price_checks_per_run=max(0, min(12, int(raw.get("amazon_proposal_price_checks_per_run", 12)))),
     )
 
 
@@ -398,6 +401,121 @@ async def refresh_mapped_quotes(state, options, config, client, run_state, *, no
         run_state["mapped_quote_refreshes"] = run_state.get("mapped_quote_refreshes", 0) + 1
 
 
+def sanitize_proposed_links(state, options) -> None:
+    """Drop proposals that could never be a sane CeX ↔ Amazon compare."""
+    proposals = state.get("proposed_links") or {}
+    cleaned = {}
+    for box_id, prop in proposals.items():
+        if not isinstance(prop, dict):
+            continue
+        record = state.get("items", {}).get(box_id)
+        prices = cache_price(record) if record else None
+        if not prices:
+            continue
+        title = prop.get("amazon_title") or ""
+        asin = str(prop.get("asin") or "").upper()
+        if not re.fullmatch(r"[A-Z0-9]{10}", asin):
+            continue
+        score = int(prop.get("match_percent") or cex_ie.title_match_score(title, prices.box_name))
+        if score < options.amazon_proposal_min_display_percent:
+            continue
+        if not cex_ie.titles_match_for_trade_in(title, prices.box_name):
+            continue
+        cleaned[box_id] = {**prop, "asin": asin, "match_percent": score, "status": prop.get("status") or "proposed"}
+    state["proposed_links"] = cleaned
+
+
+def proposal_compare_rows(state, options, config, *, now=None):
+    """Research rows for suggested CeX ↔ Amazon pairs (no exact mapping required)."""
+    now = now or datetime.now(timezone.utc)
+    policy = load_alert_policy()
+    rows = []
+    for box_id, prop in (state.get("proposed_links") or {}).items():
+        if prop.get("status") in ("rejected", "invalid"):
+            continue
+        record = state.get("items", {}).get(box_id)
+        prices = cache_price(record) if record else None
+        if not prices or prices.cash_eur <= options.min_cash_eur:
+            continue
+        asin = prop.get("asin")
+        title = prop.get("amazon_title") or prices.box_name
+        if not re.fullmatch(r"[A-Z0-9]{10}", asin or ""):
+            continue
+        if not cex_ie.titles_match_for_trade_in(title, prices.box_name):
+            continue
+        row = {
+            "asin": asin,
+            "title": title,
+            "url": normalize_product_url(asin),
+            "cex_box_id": box_id,
+            "cex_title": prices.box_name,
+            "cex_url": prices.url,
+            "cex_cash_eur": prices.cash_eur,
+            "price_eur": prop.get("amazon_price_eur"),
+            "match_percent": int(prop.get("match_percent") or 0),
+            "scan_lane": "cex_proposal",
+            "cex_quote_cache": record,
+            "cex_quote_checked_at": (record or {}).get("checked_at"),
+            "cex_quote_fresh_for_alert": True,
+        }
+        if row.get("price_eur"):
+            built = build_cex_row(
+                {**row, "price_eur": float(row["price_eur"])}, prices,
+                min_profit_eur=max(config.cex_min_cash_profit_eur, policy.min_cex_cash_profit_eur),
+                min_profit_percent=config.cex_min_cash_profit_percent,
+                min_roi_percent=max(config.cex_min_roi_percent, policy.min_cex_roi_percent),
+                delivery_eur=config.cex_delivery_eur, extra_cost_eur=config.cex_extra_cost_eur,
+                payout_haircut_percent=config.cex_payout_haircut_percent,
+            )
+            rows.append({**row, **built})
+        else:
+            rows.append(row)
+    rows.sort(key=lambda r: (-float(r.get("cex_cash_eur") or 0), -(r.get("match_percent") or 0), r["asin"]))
+    return rows
+
+
+async def refresh_proposal_amazon_prices(state, options, config, client, *, limit=12, now=None):
+    """Read Amazon product pages for suggested CeX pairs and store compare prices."""
+    now = now or datetime.now(timezone.utc)
+    sanitize_proposed_links(state, options)
+    if limit <= 0:
+        return {"attempted": 0, "price_read": 0}
+    due = []
+    for box_id, prop in (state.get("proposed_links") or {}).items():
+        record = state.get("items", {}).get(box_id)
+        prices = cache_price(record) if record else None
+        if not prices:
+            continue
+        age = age_hours({"checked_at": prop.get("amazon_checked_at")}, now)
+        if age is not None and age < 6:
+            continue
+        due.append((prop.get("amazon_checked_at") or "", -prices.cash_eur, box_id, prop))
+    stats = {"attempted": 0, "price_read": 0}
+    for _, _, box_id, prop in sorted(due)[:limit]:
+        asin = prop.get("asin")
+        if not asin:
+            continue
+        stats["attempted"] += 1
+        try:
+            await asyncio.sleep(config.request_delay_seconds)
+            from app.scraper.amazon_ie import fetch_product
+            snap = await fetch_product(client, asin)
+            prop = {**prop, "amazon_checked_at": now.isoformat()}
+            if snap.asin == asin and snap.currency == "EUR" and snap.price_eur and snap.price_eur > 0:
+                prop.update(
+                    amazon_price_eur=round(float(snap.price_eur), 2),
+                    amazon_title=snap.title or prop.get("amazon_title"),
+                    amazon_read_status="price_read",
+                )
+                stats["price_read"] += 1
+            else:
+                prop["amazon_read_status"] = snap.parse_status
+            state["proposed_links"][box_id] = prop
+        except (httpx.HTTPError, ValueError, TypeError, OverflowError):
+            state["proposed_links"][box_id] = {**prop, "amazon_checked_at": now.isoformat(), "amazon_read_status": "read_failed"}
+    return stats
+
+
 def watch_rows(state, config, *, now=None, options=None):
     now = now or datetime.now(timezone.utc)
     policy = load_alert_policy()
@@ -447,6 +565,10 @@ def target_funnel(state, config, *, now=None):
             1 for m in state.get("mappings", {}).values() if m.get("match_confidence") == "user_confirmed"
         ),
         "proposed_links": len(state.get("proposed_links", {})),
+        "proposal_prices_read": sum(
+            1 for p in (state.get("proposed_links") or {}).values()
+            if isinstance(p, dict) and p.get("amazon_price_eur")
+        ),
         "fresh_quotes": sum(r["cex_quote_fresh_for_alert"] for r in rows),
         "stale_quotes": sum(not r["cex_quote_fresh_for_alert"] for r in rows),
     }

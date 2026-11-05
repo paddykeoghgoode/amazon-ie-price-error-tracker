@@ -18,6 +18,7 @@ from app.services.cex_cache import quote_entry
 from app.services.cex_targets import (
     TargetConfig, target_state, sync_mappings, discover_targets, attach_target_quotes,
     refresh_mapped_quotes, watch_rows, exact_target_match, prune_targets,
+    sanitize_proposed_links, load_target_config,
 )
 from app.services.discovery_checks import choose_detail_checks
 from scripts.scan_hotlist import recheck, select_fast_checks
@@ -299,6 +300,14 @@ class TestCexTargetCatalogue(unittest.TestCase):
                 search.assert_not_awaited()
         asyncio.run(go())
 
+    def test_sanitize_proposed_links_drops_invalid_matches(self):
+        cat = catalogue()
+        cat['cex_targets']['proposed_links'] = {
+            'cex-test': {'asin': 'B000000099', 'amazon_title': 'Random perfume', 'match_percent': 0},
+        }
+        sanitize_proposed_links(cat['cex_targets'], load_target_config(Path('bestsellers.json')))
+        self.assertEqual(cat['cex_targets']['proposed_links'], {})
+
     def test_unprofitable_targets_use_half_existing_detail_budget(self):
         rows = [dict(item(str(i), exact=False), cex_target_box_id='cex-test') for i in range(10)]
         selected = choose_detail_checks({'items': rows}, [], [], config=config(), policy=AlertPolicy())
@@ -402,21 +411,21 @@ class TestCexFastChecks(unittest.TestCase):
         cat = catalogue([item(f'B{i:09d}') for i in range(50)])
         mapped = watch_rows(cat['cex_targets'], config(), now=NOW)
         drops = [dict(item(f'D{i:09d}'), found_at=NOW.isoformat()) for i in range(20)]
-        selected = select_fast_checks(drops, mapped, {}, limit=500)
+        selected = select_fast_checks(drops, mapped, {}, {}, limit=500)
         self.assertEqual(len(selected), 12)
         self.assertEqual(sum(r['scan_lane']=='cex_target' for r in selected), 8)
         prior = {r['asin']:{**r,'checked_at':NOW.isoformat()} for r in selected}
-        again = select_fast_checks(drops, mapped, prior)
+        again = select_fast_checks(drops, mapped, {}, prior)
         self.assertFalse({r['asin'] for r in again} & set(prior))
         # Every target eventually reaches an exploration slot.
         seen=set()
         for n in range(30):
-            batch=select_fast_checks(drops, mapped, prior)
+            batch=select_fast_checks(drops, mapped, {}, prior)
             for r in batch:
                 seen.add(r['asin'])
                 prior[r['asin']]={'checked_at':(NOW+timedelta(minutes=n+1)).isoformat()}
         self.assertTrue({r['asin'] for r in mapped} <= seen)
-        self.assertEqual(select_fast_checks(drops, mapped, {}, limit=0), [])
+        self.assertEqual(select_fast_checks(drops, mapped, {}, {}, limit=0), [])
 
     def test_successful_unselected_fingerprints_are_not_discarded(self):
         previous={'products':[{'asin':'OTHER', 'last_cex_alert_price_eur':125,'checked_at':NOW.isoformat()}]}

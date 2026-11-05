@@ -97,6 +97,16 @@ class AmazonTargetDiscoveryTests(unittest.TestCase):
             self.assertEqual(s['mappings'],{})
         asyncio.run(go())
 
+    def test_weak_title_match_is_not_saved_as_proposal(self):
+        async def go():
+            s = state()
+            s['items']['sony']['source'] = 'box_detail'
+            page = html(1).replace('Sony WH-1000XM5 Headphones Black', 'Ted Baker Perfume 50ml')
+            async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200, text=page))) as client:
+                await discover_amazon_targets(s, config(), client, {}, now=NOW)
+            self.assertNotIn('sony', s.get('proposed_links', {}))
+        asyncio.run(go())
+
     def test_unpriced_target_receives_bounded_detail_slot(self):
         from app.services.discovery_checks import choose_detail_checks, apply_detail_checks
         from app.services.alert_policy import AlertPolicy

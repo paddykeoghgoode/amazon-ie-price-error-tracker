@@ -106,7 +106,7 @@ async def _hydrate_cex_detail(state, box_id, record, prices, client, config, run
 
 async def _propose_one_target(
     state, config, client, run_state, *, existing_rows=(), now, box_id, record,
-    proposal_retry_hours: float, min_catalogue_percent: int,
+    proposal_retry_hours: float, min_catalogue_percent: int, min_display_percent: int,
 ):
     stats = {"search_requests": 0, "candidates": 0, "status": "no_due_target"}
     history = state.setdefault("amazon_discovery", {})
@@ -147,9 +147,18 @@ async def _propose_one_target(
             response.raise_for_status()
             scored = parse_search_scored(response.text, prices, limit=5)
             rows = [r for r in scored if r.get("match_percent", 0) >= min_catalogue_percent][:2]
-        best = scored[0] if scored else (rows[0] if rows else None)
+        best = None
+        if scored:
+            candidate = max(scored, key=lambda r: int(r.get("match_percent") or 0))
+            score = int(candidate.get("match_percent") or 0)
+            if (score >= min_display_percent
+                    and cex_ie.titles_match_for_trade_in(candidate.get("title"), prices.box_name)):
+                best = candidate
         if not best and rows:
-            best = {**rows[0], "match_percent": cex_ie.title_match_score(rows[0].get("title"), prices.box_name)}
+            scored_row = {**rows[0], "match_percent": cex_ie.title_match_score(rows[0].get("title"), prices.box_name)}
+            if (scored_row["match_percent"] >= min_display_percent
+                    and cex_ie.titles_match_for_trade_in(scored_row.get("title"), prices.box_name)):
+                best = scored_row
         proposals = state.setdefault("proposed_links", {})
         if best:
             proposals[box_id] = {
@@ -160,6 +169,8 @@ async def _propose_one_target(
                 "proposed_at": now.isoformat(),
                 "status": "proposed",
             }
+        elif box_id in proposals:
+            proposals.pop(box_id, None)
         candidate_payload = scored[:3] if scored else [
             {k: r[k] for k in ('asin', 'title', 'url', 'price_eur', 'price_history', 'last_seen_at') if k in r}
             | {"match_percent": cex_ie.title_match_score(r.get("title"), prices.box_name)} for r in rows[:3]
@@ -190,6 +201,7 @@ async def _propose_one_target(
 async def propose_amazon_links(
     state, config, client, run_state, *, existing_rows=(), now=None,
     max_searches: int = 1, proposal_retry_hours: float = 12.0, min_catalogue_percent: int = 72,
+    min_display_percent: int = 40,
 ):
     """Search Amazon.ie from CeX titles; store scored proposals and optional catalogue rows."""
     now = now or datetime.now(timezone.utc)
@@ -232,7 +244,7 @@ async def propose_amazon_links(
         rows, one = await _propose_one_target(
             state, config, client, run_state, existing_rows=existing_rows, now=now,
             box_id=box_id, record=record, proposal_retry_hours=proposal_retry_hours,
-            min_catalogue_percent=min_catalogue_percent,
+            min_catalogue_percent=min_catalogue_percent, min_display_percent=min_display_percent,
         )
         attempts += 1
         stats["search_requests"] += one.get("search_requests", 0)
