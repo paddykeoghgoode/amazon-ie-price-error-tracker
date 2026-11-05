@@ -27,8 +27,8 @@ from app.services.resale_relevance import relevance
 @dataclass(frozen=True)
 class TargetConfig:
     enabled: bool = False
-    max_items: int = 1000
-    max_mappings: int = 1000
+    max_items: int = 5000
+    max_mappings: int = 5000
     min_cash_eur: float = 10  # Exclusive floor: CeX must offer more than this.
     priority_cash_eur: float = 150
     searches_per_run: int = 2
@@ -45,8 +45,8 @@ def load_target_config(path: str | Path = "bestsellers.json") -> TargetConfig:
     raw = json.loads(Path(path).read_text(encoding="utf-8")).get("cex_first") or {}
     return TargetConfig(
         enabled=raw.get("enabled") is True,
-        max_items=max(1, min(1000, int(raw.get("max_items", 1000)))),
-        max_mappings=max(1, min(1000, int(raw.get("max_mappings", 1000)))),
+        max_items=max(1, min(5000, int(raw.get("max_items", 5000)))),
+        max_mappings=max(1, min(5000, int(raw.get("max_mappings", 5000)))),
         min_cash_eur=max(0, float(raw.get("min_cash_eur", 10))),
         priority_cash_eur=max(0, float(raw.get("priority_cash_eur", 150))),
         searches_per_run=max(0, min(2, int(raw.get("searches_per_run", 2)))),
@@ -125,6 +125,8 @@ def import_target_seed(state, options, path="docs/cex-targets-seed.json", *, now
     for key, record in (seed.get('items') or {}).items():
         prices = cache_price(record)
         if prices and prices.cash_eur > options.min_cash_eur and key not in state['items']:
+            if not relevance({'title': record.get('title') or prices.box_name})[0]:
+                continue
             state['items'][key] = {**copy.deepcopy(record), 'source': 'catalogue_search'}
     state['seed_imported_at'] = stamp
     prune_targets(state, options, now)
@@ -182,7 +184,8 @@ def prune_targets(state, options, now):
             return prices.cash_eur if prices else 0
         if field == "items":
             rows = [r for r in rows if cash(r) > options.min_cash_eur and not re.search(
-                r'\b(?:non[ -]working|faulty|spares)\b', (r.get('quote') or {}).get('box_name', ''), re.I)]
+                r'\b(?:non[ -]working|faulty|spares)\b', (r.get('quote') or {}).get('box_name', ''), re.I)
+                and relevance({'title': (r.get('quote') or {}).get('box_name')})[0]]
         # Keep unavailable/error mapping records so an older section cannot
         # resurrect a cash quote invalidated by a more recent box refresh.
         preferred = [r for r in rows if cash(r) >= options.priority_cash_eur]
@@ -236,6 +239,8 @@ async def discover_targets(state, options, config, client, run_state, *, now=Non
                 except (ValueError, TypeError, OverflowError):
                     continue
                 if not box_id or not title or not options.min_cash_eur < cash < float("inf"):
+                    continue
+                if not relevance({'title': title})[0]:
                     continue
                 prices = cex_ie.CexPrices(box_id, title, hit.get("categoryName"), cash, 0,
                                          retail, cex_ie.product_url(box_id), catalog_barcodes(hit),

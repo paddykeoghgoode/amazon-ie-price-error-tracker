@@ -25,6 +25,9 @@ caption { text-align:left; caption-side:bottom; padding-block:var(--space-sm); }
 .target-confirm, .target-reject, #target-export-links { min-height:44px; padding:.45rem .75rem; border-radius:var(--radius); border:1px solid var(--rule); background:var(--card); cursor:pointer; font:inherit; }
 .target-confirm { background:var(--accent); color:var(--accent-ink); border-color:transparent; font-weight:600; }
 .target-toolbar { margin-bottom:var(--space-md); }
+.target-variants { display:flex; flex-wrap:wrap; gap:6px; margin-top:var(--space-sm); }
+.target-variant { min-height:36px; padding:.25rem .5rem; border-radius:999px; border:1px solid var(--rule); background:var(--bg); font-size:var(--text-sm); cursor:pointer; }
+.target-variant-active { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
 @media(max-width:760px) {
   body { padding:16px; }
   .target-controls { display:grid; grid-template-columns:minmax(0,1fr); }

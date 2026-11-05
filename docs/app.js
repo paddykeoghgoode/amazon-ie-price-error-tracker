@@ -150,16 +150,27 @@ function renderGeneralDropsPage() {
   const minPrice = Number(document.getElementById("drop-min-price")?.value || 0);
   const minSaving = Number(document.getElementById("drop-min-saving")?.value || 0);
   const section = document.getElementById("drop-section")?.value || "";
-  const sort = document.getElementById("drop-sort")?.value || "percentage";
+  const sort = document.getElementById("drop-sort")?.value || "savings";
   const q = (document.getElementById("drop-search")?.value || "").toLowerCase().trim();
+  const brandsOnly = document.getElementById("drop-brands-only")?.checked !== false;
   const selected = generalDropRows.filter((r) => {
+    if (brandsOnly && r.resale_eligible === false) return false;
     if (r.drop_percent < min || r.price_eur < minPrice || r.savings_eur < minSaving ||
         (section && r.section_id !== section)) return false;
-    return !q || [r.title, r.asin, r.category, r.section_name]
-      .some((v) => String(v || "").toLowerCase().includes(q));
+    if (!q) return true;
+    const hay = [r.title, r.asin, r.category, r.section_name, r.savings_eur, r.drop_percent]
+      .map((v) => String(v ?? "")).join(" ").toLowerCase();
+    if (hay.includes(q)) return true;
+    const euroQuery = q.match(/€?\s*(\d+(?:\.\d+)?)/);
+    if (euroQuery && Number(r.savings_eur) >= Number(euroQuery[1])) return true;
+    const pctQuery = q.match(/(\d+(?:\.\d+)?)\s*%/);
+    if (pctQuery && Number(r.drop_percent) >= Number(pctQuery[1])) return true;
+    return false;
   });
   if (sort === "savings") {
     selected.sort((a, b) => b.savings_eur - a.savings_eur || b.drop_percent - a.drop_percent);
+  } else if (sort === "both") {
+    selected.sort((a, b) => b.savings_eur - a.savings_eur || b.drop_percent - a.drop_percent || String(b.found_at || "").localeCompare(String(a.found_at || "")));
   } else if (sort === "recent") {
     selected.sort((a, b) => String(b.found_at || "").localeCompare(String(a.found_at || "")));
   } else {
@@ -233,7 +244,7 @@ function renderGeneralDrops(deals) {
 }
 
 function setupGeneralDropControls() {
-  for (const id of ["drop-min", "drop-min-price", "drop-min-saving", "drop-section", "drop-sort", "drop-search"]) {
+  for (const id of ["drop-min", "drop-min-price", "drop-min-saving", "drop-section", "drop-sort", "drop-search", "drop-brands-only"]) {
     document.getElementById(id)?.addEventListener("input", () => {
       generalDropPage = 0;
       renderGeneralDropsPage();

@@ -592,11 +592,38 @@
       "Tekken",
       "Mortal Kombat"
     ],
-    "excluded_brands": []
+    "excluded_brands": [
+      "Ozeino",
+      "Ukor",
+      "Bengoo",
+      "E-YOOSO",
+      "EasySMX",
+      "Ziumier",
+      "NUBWO",
+      "Nubwo",
+      "ONIKUMA",
+      "Onikuma",
+      "Redragon",
+      "Mars Gaming",
+      "Spirit of Gamer",
+      "Spirit Of Gamer",
+      "Subsonic",
+      "Konix",
+      "Snakebyte",
+      "Meetion",
+      "Fantech",
+      "Delux",
+      "Attack Shark",
+      "GravaStar",
+      "Gravastar",
+      "Darmoshark",
+      "Royal Kludge",
+      "AULA"
+    ]
   },
   "cex_first": {
     "enabled": true,
-    "max_items": 1000,
+    "max_items": 5000,
     "min_cash_eur": 10,
     "searches_per_run": 2,
     "refreshes_per_run": 2,
@@ -635,7 +662,7 @@
     "amazon_proposal_retry_hours": 12,
     "amazon_proposal_min_catalogue_percent": 72,
     "amazon_proposal_min_display_percent": 40,
-    "max_mappings": 1000,
+    "max_mappings": 5000,
     "priority_cash_eur": 150
   }
 }
