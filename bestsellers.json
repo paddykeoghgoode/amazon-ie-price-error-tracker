@@ -662,6 +662,7 @@
     "amazon_proposal_retry_hours": 12,
     "amazon_proposal_min_catalogue_percent": 72,
     "amazon_proposal_min_display_percent": 40,
+    "amazon_proposal_price_checks_per_run": 12,
     "max_mappings": 5000,
     "priority_cash_eur": 150
   }
