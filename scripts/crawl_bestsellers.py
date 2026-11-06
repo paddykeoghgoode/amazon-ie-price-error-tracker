@@ -42,6 +42,7 @@ from app.services.cex_targets import (
     discover_targets, attach_target_quotes, target_funnel, merge_user_links, apply_user_links,
     import_target_seed, refresh_proposal_amazon_prices, sanitize_proposed_links,
 )
+from app.services.cex_retail_compare import refresh_cex_retail_compares
 from app.services.monitor import BROWSER_HEADERS
 from app.services.catalogue import (
     make_section_catalogue, select_check_batch, apply_batch_results,
@@ -204,6 +205,10 @@ async def crawl_section(
                     limit=target_options.amazon_proposal_price_checks_per_run,
                 )
                 amazon_discovery_stats = {**amazon_discovery_stats, **proposal_prices}
+                retail_stats = await refresh_cex_retail_compares(
+                    targets, config, client, max_requests=target_options.retail_checks_per_run,
+                )
+                amazon_discovery_stats = {**amazon_discovery_stats, "retail": retail_stats}
                 by_asin = {r['asin']: r for r in section_catalogue['items']}
                 for row in discovered:
                     if row['asin'] in by_asin:
