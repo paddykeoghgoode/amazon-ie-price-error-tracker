@@ -8,7 +8,20 @@ from app.config import settings
 from app import database as db
 from app.detector.price_error import evaluate_price, should_notify_again
 from app.notifier.telegram import format_price_alert, send_telegram_message, send_whatsapp_message
-from app.scraper.amazon_ie import ProductSnapshot, extract_asin, fetch_product, normalize_product_url
+from app.scraper.amazon_ie import (
+    ProductSnapshot,
+    DEFAULT_HEADERS,
+    extract_asin,
+    failure_reason,
+    fetch_product,
+    normalize_product_url,
+)
+from app.services.amazon_access import (
+    clear_watchlist_amazon_cooldown,
+    start_watchlist_amazon_cooldown,
+    watchlist_amazon_blocked_until,
+    watchlist_amazon_cooling_down,
+)
 from app.services.price_history import observe_price_reference
 from app.services.alert_policy import (
     AlertPolicy, load_alert_policy, materially_cheaper_than_last, qualifies_price_event,
@@ -16,13 +29,13 @@ from app.services.alert_policy import (
 
 logger = logging.getLogger(__name__)
 
-BROWSER_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-    ),
-    "Accept-Language": "en-IE,en;q=0.9",
-}
+BROWSER_HEADERS = DEFAULT_HEADERS
+
+
+@dataclass
+class CheckOutcome:
+    snap: ProductSnapshot | None = None
+    provider_blocked: bool = False
 
 
 @dataclass
@@ -203,7 +216,7 @@ async def notify_alert(alert: DetectedAlert) -> None:
         logger.info("Alert sent for %s", alert.asin)
 
 
-async def check_product(client: httpx.AsyncClient, product: dict) -> ProductSnapshot | None:
+async def check_product(client: httpx.AsyncClient, product: dict) -> CheckOutcome:
     product_id = int(product["id"])
     url = product["url"]
     try:
@@ -211,8 +224,9 @@ async def check_product(client: httpx.AsyncClient, product: dict) -> ProductSnap
     except Exception as exc:
         logger.warning("Scrape failed for %s: %s", url, exc)
         db.record_price_check(product_id, None, None, None, raw_note=str(exc))
-        return
+        return CheckOutcome(provider_blocked=failure_reason(exc) == "provider_blocked")
 
+    clear_watchlist_amazon_cooldown()
     alert = record_and_detect(
         product_id, snap, known_title=product.get("title"),
         alert_policy=load_alert_policy(),
@@ -220,20 +234,28 @@ async def check_product(client: httpx.AsyncClient, product: dict) -> ProductSnap
     )
     if alert:
         await notify_alert(alert)
-    return snap
+    return CheckOutcome(snap=snap)
 
 
 async def run_once() -> dict[str, dict]:
+    if watchlist_amazon_cooling_down():
+        until = watchlist_amazon_blocked_until()
+        logger.info("Skipping Amazon watchlist fetches until %s", until.isoformat() if until else "?")
+        return {}
     async with httpx.AsyncClient(headers=BROWSER_HEADERS, timeout=30.0) as client:
         products = db.list_products(enabled_only=True)
         metadata: dict[str, dict] = {}
         for product in products:
-            snap = await check_product(client, product)
-            if snap is not None:
+            outcome = await check_product(client, product)
+            if outcome.snap is not None:
                 metadata[product["asin"]] = {
-                    "model_number": snap.model_number,
-                    "barcode": snap.barcode,
+                    "model_number": outcome.snap.model_number,
+                    "barcode": outcome.snap.barcode,
                 }
+            if outcome.provider_blocked:
+                start_watchlist_amazon_cooldown()
+                logger.warning("Amazon blocked watchlist fetch; cooling down for 30 minutes")
+                break
             await asyncio.sleep(settings.request_delay_seconds)
         return metadata
 

@@ -88,6 +88,11 @@ def set_meta(key: str, value: str) -> None:
         )
 
 
+def clear_meta(key: str) -> None:
+    with _connect() as conn:
+        conn.execute("DELETE FROM meta WHERE key = ?", (key,))
+
+
 def alerts_since(since_iso: str) -> int:
     with _connect() as conn:
         row = conn.execute("SELECT COUNT(*) FROM alerts WHERE created_at >= ?", (since_iso,)).fetchone()
@@ -247,6 +252,20 @@ def latest_price_check(product_id: int) -> dict | None:
             """
             SELECT * FROM price_checks
             WHERE product_id = ?
+            ORDER BY checked_at DESC
+            LIMIT 1
+            """,
+            (product_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def latest_successful_price_check(product_id: int) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT * FROM price_checks
+            WHERE product_id = ? AND price_eur IS NOT NULL
             ORDER BY checked_at DESC
             LIMIT 1
             """,

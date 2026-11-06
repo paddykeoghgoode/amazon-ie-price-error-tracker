@@ -98,6 +98,7 @@ td a { font-weight: 600; }
 .badge.error, .badge.failed { color: var(--danger); background: var(--danger-surface); }
 .badge.ok { color: var(--ok); background: var(--ok-surface); }
 .badge.fetch, .badge.running { color: var(--warning); background: var(--warning-surface); }
+.badge.cooldown { color: var(--muted); background: var(--surface-2); }
 .badge.queued { color: var(--muted); background: var(--surface-raised); }
 .deep-tier { margin-bottom: var(--space-lg); }
 .deep-tier h3 { margin-bottom: var(--space-sm); }
