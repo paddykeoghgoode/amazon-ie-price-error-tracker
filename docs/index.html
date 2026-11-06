@@ -9,6 +9,7 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="style.css" />
   <script src="theme.js"></script>
+  <script src="table-sort.js"></script>
 </head>
 <body>
   <header>
@@ -75,7 +76,16 @@
   <section class="card coverage-section">
     <h2>Scan coverage by section</h2>
     <p class="hint">Each block publishes independently. Times are Ireland time. Seller verification is disabled; Amazon prices are observed from bestseller pages. CeX work is bounded and cached.</p>
-    <div class="table-wrap"><table id="section-table" hidden><thead><tr><th>Section</th><th>Last scanned</th><th>Status</th><th>Items</th><th>CeX queue checked</th><th>CeX live / cached</th><th>Amazon drops</th><th>Finds</th></tr></thead><tbody id="section-body"></tbody></table></div>
+    <div class="table-wrap"><table id="section-table" class="sortable-table" hidden><thead><tr>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="section_name">Section</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="generated_at">Last scanned</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="scan_status">Status</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="items_seen">Items</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="cex_checked">CeX queue checked</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="cex_live">CeX live / cached</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="drops_count">Amazon drops</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="finds">Finds</button></th>
+          </tr></thead><tbody id="section-body"></tbody></table></div>
     <p id="section-empty" class="empty">No section scans published yet.</p>
   </section>
   <section class="card research-section">
@@ -86,14 +96,14 @@
     <ul id="deals-alerts" class="alerts" hidden></ul>
     <p id="research-log-empty" class="empty" hidden>No prioritised findings. Include unrecognised brands to review other observations.</p>
     <div class="table-wrap">
-      <table id="deals-table" hidden>
+      <table id="deals-table" class="sortable-table" hidden>
         <thead>
           <tr>
-            <th>Product</th>
-            <th>Now</th>
-            <th>Usual</th>
-            <th>Drop</th>
-            <th>Found</th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="title">Product</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="price_eur">Now</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="median_eur">Usual</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="drop_percent">Drop</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="found_at">Found</button></th>
           </tr>
         </thead>
         <tbody id="deals-body"></tbody>
@@ -112,14 +122,14 @@
     <h2>High-ticket &amp; rapid drops</h2>
     <p class="hint">Research feed for observed expensive/rapid discounts. Telegram uses stricter high-value and saving requirements than this table. Seller/checkout price not verified.</p>
     <div class="table-wrap">
-      <table id="premium-table" hidden>
+      <table id="premium-table" class="sortable-table" hidden>
         <thead>
           <tr>
-            <th>Product</th>
-            <th>Now</th>
-            <th>Reference</th>
-            <th>Drop</th>
-            <th>Kind</th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="title">Product</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="price_eur">Now</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="reference_eur">Reference</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="drop_percent">Drop</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="drop_kind">Kind</button></th>
           </tr>
         </thead>
         <tbody id="premium-body"></tbody>
@@ -191,7 +201,7 @@
     </div>
     <p id="general-drops-summary" class="hint" role="status">Loading price drop history…</p>
     <div class="table-wrap">
-      <table id="general-drops-table" hidden>
+      <table id="general-drops-table" class="sortable-table" hidden>
         <thead>
           <tr>
             <th scope="col"><button type="button" class="th-sort" data-sort-key="title">Product</button></th>
@@ -226,8 +236,15 @@
       <p class="hint">Exact Amazon-to-CeX matches, watched before a sale appears. The ~1,000 CeX rows are catalogue trade-in quotes; most will stay unlinked until the same product is found on Amazon.ie with matching model/EAN. Buy ceilings include the cash payout buffer, costs and your alert margin. Checks rotate within the existing twelve-page fast scan.</p>
       <p id="cex-target-summary" role="status">Waiting for the first CeX target scan to publish.</p>
       <p id="cex-target-diagnostics" class="hint"></p>
-      <div class="table-wrap"><table id="cex-target-table" hidden>
-        <thead><tr><th>Product / CeX variant</th><th>Amazon</th><th>Buy at or below</th><th>Buffered cash margin</th><th>Last checked</th><th>Result</th></tr></thead>
+      <div class="table-wrap"><table id="cex-target-table" class="sortable-table" hidden>
+        <thead><tr>
+          <th scope="col"><button type="button" class="th-sort" data-sort-key="title">Product / CeX variant</button></th>
+          <th scope="col"><button type="button" class="th-sort" data-sort-key="price_eur">Amazon</button></th>
+          <th scope="col"><button type="button" class="th-sort" data-sort-key="cex_max_buy_eur">Buy at or below</button></th>
+          <th scope="col"><button type="button" class="th-sort" data-sort-key="cex_cash_profit_eur">Buffered cash margin</button></th>
+          <th scope="col"><button type="button" class="th-sort" data-sort-key="checked_at">Last checked</button></th>
+          <th scope="col"><button type="button" class="th-sort" data-sort-key="result_label">Result</button></th>
+        </tr></thead>
         <tbody id="cex-target-body"></tbody>
       </table></div>
     </section>
@@ -235,14 +252,14 @@
     <h2>CeX cash trade-in</h2>
     <p id="cex-summary" class="hint">Estimates net profit from CeX cash trade-in after configured costs and payout haircut. Verify the exact model, grade, checkout cost and quote.</p>
     <div class="table-wrap">
-      <table id="cex-table" hidden>
+      <table id="cex-table" class="sortable-table" hidden>
         <thead>
           <tr>
-            <th>Product</th>
-            <th>Amazon</th>
-            <th>CeX cash</th>
-            <th>Est. net profit / Max buy</th>
-            <th>Drop</th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="title">Product</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="price_eur">Amazon</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="cex_cash_eur">CeX cash</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="cex_cash_profit_eur">Est. net profit / Max buy</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="drop_percent">Drop</button></th>
           </tr>
         </thead>
         <tbody id="cex-body"></tbody>
@@ -250,13 +267,13 @@
     </div>
     <p id="cex-empty" class="empty">No CeX cash flips met your profit margin on sale items this crawl.</p>
     <div class="table-wrap">
-      <table id="cex-near-table" hidden>
+      <table id="cex-near-table" class="sortable-table" hidden>
         <thead>
           <tr>
-            <th>Close matches (below your margin)</th>
-            <th>Amazon</th>
-            <th>CeX cash</th>
-            <th>Est. net profit</th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="title">Close matches (below your margin)</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="price_eur">Amazon</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="cex_cash_eur">CeX cash</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="cex_cash_profit_eur">Est. net profit</button></th>
           </tr>
         </thead>
         <tbody id="cex-near-body"></tbody>
@@ -269,14 +286,14 @@
       Regular Amazon prices compared with CeX cash trade-in. Net estimates subtract configurable costs and a payout buffer.
     </p>
     <div class="table-wrap">
-      <table id="cex-arb-table" hidden>
+      <table id="cex-arb-table" class="sortable-table" hidden>
         <thead>
           <tr>
-            <th>Product</th>
-            <th>Amazon</th>
-            <th>CeX cash</th>
-            <th>Est. net profit</th>
-            <th>CeX retail</th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="title">Product</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="price_eur">Amazon</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="cex_cash_eur">CeX cash</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="cex_cash_profit_eur">Est. net profit</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="cex_retail_eur">CeX retail</button></th>
           </tr>
         </thead>
         <tbody id="cex-arb-body"></tbody>
@@ -284,13 +301,13 @@
     </div>
     <p id="cex-arb-empty" class="empty">No regular-price arbitrage met your margin this crawl.</p>
     <div class="table-wrap">
-      <table id="cex-arb-near-table" hidden>
+      <table id="cex-arb-near-table" class="sortable-table" hidden>
         <thead>
           <tr>
-            <th>Close matches (below your margin)</th>
-            <th>Amazon</th>
-            <th>CeX cash</th>
-            <th>Est. net profit</th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="title">Close matches (below your margin)</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="price_eur">Amazon</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="cex_cash_eur">CeX cash</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="cex_cash_profit_eur">Est. net profit</button></th>
           </tr>
         </thead>
         <tbody id="cex-arb-near-body"></tbody>
@@ -322,8 +339,15 @@
     </div>
     <p id="catalogue-info" class="hint" role="status">Click Browse listings to load the full current inventory.</p>
     <div class="table-wrap">
-      <table id="catalogue-table" hidden>
-        <thead><tr><th>Amazon listing</th><th>Section</th><th>Amazon price</th><th>Seller check</th><th>CeX research</th><th>Last CeX research</th></tr></thead>
+      <table id="catalogue-table" class="sortable-table" hidden>
+        <thead><tr>
+          <th scope="col"><button type="button" class="th-sort" data-sort-key="title">Amazon listing</button></th>
+          <th scope="col"><button type="button" class="th-sort" data-sort-key="section_name">Section</button></th>
+          <th scope="col"><button type="button" class="th-sort" data-sort-key="price_eur">Amazon price</button></th>
+          <th scope="col"><button type="button" class="th-sort" data-sort-key="seller">Seller check</button></th>
+          <th scope="col"><button type="button" class="th-sort" data-sort-key="cex_status">CeX research</button></th>
+          <th scope="col"><button type="button" class="th-sort" data-sort-key="last_checked_at">Last CeX research</button></th>
+        </tr></thead>
         <tbody id="catalogue-body"></tbody>
       </table>
     </div>
@@ -374,8 +398,13 @@ https://www.harveynorman.ie/..." form="add-form"></textarea>
     <p class="hint">Open GitHub issues are processed automatically. If a short link cannot be resolved, edit the same issue with the full Amazon.ie URL or ASIN; you don’t need to create a second issue.</p>
     <p id="watch-requests-empty" class="empty">No watchlist requests have been processed yet.</p>
     <div class="table-wrap">
-      <table id="watch-requests-table" hidden>
-        <thead><tr><th>Request</th><th>Product</th><th>Processing status</th><th>Last checked</th></tr></thead>
+      <table id="watch-requests-table" class="sortable-table" hidden>
+        <thead><tr>
+          <th scope="col"><button type="button" class="th-sort" data-sort-key="issue_number">Request</button></th>
+          <th scope="col"><button type="button" class="th-sort" data-sort-key="asin">Product</button></th>
+          <th scope="col"><button type="button" class="th-sort" data-sort-key="status">Processing status</button></th>
+          <th scope="col"><button type="button" class="th-sort" data-sort-key="checked_at">Last checked</button></th>
+        </tr></thead>
         <tbody id="watch-requests-body"></tbody>
       </table>
     </div>
@@ -390,14 +419,14 @@ https://www.harveynorman.ie/..." form="add-form"></textarea>
     <h2>Watched products</h2>
     <div id="products-empty" class="empty">Nothing on the watch list yet. Add an Amazon.ie URL above.</div>
     <div class="table-wrap">
-      <table id="products-table" hidden>
+      <table id="products-table" class="sortable-table" hidden>
         <thead>
           <tr>
-            <th>Product</th>
-            <th>Now</th>
-            <th>Was</th>
-            <th>Status</th>
-            <th>Checked</th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="title">Product</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="price_eur">Now</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="list_price_eur">Was</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="status">Status</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="checked_at">Checked</button></th>
           </tr>
         </thead>
         <tbody id="products-body"></tbody>

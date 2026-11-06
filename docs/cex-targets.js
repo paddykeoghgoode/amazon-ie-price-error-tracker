@@ -267,20 +267,41 @@ if (typeof document !== 'undefined') {
     $('target-status').textContent = results[0].status === 'rejected' ? 'Live catalogue unavailable. Showing the dated discovery snapshot where available; mapping and profit are not verified.' : `Published ${TargetPage.date(catalogue.generated_at)}. Link Amazon (Link this match) and Irish shops (Add shop link), export JSON to docs/cex-user-links.json, then scans show Amazon and shop → CeX margins.`;
     let page = 0;
     const pageSize = 50;
+    const TARGET_SCHEMA = {
+      product: { kind: "text", get: ({ group }) => group.label },
+      cash_eur: { kind: "number", get: ({ group }) => activeRow(group).quote.cash_eur },
+      amazon_price: { kind: "number", get: ({ group }) => {
+        const row = activeRow(group);
+        return row.observed?.price_eur ?? row.proposed?.amazon_price_eur;
+      }},
+      retail_net: { kind: "number", get: ({ group }) => activeRow(group).retailCompare?.best_price_net_profit_eur },
+      profit: { kind: "number", get: ({ group }) => {
+        const row = activeRow(group);
+        return row.check?.cex_cash_profit_eur ?? row.proposed?.cex_cash_profit_eur;
+      }},
+      checked_at: { kind: "date", get: ({ group }) => {
+        const row = activeRow(group);
+        return row.check?.checked_at || row.proposed?.amazon_checked_at || row.discovery?.checked_at;
+      }},
+    };
     function render() {
       const visible=groups.filter(g=>{
         const row=activeRow(g);
         const query = $('target-search').value.toLowerCase().trim(), groupCat=$('target-category').value, match=$('target-matching').value;
         return (!query || `${g.label} ${row.quote.box_id}`.toLowerCase().includes(query)) && (!groupCat || row.group===groupCat) && (!match || (match==='mapped' ? !!(row.mapping || row.userMapping) : !(row.mapping || row.userMapping)));
       });
-      page = Math.min(page, Math.max(0, Math.ceil(visible.length/pageSize)-1));
+      const sort = TableSort.getSort('target-table', { key: 'cash_eur', dir: 'desc' });
+      const sorted = TableSort.sortRows(visible.map((group) => ({ group })), sort, TARGET_SCHEMA).map((entry) => entry.group);
+      TableSort.updateHeaders('target-table', sort);
+      page = Math.min(page, Math.max(0, Math.ceil(sorted.length/pageSize)-1));
       const start=page*pageSize;
-      $('target-rows').innerHTML=visible.slice(start,start+pageSize).map(g=>TargetPage.renderRow(activeRow(g), g)).join('');
-      $('target-page').textContent=`Page ${page+1} of ${Math.max(1,Math.ceil(visible.length/pageSize))}`;
-      $('target-prev').disabled=page===0; $('target-next').disabled=start+pageSize>=visible.length;
-      $('target-table').hidden=!visible.length; $('target-empty').hidden=!!visible.length;
-      $('target-result-count').textContent=`${visible.length} matching targets · showing ${visible.length ? start+1 : 0}–${Math.min(start+pageSize,visible.length)} · cash payouts`;
+      $('target-rows').innerHTML=sorted.slice(start,start+pageSize).map(g=>TargetPage.renderRow(activeRow(g), g)).join('');
+      $('target-page').textContent=`Page ${page+1} of ${Math.max(1,Math.ceil(sorted.length/pageSize))}`;
+      $('target-prev').disabled=page===0; $('target-next').disabled=start+pageSize>=sorted.length;
+      $('target-table').hidden=!sorted.length; $('target-empty').hidden=!!sorted.length;
+      $('target-result-count').textContent=`${sorted.length} matching targets · showing ${sorted.length ? start+1 : 0}–${Math.min(start+pageSize,sorted.length)} · cash payouts`;
     }
+    TableSort.bind('target-table', TARGET_SCHEMA, render, { key: 'cash_eur', dir: 'desc' });
     ['target-search','target-category','target-matching'].forEach(id=>$(id).addEventListener('input',()=>{page=0;render();}));
     $('target-prev').addEventListener('click',()=>{page--;render();});
     $('target-next').addEventListener('click',()=>{page++;render();});
@@ -340,8 +361,21 @@ if (typeof document !== 'undefined') {
     });
     render();
     const coffee=TargetPage.coffee(catalogue);
-    $('coffee-table').hidden=!coffee.length; $('coffee-empty').hidden=!!coffee.length;
-    $('coffee-rows').innerHTML=coffee.filter(r=>/^[A-Z0-9]{10}$/.test(r.asin)).map(r=>`<tr><td><a href="https://www.amazon.ie/dp/${r.asin}" target="_blank" rel="noopener">${TargetPage.esc(r.title)}</a></td><td>${TargetPage.money(r.price_eur)}${TargetPage.renderHistory(TargetPage.historyFor(r))}</td><td>${TargetPage.esc(TargetPage.date(r.last_seen_at))}</td></tr>`).join('');
+    const coffeeRows = coffee.filter(r=>/^[A-Z0-9]{10}$/.test(r.asin));
+    const COFFEE_SCHEMA = {
+      title: { kind: 'text', get: (r) => r.title },
+      price_eur: { kind: 'number', get: (r) => r.price_eur },
+      last_seen_at: { kind: 'date', get: (r) => r.last_seen_at },
+    };
+    function renderCoffee() {
+      const sort = TableSort.getSort('coffee-table', { key: 'price_eur', dir: 'desc' });
+      const rows = TableSort.sortRows(coffeeRows, sort, COFFEE_SCHEMA);
+      TableSort.updateHeaders('coffee-table', sort);
+      $('coffee-rows').innerHTML=rows.map(r=>`<tr><td><a href="https://www.amazon.ie/dp/${r.asin}" target="_blank" rel="noopener">${TargetPage.esc(r.title)}</a></td><td>${TargetPage.money(r.price_eur)}${TargetPage.renderHistory(TargetPage.historyFor(r))}</td><td>${TargetPage.esc(TargetPage.date(r.last_seen_at))}</td></tr>`).join('');
+    }
+    $('coffee-table').hidden=!coffeeRows.length; $('coffee-empty').hidden=!!coffeeRows.length;
+    TableSort.bind('coffee-table', COFFEE_SCHEMA, renderCoffee, { key: 'price_eur', dir: 'desc' });
+    renderCoffee();
   }
   load().catch(()=>{ $('target-status').textContent='Could not load target data. Please reload or return to the tracker.'; });
 }
