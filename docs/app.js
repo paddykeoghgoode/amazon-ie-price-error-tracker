@@ -979,7 +979,7 @@ function render(data) {
     const approved = new Set([
       "currys.ie", "smythstoys.com", "harveynorman.ie", "did.ie", "electrocity.ie",
       "petermurphyelectrical.ie", "euronics.ie", "expert.ie", "joyces.ie",
-      "arnotts.ie", "keanscm.ie", "irwinelectrical.ie",
+      "arnotts.ie", "keanscm.ie", "irwinelectrical.ie", "very.ie",
     ]);
     if (links.length > 8) {
       alert("Please add at most 8 direct retailer product links per item.");

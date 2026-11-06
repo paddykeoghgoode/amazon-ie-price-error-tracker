@@ -33,6 +33,7 @@ RETAILERS = {
     "arnotts.ie": "Arnotts",
     "keanscm.ie": "Keans",
     "irwinelectrical.ie": "Irwin Electrical",
+    "very.ie": "Very",
 }
 MAX_LINKS_PER_PRODUCT = 8
 MAX_HTML_BYTES = 1_000_000

@@ -2,6 +2,13 @@
 .target-intro > div { padding:var(--space-lg) var(--space-md); display:flex; flex-direction:column; gap:var(--space-sm); }
 .target-intro > div + div { border-left:1px solid var(--rule); }
 .target-intro span { color:var(--muted); font-size:var(--text-sm); }
+.target-stat-label { cursor:help; border-bottom:1px dotted var(--rule); }
+.target-scan-panel { margin-bottom:var(--space-xl); }
+.target-funnel { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:var(--space-md) var(--space-lg); margin:var(--space-md) 0; }
+.target-funnel dt { color:var(--muted); font-size:var(--text-sm); margin:0; }
+.target-funnel dd { margin:var(--space-xs) 0 0; font-weight:600; font-size:1.1rem; }
+.target-stale { display:inline-block; margin-top:var(--space-xs); padding:.15rem .45rem; border-radius:999px; background:var(--warning-surface); color:var(--warning); font-size:var(--text-sm); font-weight:600; }
+.target-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-md); }
 .target-intro strong { font-size:2.4rem; font-weight:500; }
 .target-heading { display:flex; justify-content:space-between; align-items:start; gap:var(--space-lg); }
 .target-heading .hint { max-width:75ch; }
@@ -19,7 +26,7 @@
 .target-good { color:var(--ok); }
 .target-money { font-weight:600; white-space:nowrap; }
 caption { text-align:left; caption-side:bottom; padding-block:var(--space-sm); }
-@media(max-width:680px) { .target-heading { display:block; } .target-intro { grid-template-columns:1fr; } .target-intro > div { flex-direction:row; justify-content:space-between; align-items:center; padding:var(--space-md) 0; } .target-intro > div + div { border-left:0; border-top:1px solid var(--rule-soft); } .target-intro strong { font-size:1.75rem; } }
+@media(max-width:680px) { .target-heading { display:block; } .target-intro { grid-template-columns:1fr; } .target-intro > div { flex-direction:column; align-items:flex-start; gap:var(--space-xs); padding:var(--space-md) 0; } .target-intro > div + div { border-left:0; border-top:1px solid var(--rule-soft); } .target-intro strong { font-size:1.75rem; } .target-stat-label { font-size:var(--text-sm); line-height:1.35; } }
 
 .amazon-action { display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:.6rem .8rem; background:var(--accent); color:var(--accent-ink); border-radius:var(--radius); font-weight:600; text-decoration:none; }
 .amazon-action:hover { color:var(--accent-ink); filter:brightness(1.08); }

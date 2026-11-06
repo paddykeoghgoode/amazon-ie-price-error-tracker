@@ -4,7 +4,7 @@ const TargetPage = (() => {
   const money = n => finite(n) ? new Intl.NumberFormat('en-IE', {style:'currency', currency:'EUR'}).format(Number(n)) : '—';
   const date = s => s && Number.isFinite(Date.parse(s)) ? new Intl.DateTimeFormat('en-IE', {dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Dublin'}).format(new Date(s)) : 'Not checked';
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const RETAIL_HOSTS = new Set(['currys.ie','smythstoys.com','harveynorman.ie','did.ie','electrocity.ie','petermurphyelectrical.ie','euronics.ie','expert.ie','joyces.ie','arnotts.ie','keanscm.ie','irwinelectrical.ie']);
+  const RETAIL_HOSTS = new Set(['currys.ie','smythstoys.com','harveynorman.ie','did.ie','electrocity.ie','petermurphyelectrical.ie','euronics.ie','expert.ie','joyces.ie','arnotts.ie','keanscm.ie','irwinelectrical.ie','very.ie']);
   function trustedRetailUrl(raw) {
     try {
       const u = new URL(String(raw || '').trim());
@@ -191,7 +191,7 @@ const TargetPage = (() => {
     const urls = r.userLink?.retailer_urls || [];
     const addBtn = `<button type="button" class="target-add-retail" data-box="${esc(r.boxId)}">Add shop link</button>`;
     if (!urls.length) {
-      return `${addBtn}<span class="target-meta">Currys, Smyths, Harvey Norman… paste the exact product page URL</span>`;
+      return `${addBtn}<span class="target-meta">Currys, Smyths, Very.ie, Harvey Norman… paste the exact product page URL</span>`;
     }
     const rc = r.retailCompare;
     if (!rc?.offers?.length) {
@@ -212,6 +212,8 @@ const TargetPage = (() => {
   }
   function renderRow(r, group) {
     const {quote:q,mapping:m,check:c,userMapping:u,userLink:ul,proposed:p,candidate:can} = r;
+    const now = Date.now();
+    const staleMs = 24 * 3600000;
     const cex = `https://ie.webuy.com/product-detail?id=${encodeURIComponent(q.box_id)}`;
     const matched = m && asinOk(m.asin);
     const userConfirmed = u && asinOk(u.asin);
@@ -234,7 +236,11 @@ const TargetPage = (() => {
     const observedMeta = matched ? 'mapped product' : userConfirmed ? 'your link'
       : (r.observed?.source === 'listing' || (!p?.amazon_price_eur && r.observed?.source !== 'product_page')) ? 'candidate, unverified'
       : r.compareFresh ? 'suggested match · fresh compare' : 'suggested match · verify variant';
-    return `<tr data-box-id="${esc(r.boxId)}" data-group-key="${esc(group?.key || r.boxId)}"><td><a href="${cex}" target="_blank" rel="noopener">${esc(group?.label || q.box_name)}</a><span class="target-meta">${esc(q.category_name || 'CeX catalogue')} · ${group && group.variants.length > 1 ? `${group.variants.length} CeX listings` : esc(q.box_id)}</span>${variants}</td><td><span class="target-money">${money(q.cash_eur)}</span><span class="target-meta">${r.record.source === 'catalogue_search' ? 'Index estimate' : 'Detail quote'} · ${esc(date(r.record.checked_at))}</span></td><td><a class="amazon-action" href="${amazon}" target="_blank" rel="noopener">${linkLabel}</a><span class="target-meta">${esc(stage)}</span>${pct && !userConfirmed ? `<span class="target-meta">${esc(pct)} (estimate only)</span>` : ''}${actions}${r.observed ? `<span class="target-money">${money(r.observed.price_eur)}</span><span class="target-meta">Last observed ${esc(date(r.observed.observed_at))} · ${observedMeta}</span>` : '<span class="target-meta">Amazon price pending · scans run every ~10 min</span>'}${renderHistory(r.history || [])}</td><td>${renderRetailCell(r)}</td><td class="${r.profitable ? 'target-good' : ''}">${r.fresh ? money(c.cex_cash_profit_eur) : r.compareFresh && finite(c?.cex_cash_profit_eur) ? money(c.cex_cash_profit_eur) : 'Not verified'}<span class="target-meta">${r.profitable ? 'Meets alert margin' : r.compareFresh ? 'Estimated margin (link not confirmed)' : r.fresh ? 'Below alert margin' : 'Awaiting Amazon product-page read'}</span></td><td>${esc(date(c?.checked_at || p?.amazon_checked_at || r.discovery?.checked_at || p?.proposed_at || r.retailCompare?.checked_at))}<span class="target-meta">${esc(c?.status?.replaceAll('_',' ') || p?.amazon_read_status?.replaceAll('_',' ') || r.discovery?.status?.replaceAll('_',' ') || (p ? 'proposal saved' : r.retailCompare?.matched_count ? 'shop prices checked' : 'Amazon not checked'))}</span></td></tr>`;
+    const obsAt = r.observed?.observed_at || c?.checked_at;
+    const obsAge = obsAt ? now - Date.parse(obsAt) : NaN;
+    const staleBadge = Number.isFinite(obsAge) && obsAge > staleMs
+      ? '<span class="target-stale">Stale price · re-check Amazon</span>' : '';
+    return `<tr data-box-id="${esc(r.boxId)}" data-group-key="${esc(group?.key || r.boxId)}"><td><a href="${cex}" target="_blank" rel="noopener">${esc(group?.label || q.box_name)}</a><span class="target-meta">${esc(q.category_name || 'CeX catalogue')} · ${group && group.variants.length > 1 ? `${group.variants.length} CeX listings` : esc(q.box_id)}</span>${variants}</td><td><span class="target-money">${money(q.cash_eur)}</span><span class="target-meta">${r.record.source === 'catalogue_search' ? 'Index estimate' : 'Detail quote'} · ${esc(date(r.record.checked_at))}</span></td><td><a class="amazon-action" href="${amazon}" target="_blank" rel="noopener">${linkLabel}</a><span class="target-meta">${esc(stage)}</span>${pct && !userConfirmed ? `<span class="target-meta">${esc(pct)} (estimate only)</span>` : ''}${actions}${r.observed ? `<span class="target-money">${money(r.observed.price_eur)}</span><span class="target-meta">Last observed ${esc(date(r.observed.observed_at))} · ${observedMeta}</span>${staleBadge}` : '<span class="target-meta">Amazon price pending · scans run every ~10 min</span>'}${renderHistory(r.history || [])}</td><td>${renderRetailCell(r)}</td><td class="${r.profitable ? 'target-good' : ''}">${r.fresh ? money(c.cex_cash_profit_eur) : r.compareFresh && finite(c?.cex_cash_profit_eur) ? money(c.cex_cash_profit_eur) : 'Not verified'}<span class="target-meta">${r.profitable ? 'Meets alert margin' : r.compareFresh ? 'Estimated margin (link not confirmed)' : r.fresh ? 'Below alert margin' : 'Awaiting Amazon product-page read'}</span></td><td>${esc(date(c?.checked_at || p?.amazon_checked_at || r.discovery?.checked_at || p?.proposed_at || r.retailCompare?.checked_at))}<span class="target-meta">${esc(c?.status?.replaceAll('_',' ') || p?.amazon_read_status?.replaceAll('_',' ') || r.discovery?.status?.replaceAll('_',' ') || (p ? 'proposal saved' : r.retailCompare?.matched_count ? 'shop prices checked' : 'Amazon not checked'))}</span></td></tr>`;
   }
   return {rows, groupTargets, coffee, renderRow, renderRetailCell, fmtDelta, trustedRetailUrl, category, date, money, esc, historyFor, renderHistory,
     readLocalUserLinks, exportUserLinksPayload, USER_LINKS_STORAGE, REJECTED_STORAGE, asinOk, CEX_TARGET_LIMIT,
@@ -248,12 +254,20 @@ if (typeof document !== 'undefined') {
     catch (error) { if (optional) return {}; throw error; }
   }
   async function load() {
-    const results = await Promise.allSettled([read('catalogue.json'),read('hotlist.json',true),read('cex-targets-seed.json',true),read('cex-user-links.json',true)]);
+    const results = await Promise.allSettled([
+      read('catalogue.json'),
+      read('hotlist.json', true),
+      read('cex-targets-seed.json', true),
+      read('cex-user-links.json', true),
+      read('data.json', true),
+    ]);
     const catalogue = results[0].status === 'fulfilled' ? results[0].value : {};
     const hotlist = results[1].status === 'fulfilled' ? results[1].value : {};
     const seed = results[2].status === 'fulfilled' ? results[2].value : {};
     const userFile = results[3].status === 'fulfilled' ? (results[3].value.links || {}) : {};
-    let flatRows = TargetPage.rows(catalogue,hotlist,seed,Date.now(),userFile);
+    const watchData = results[4].status === 'fulfilled' ? results[4].value : {};
+    let localLinks = TargetPage.readLocalUserLinks();
+    let flatRows = TargetPage.rows(catalogue, hotlist, seed, Date.now(), userFile, localLinks);
     let groups = TargetPage.groupTargets(flatRows);
     const variantPick = new Map();
     const activeRow = (group) => {
@@ -264,9 +278,62 @@ if (typeof document !== 'undefined') {
     $('mapped-count').textContent = flatRows.filter(r=>r.mapping || r.userMapping).length;
     $('profitable-count').textContent = flatRows.filter(r=>r.profitable).length;
     $('retail-flip-count').textContent = flatRows.filter(r => (r.retailCompare?.best_price_net_profit_eur ?? -1) >= 0 && (r.retailCompare?.matched_count || 0) > 0).length;
-    $('target-status').textContent = results[0].status === 'rejected' ? 'Live catalogue unavailable. Showing the dated discovery snapshot where available; mapping and profit are not verified.' : `Published ${TargetPage.date(catalogue.generated_at)}. Link Amazon (Link this match) and Irish shops (Add shop link), export JSON to docs/cex-user-links.json, then scans show Amazon and shop → CeX margins.`;
+    const ct = catalogue.cex_targets || {};
+    const funnel = hotlist.funnel || {};
+    const blockedUntil = watchData.amazon_blocked_until || hotlist.blocked_until;
+    const cooldownEl = $('target-amazon-cooldown');
+    if (cooldownEl) {
+      const untilMs = blockedUntil ? Date.parse(blockedUntil) : NaN;
+      if (Number.isFinite(untilMs) && untilMs > Date.now()) {
+        cooldownEl.hidden = false;
+        cooldownEl.textContent = `Amazon automated access is paused until ${TargetPage.date(blockedUntil)} (challenge page or rate limit). CeX→Amazon mapping and fresh prices resume after that. Watchlist uses the same cooldown.`;
+      } else {
+        cooldownEl.hidden = true;
+        cooldownEl.textContent = '';
+      }
+    }
+    const funnelEl = $('target-funnel');
+    if (funnelEl) {
+      const savedMaps = Number(funnel.saved_mappings ?? ct.saved_mappings ?? Object.keys(ct.mappings || {}).length);
+      const items = [
+        ['Catalogue CeX SKUs (live scan)', funnel.catalogue_skus ?? Object.keys(ct.items || {}).length],
+        ['Saved exact Amazon maps', savedMaps],
+        ['Alert-ready maps', funnel.alert_ready_mappings ?? ct.alert_ready_mappings ?? '—'],
+        ['Fresh CeX quotes', funnel.fresh_quotes ?? '—'],
+        ['Last fast scan · Amazon pages tried', funnel.amazon_attempted ?? hotlist.checked_this_run ?? '—'],
+        ['Last fast scan · prices read', funnel.price_read ?? hotlist.price_read ?? '—'],
+        ['Identity mismatches (last scan)', funnel.identity_mismatch ?? '—'],
+        ['Qualifying margins (last scan)', funnel.profitable ?? '—'],
+        ['Shop link rows (browser + committed file)', flatRows.filter(r => (r.userLink?.retailer_urls || []).length).length],
+        ['Hotlist scan status', hotlist.scan_status || '—'],
+      ];
+      funnelEl.innerHTML = items.map(([k, v]) => `<div><dt>${TargetPage.esc(k)}</dt><dd>${TargetPage.esc(String(v))}</dd></div>`).join('');
+    }
+    $('target-status').textContent = results[0].status === 'rejected'
+      ? 'Live catalogue unavailable. Showing the dated discovery snapshot where available; mapping and profit are not verified.'
+      : `Published ${TargetPage.date(catalogue.generated_at)} · ${flatRows.filter(r => r.mapping || r.userMapping).length} exact maps · ${flatRows.filter(r => (r.userLink?.retailer_urls || []).length).length} rows with shop URLs`;
     let page = 0;
     const pageSize = 50;
+    function rowPassesFilters(group) {
+      const row = activeRow(group);
+      const query = $('target-search').value.toLowerCase().trim();
+      const groupCat = $('target-category').value;
+      const match = $('target-matching').value;
+      if (query && !`${group.label} ${row.quote.box_id}`.toLowerCase().includes(query)) return false;
+      if (groupCat && row.group !== groupCat) return false;
+      if (match === 'mapped' && !(row.mapping || row.userMapping)) return false;
+      if (match === 'unmapped' && (row.mapping || row.userMapping)) return false;
+      if (match === 'suggested') {
+        if (row.mapping || row.userMapping) return false;
+        const asin = row.candidate?.asin || row.proposed?.asin;
+        if (!TargetPage.asinOk(asin)) return false;
+      }
+      if (match === 'shop_links') {
+        const urls = row.userLink?.retailer_urls || [];
+        if (!urls.length) return false;
+      }
+      return true;
+    }
     const TARGET_SCHEMA = {
       product: { kind: "text", get: ({ group }) => group.label },
       cash_eur: { kind: "number", get: ({ group }) => activeRow(group).quote.cash_eur },
@@ -284,25 +351,37 @@ if (typeof document !== 'undefined') {
         return row.check?.checked_at || row.proposed?.amazon_checked_at || row.discovery?.checked_at;
       }},
     };
+    const LIST_SORT_PRESETS = {
+      default: { key: 'cash_eur', dir: 'desc' },
+      retail_net: { key: 'retail_net', dir: 'desc' },
+      cash: { key: 'cash_eur', dir: 'desc' },
+      amazon_profit: { key: 'profit', dir: 'desc' },
+    };
+    function applyListSortPreset() {
+      const mode = $('target-list-sort')?.value || 'default';
+      TableSort.setSort('target-table', LIST_SORT_PRESETS[mode] || LIST_SORT_PRESETS.default);
+    }
     function render() {
-      const visible=groups.filter(g=>{
-        const row=activeRow(g);
-        const query = $('target-search').value.toLowerCase().trim(), groupCat=$('target-category').value, match=$('target-matching').value;
-        return (!query || `${g.label} ${row.quote.box_id}`.toLowerCase().includes(query)) && (!groupCat || row.group===groupCat) && (!match || (match==='mapped' ? !!(row.mapping || row.userMapping) : !(row.mapping || row.userMapping)));
-      });
+      const filtered = groups.filter((g) => rowPassesFilters(g));
       const sort = TableSort.getSort('target-table', { key: 'cash_eur', dir: 'desc' });
-      const sorted = TableSort.sortRows(visible.map((group) => ({ group })), sort, TARGET_SCHEMA).map((entry) => entry.group);
+      const sorted = TableSort.sortRows(filtered.map((group) => ({ group })), sort, TARGET_SCHEMA).map((entry) => entry.group);
       TableSort.updateHeaders('target-table', sort);
-      page = Math.min(page, Math.max(0, Math.ceil(sorted.length/pageSize)-1));
-      const start=page*pageSize;
-      $('target-rows').innerHTML=sorted.slice(start,start+pageSize).map(g=>TargetPage.renderRow(activeRow(g), g)).join('');
-      $('target-page').textContent=`Page ${page+1} of ${Math.max(1,Math.ceil(sorted.length/pageSize))}`;
-      $('target-prev').disabled=page===0; $('target-next').disabled=start+pageSize>=sorted.length;
-      $('target-table').hidden=!sorted.length; $('target-empty').hidden=!!sorted.length;
-      $('target-result-count').textContent=`${sorted.length} matching targets · showing ${sorted.length ? start+1 : 0}–${Math.min(start+pageSize,sorted.length)} · cash payouts`;
+      page = Math.min(page, Math.max(0, Math.ceil(sorted.length / pageSize) - 1));
+      const start = page * pageSize;
+      $('target-rows').innerHTML = sorted.slice(start, start + pageSize).map((g) => TargetPage.renderRow(activeRow(g), g)).join('');
+      $('target-page').textContent = `Page ${page + 1} of ${Math.max(1, Math.ceil(sorted.length / pageSize))}`;
+      $('target-prev').disabled = page === 0;
+      $('target-next').disabled = start + pageSize >= sorted.length;
+      $('target-table').hidden = !sorted.length;
+      $('target-empty').hidden = !!sorted.length;
+      $('target-result-count').textContent = `${sorted.length} matching targets · showing ${sorted.length ? start + 1 : 0}–${Math.min(start + pageSize, sorted.length)} · cash payouts`;
     }
     TableSort.bind('target-table', TARGET_SCHEMA, render, { key: 'cash_eur', dir: 'desc' });
-    ['target-search','target-category','target-matching'].forEach(id=>$(id).addEventListener('input',()=>{page=0;render();}));
+    ['target-search', 'target-category', 'target-matching', 'target-list-sort'].forEach((id) => $(id).addEventListener('input', () => {
+      page = 0;
+      if (id === 'target-list-sort') applyListSortPreset();
+      render();
+    }));
     $('target-prev').addEventListener('click',()=>{page--;render();});
     $('target-next').addEventListener('click',()=>{page++;render();});
     $('target-rows').addEventListener('click', event => {
@@ -317,7 +396,7 @@ if (typeof document !== 'undefined') {
       const addRetail = event.target.closest('.target-add-retail');
       if (addRetail) {
         const boxId = addRetail.dataset.box;
-        const url = window.prompt('Paste HTTPS product page URL (Currys, Smyths, Harvey Norman, …):');
+        const url = window.prompt('Paste HTTPS product page URL (Currys, Smyths, Very.ie, Harvey Norman, …):');
         if (!url || !TargetPage.trustedRetailUrl(url)) {
           if (url) window.alert('That URL is not from an approved Irish retailer host, or is not HTTPS.');
           return;
@@ -329,6 +408,7 @@ if (typeof document !== 'undefined') {
         localStorage.setItem(TargetPage.USER_LINKS_STORAGE, JSON.stringify(links));
         flatRows = TargetPage.rows(catalogue, hotlist, seed, Date.now(), userFile, links);
         groups = TargetPage.groupTargets(flatRows);
+        localLinks = links;
         render();
         return;
       }
@@ -338,7 +418,7 @@ if (typeof document !== 'undefined') {
         const rejected = JSON.parse(localStorage.getItem(TargetPage.REJECTED_STORAGE) || '{}');
         rejected[boxId] = true;
         localStorage.setItem(TargetPage.REJECTED_STORAGE, JSON.stringify(rejected));
-        flatRows = TargetPage.rows(catalogue, hotlist, seed, Date.now(), userFile);
+        flatRows = TargetPage.rows(catalogue, hotlist, seed, Date.now(), userFile, localLinks);
         groups = TargetPage.groupTargets(flatRows);
         render();
         return;
