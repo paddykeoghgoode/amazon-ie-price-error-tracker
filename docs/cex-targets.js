@@ -334,32 +334,54 @@ if (typeof document !== 'undefined') {
       }
       return true;
     }
-    function sortVisible(list) {
+    const TARGET_SCHEMA = {
+      product: { kind: "text", get: ({ group }) => group.label },
+      cash_eur: { kind: "number", get: ({ group }) => activeRow(group).quote.cash_eur },
+      amazon_price: { kind: "number", get: ({ group }) => {
+        const row = activeRow(group);
+        return row.observed?.price_eur ?? row.proposed?.amazon_price_eur;
+      }},
+      retail_net: { kind: "number", get: ({ group }) => activeRow(group).retailCompare?.best_price_net_profit_eur },
+      profit: { kind: "number", get: ({ group }) => {
+        const row = activeRow(group);
+        return row.check?.cex_cash_profit_eur ?? row.proposed?.cex_cash_profit_eur;
+      }},
+      checked_at: { kind: "date", get: ({ group }) => {
+        const row = activeRow(group);
+        return row.check?.checked_at || row.proposed?.amazon_checked_at || row.discovery?.checked_at;
+      }},
+    };
+    const LIST_SORT_PRESETS = {
+      default: { key: 'cash_eur', dir: 'desc' },
+      retail_net: { key: 'retail_net', dir: 'desc' },
+      cash: { key: 'cash_eur', dir: 'desc' },
+      amazon_profit: { key: 'profit', dir: 'desc' },
+    };
+    function applyListSortPreset() {
       const mode = $('target-list-sort')?.value || 'default';
-      const scored = list.map((group) => ({ group, row: activeRow(group) }));
-      if (mode === 'retail_net') {
-        scored.sort((a, b) => (b.row.retailCompare?.best_price_net_profit_eur ?? -1e9) - (a.row.retailCompare?.best_price_net_profit_eur ?? -1e9));
-      } else if (mode === 'cash') {
-        scored.sort((a, b) => b.row.quote.cash_eur - a.row.quote.cash_eur);
-      } else if (mode === 'amazon_profit') {
-        scored.sort((a, b) => (b.row.check?.cex_cash_profit_eur ?? -1e9) - (a.row.check?.cex_cash_profit_eur ?? -1e9));
-      }
-      return scored.map((entry) => entry.group);
+      TableSort.setSort('target-table', LIST_SORT_PRESETS[mode] || LIST_SORT_PRESETS.default);
     }
     function render() {
       const filtered = groups.filter((g) => rowPassesFilters(g));
-      const visible = sortVisible(filtered);
-      page = Math.min(page, Math.max(0, Math.ceil(visible.length / pageSize) - 1));
+      const sort = TableSort.getSort('target-table', { key: 'cash_eur', dir: 'desc' });
+      const sorted = TableSort.sortRows(filtered.map((group) => ({ group })), sort, TARGET_SCHEMA).map((entry) => entry.group);
+      TableSort.updateHeaders('target-table', sort);
+      page = Math.min(page, Math.max(0, Math.ceil(sorted.length / pageSize) - 1));
       const start = page * pageSize;
-      $('target-rows').innerHTML = visible.slice(start, start + pageSize).map((g) => TargetPage.renderRow(activeRow(g), g)).join('');
-      $('target-page').textContent = `Page ${page + 1} of ${Math.max(1, Math.ceil(visible.length / pageSize))}`;
+      $('target-rows').innerHTML = sorted.slice(start, start + pageSize).map((g) => TargetPage.renderRow(activeRow(g), g)).join('');
+      $('target-page').textContent = `Page ${page + 1} of ${Math.max(1, Math.ceil(sorted.length / pageSize))}`;
       $('target-prev').disabled = page === 0;
-      $('target-next').disabled = start + pageSize >= visible.length;
-      $('target-table').hidden = !visible.length;
-      $('target-empty').hidden = !!visible.length;
-      $('target-result-count').textContent = `${visible.length} matching targets · showing ${visible.length ? start + 1 : 0}–${Math.min(start + pageSize, visible.length)} · cash payouts`;
+      $('target-next').disabled = start + pageSize >= sorted.length;
+      $('target-table').hidden = !sorted.length;
+      $('target-empty').hidden = !!sorted.length;
+      $('target-result-count').textContent = `${sorted.length} matching targets · showing ${sorted.length ? start + 1 : 0}–${Math.min(start + pageSize, sorted.length)} · cash payouts`;
     }
-    ['target-search', 'target-category', 'target-matching', 'target-list-sort'].forEach((id) => $(id).addEventListener('input', () => { page = 0; render(); }));
+    TableSort.bind('target-table', TARGET_SCHEMA, render, { key: 'cash_eur', dir: 'desc' });
+    ['target-search', 'target-category', 'target-matching', 'target-list-sort'].forEach((id) => $(id).addEventListener('input', () => {
+      page = 0;
+      if (id === 'target-list-sort') applyListSortPreset();
+      render();
+    }));
     $('target-prev').addEventListener('click',()=>{page--;render();});
     $('target-next').addEventListener('click',()=>{page++;render();});
     $('target-rows').addEventListener('click', event => {
@@ -419,8 +441,21 @@ if (typeof document !== 'undefined') {
     });
     render();
     const coffee=TargetPage.coffee(catalogue);
-    $('coffee-table').hidden=!coffee.length; $('coffee-empty').hidden=!!coffee.length;
-    $('coffee-rows').innerHTML=coffee.filter(r=>/^[A-Z0-9]{10}$/.test(r.asin)).map(r=>`<tr><td><a href="https://www.amazon.ie/dp/${r.asin}" target="_blank" rel="noopener">${TargetPage.esc(r.title)}</a></td><td>${TargetPage.money(r.price_eur)}${TargetPage.renderHistory(TargetPage.historyFor(r))}</td><td>${TargetPage.esc(TargetPage.date(r.last_seen_at))}</td></tr>`).join('');
+    const coffeeRows = coffee.filter(r=>/^[A-Z0-9]{10}$/.test(r.asin));
+    const COFFEE_SCHEMA = {
+      title: { kind: 'text', get: (r) => r.title },
+      price_eur: { kind: 'number', get: (r) => r.price_eur },
+      last_seen_at: { kind: 'date', get: (r) => r.last_seen_at },
+    };
+    function renderCoffee() {
+      const sort = TableSort.getSort('coffee-table', { key: 'price_eur', dir: 'desc' });
+      const rows = TableSort.sortRows(coffeeRows, sort, COFFEE_SCHEMA);
+      TableSort.updateHeaders('coffee-table', sort);
+      $('coffee-rows').innerHTML=rows.map(r=>`<tr><td><a href="https://www.amazon.ie/dp/${r.asin}" target="_blank" rel="noopener">${TargetPage.esc(r.title)}</a></td><td>${TargetPage.money(r.price_eur)}${TargetPage.renderHistory(TargetPage.historyFor(r))}</td><td>${TargetPage.esc(TargetPage.date(r.last_seen_at))}</td></tr>`).join('');
+    }
+    $('coffee-table').hidden=!coffeeRows.length; $('coffee-empty').hidden=!!coffeeRows.length;
+    TableSort.bind('coffee-table', COFFEE_SCHEMA, renderCoffee, { key: 'price_eur', dir: 'desc' });
+    renderCoffee();
   }
   load().catch(()=>{ $('target-status').textContent='Could not load target data. Please reload or return to the tracker.'; });
 }
