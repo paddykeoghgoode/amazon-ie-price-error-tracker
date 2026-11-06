@@ -12,11 +12,15 @@ html, body { overflow-x: clip; }
 body { max-width: var(--container); margin: 0 auto; padding: var(--space-xl); background: var(--bg); color: var(--text); font-variant-numeric: tabular-nums; }
 header { padding: var(--space-xs) 0 var(--space-lg); }
 .brand-row { display: flex; align-items: center; gap: var(--space-md); flex-wrap: wrap; }
+.header-actions { margin-left: auto; display: inline-flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; }
+.theme-toggle { min-height: 44px; padding: 0 var(--space-md); border: 1px solid var(--rule); border-radius: var(--radius); background: var(--card); color: var(--text); font: inherit; font-size: var(--text-sm); font-weight: 600; cursor: pointer; }
+.theme-toggle:hover { background: var(--surface-hover); }
+.theme-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .brand-icon { display: grid; place-items: center; width: 44px; height: 44px; flex: 0 0 auto; border: 1px solid var(--accent); border-radius: var(--radius); color: var(--accent); font-size: 1.44rem; font-weight: 600; }
 header h1 { font-size: var(--text-display); margin: 0; line-height: 1.1; }
 .brand-accent { color: inherit; }
 .brand-context { color: var(--muted); font-size: var(--text-sm); margin-top: var(--space-xs); }
-.header-action { margin-left: auto; display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--space-md); border: 1px solid var(--rule); border-radius: var(--radius); text-decoration: none; font-size: var(--text-sm); }
+.header-action { display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--space-md); border: 1px solid var(--rule); border-radius: var(--radius); text-decoration: none; font-size: var(--text-sm); }
 header .tagline { margin: var(--space-md) 0; max-width: 75ch; color: var(--text); }
 header > .hint { max-width: 100ch; margin-top: var(--space-sm); }
 .status { padding: var(--space-sm) var(--space-md); background: var(--card); color: var(--text); border: 1px solid var(--rule-soft); border-radius: var(--radius); font-size: var(--text-sm); }
@@ -141,6 +145,7 @@ footer { margin-top: var(--space-xl); padding-top: var(--space-lg); border-top: 
 @media (max-width: 640px) {
   body { padding: var(--space-md); }
   header h1 { font-size: 1.728rem; }
+  .header-actions { margin-left: 0; width: 100%; justify-content: flex-end; }
   .header-action { margin-left: 0; }
   .brand-context { font-size: var(--text-sm); }
   .tab-list { gap: var(--space-lg); }

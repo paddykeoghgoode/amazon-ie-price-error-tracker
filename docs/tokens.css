@@ -49,3 +49,25 @@
   --dur-micro: 120ms;
   --dur-short: 180ms;
 }
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f5f3ee;
+  --card: #ffffff;
+  --surface-raised: #ebe8e0;
+  --surface-hover: #e0ddd4;
+  --text: #171b1d;
+  --muted: #5c6569;
+  --subtle: #7a8488;
+  --accent: #b86b00;
+  --accent-ink: #ffffff;
+  --rule: #c5cbcf;
+  --rule-soft: #ddd9d0;
+  --ok: #0d6b3a;
+  --ok-surface: #e3f3ea;
+  --danger: #b42318;
+  --danger-surface: #fdecea;
+  --warning: #9a6700;
+  --warning-surface: #fff4d6;
+  --focus: #b86b00;
+}
