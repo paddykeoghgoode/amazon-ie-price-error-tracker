@@ -178,6 +178,7 @@
           <option value="percentage">Largest % drop</option>
           <option value="both">€ saving, then % drop</option>
           <option value="recent">Recently found</option>
+          <option value="column" hidden>Column sort</option>
         </select>
       </label>
       <label class="drop-control drop-checkbox">
@@ -193,13 +194,13 @@
       <table id="general-drops-table" hidden>
         <thead>
           <tr>
-            <th>Product</th>
-            <th>Section</th>
-            <th>Historical reference</th>
-            <th>Amazon now</th>
-            <th>Saving</th>
-            <th>Drop</th>
-            <th>Found / last scan</th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="title">Product</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="section">Section</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="reference_eur">Historical reference</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="price_eur">Amazon now</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="savings_eur">Saving</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="drop_percent">Drop</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="found_at">Found / last scan</button></th>
           </tr>
         </thead>
         <tbody id="general-drops-body"></tbody>

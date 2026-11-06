@@ -82,6 +82,41 @@ const GENERAL_DROPS_PER_PAGE = 40;
 let generalDropRows = [];
 let generalDropPage = 0;
 let generalDropCoverage = { total: 0, updated: 0 };
+let generalDropSort = { key: "savings_eur", dir: "desc" };
+
+const GENERAL_DROP_SORT_PRESETS = {
+  savings: { key: "savings_eur", dir: "desc" },
+  percentage: { key: "drop_percent", dir: "desc" },
+  recent: { key: "found_at", dir: "desc" },
+};
+
+function compareGeneralDropRows(a, b, key) {
+  if (key === "title") return String(a.title || a.asin || "").localeCompare(String(b.title || b.asin || ""), "en", { sensitivity: "base" });
+  if (key === "section") return String(a.section_name || a.section_id || "").localeCompare(String(b.section_name || b.section_id || ""), "en", { sensitivity: "base" });
+  if (key === "found_at") return String(a.found_at || a.last_scanned_at || "").localeCompare(String(b.found_at || b.last_scanned_at || ""));
+  return Number(a[key] || 0) - Number(b[key] || 0);
+}
+
+function sortGeneralDropSelection(selected, sortMode) {
+  if (sortMode === "both") {
+    selected.sort((a, b) => b.savings_eur - a.savings_eur || b.drop_percent - a.drop_percent || String(b.found_at || "").localeCompare(String(a.found_at || "")));
+    return;
+  }
+  const preset = GENERAL_DROP_SORT_PRESETS[sortMode];
+  if (preset) generalDropSort = { ...preset };
+  const dir = generalDropSort.dir === "asc" ? 1 : -1;
+  selected.sort((a, b) => {
+    const cmp = compareGeneralDropRows(a, b, generalDropSort.key);
+    return dir * cmp || String(a.asin || "").localeCompare(String(b.asin || ""));
+  });
+}
+
+function updateGeneralDropSortHeaders() {
+  document.querySelectorAll("#general-drops-table .th-sort").forEach((btn) => {
+    const active = btn.dataset.sortKey === generalDropSort.key;
+    btn.setAttribute("aria-sort", active ? (generalDropSort.dir === "asc" ? "ascending" : "descending") : "none");
+  });
+}
 
 function extractGeneralDrops(deals) {
   // Each section publishes independently. Old sections can still display the
@@ -167,15 +202,8 @@ function renderGeneralDropsPage() {
     if (pctQuery && Number(r.drop_percent) >= Number(pctQuery[1])) return true;
     return false;
   });
-  if (sort === "savings") {
-    selected.sort((a, b) => b.savings_eur - a.savings_eur || b.drop_percent - a.drop_percent);
-  } else if (sort === "both") {
-    selected.sort((a, b) => b.savings_eur - a.savings_eur || b.drop_percent - a.drop_percent || String(b.found_at || "").localeCompare(String(a.found_at || "")));
-  } else if (sort === "recent") {
-    selected.sort((a, b) => String(b.found_at || "").localeCompare(String(a.found_at || "")));
-  } else {
-    selected.sort((a, b) => b.drop_percent - a.drop_percent || b.savings_eur - a.savings_eur);
-  }
+  sortGeneralDropSelection(selected, sort);
+  updateGeneralDropSortHeaders();
   const pages = Math.max(1, Math.ceil(selected.length / GENERAL_DROPS_PER_PAGE));
   generalDropPage = Math.max(0, Math.min(generalDropPage, pages - 1));
   const start = generalDropPage * GENERAL_DROPS_PER_PAGE;
@@ -244,8 +272,43 @@ function renderGeneralDrops(deals) {
 }
 
 function setupGeneralDropControls() {
+  document.getElementById("general-drops-table")?.querySelector("thead")?.addEventListener("click", (event) => {
+    const btn = event.target.closest(".th-sort");
+    if (!btn?.dataset.sortKey) return;
+    const key = btn.dataset.sortKey;
+    const numeric = key !== "title" && key !== "section";
+    if (generalDropSort.key === key) {
+      generalDropSort.dir = generalDropSort.dir === "asc" ? "desc" : "asc";
+    } else {
+      generalDropSort = { key, dir: numeric ? "desc" : "asc" };
+    }
+    const select = document.getElementById("drop-sort");
+    if (select) {
+      const preset = Object.entries(GENERAL_DROP_SORT_PRESETS).find(
+        ([, v]) => v.key === key && v.dir === generalDropSort.dir,
+      );
+      const columnOption = select.querySelector('option[value="column"]');
+      if (preset) {
+        select.value = preset[0];
+        if (columnOption) columnOption.hidden = true;
+      } else {
+        if (columnOption) columnOption.hidden = false;
+        select.value = "column";
+      }
+    }
+    generalDropPage = 0;
+    renderGeneralDropsPage();
+  });
   for (const id of ["drop-min", "drop-min-price", "drop-min-saving", "drop-section", "drop-sort", "drop-search", "drop-brands-only"]) {
     document.getElementById(id)?.addEventListener("input", () => {
+      if (id === "drop-sort") {
+        const select = document.getElementById("drop-sort");
+        const preset = GENERAL_DROP_SORT_PRESETS[select?.value];
+        if (preset) {
+          generalDropSort = { ...preset };
+          select?.querySelector('option[value="column"]')?.setAttribute("hidden", "");
+        }
+      }
       generalDropPage = 0;
       renderGeneralDropsPage();
     });
