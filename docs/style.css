@@ -145,6 +145,7 @@ footer { margin-top: var(--space-xl); padding-top: var(--space-lg); border-top: 
 @media (max-width: 640px) {
   body { padding: var(--space-md); }
   header h1 { font-size: 1.728rem; }
+  .header-actions { margin-left: 0; width: 100%; justify-content: flex-end; }
   .header-action { margin-left: 0; }
   .brand-context { font-size: var(--text-sm); }
   .tab-list { gap: var(--space-lg); }
