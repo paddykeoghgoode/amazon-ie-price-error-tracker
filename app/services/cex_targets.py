@@ -416,10 +416,11 @@ def sanitize_proposed_links(state, options) -> None:
         asin = str(prop.get("asin") or "").upper()
         if not re.fullmatch(r"[A-Z0-9]{10}", asin):
             continue
-        score = int(prop.get("match_percent") or cex_ie.title_match_score(title, prices.box_name))
+        score = int(prop.get("match_percent") or cex_ie.title_match_score(
+            title, prices.box_name, cex_category_name=prices.category_name))
         if score < options.amazon_proposal_min_display_percent:
             continue
-        if not cex_ie.titles_match_for_trade_in(title, prices.box_name):
+        if not cex_ie.titles_match_for_trade_in(title, prices.box_name, cex_category_name=prices.category_name):
             continue
         cleaned[box_id] = {**prop, "asin": asin, "match_percent": score, "status": prop.get("status") or "proposed"}
     state["proposed_links"] = cleaned
@@ -441,7 +442,7 @@ def proposal_compare_rows(state, options, config, *, now=None):
         title = prop.get("amazon_title") or prices.box_name
         if not re.fullmatch(r"[A-Z0-9]{10}", asin or ""):
             continue
-        if not cex_ie.titles_match_for_trade_in(title, prices.box_name):
+        if not cex_ie.titles_match_for_trade_in(title, prices.box_name, cex_category_name=prices.category_name):
             continue
         row = {
             "asin": asin,

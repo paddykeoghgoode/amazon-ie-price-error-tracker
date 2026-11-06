@@ -102,7 +102,8 @@ const TargetPage = (() => {
       const read = !!mapping && fresh && ['profitable','above_buy_ceiling','below_minimum_buy'].includes(check?.status);
       const compareFresh = !mapping && !userMapping && check && checkedAge >= 0 && checkedAge <= 30*60000 && ['price_read','profitable','above_buy_ceiling','below_minimum_buy'].includes(check?.status);
       const matchPercent = candidate?.match_percent ?? proposed?.match_percent ?? state.amazon_discovery?.[quote.box_id]?.best_match_percent;
-      return {record, quote, mapping, userMapping, userLink, proposed, candidate, check, history, observed:history.at(-1), fresh:read, compareFresh,
+      const inLiveScan = Object.prototype.hasOwnProperty.call(state.items || {}, boxId);
+      return {record, quote, mapping, userMapping, userLink, proposed, candidate, check, history, observed:history.at(-1), fresh:read, compareFresh, inLiveScan,
         matchPercent, profitable:read && check?.status === 'profitable', discovery:state.amazon_discovery?.[quote.box_id], boxId, group:category(quote)};
     }).filter(r => finite(r.quote.cash_eur) && r.quote.cash_eur > 10 && r.quote.box_id && !/non[ -]working|faulty|spares/i.test(r.quote.box_name || '') && !rejected[r.boxId])
       .sort((a,b) => Number(b.profitable)-Number(a.profitable) || Number(!!b.userMapping)-Number(!!a.userMapping) || Number(!!b.mapping)-Number(!!a.mapping) ||
@@ -157,7 +158,8 @@ const TargetPage = (() => {
     const amazon = asin ? `https://www.amazon.ie/dp/${asin}` : `https://www.amazon.ie/s?k=${encodeURIComponent(q.box_name.replace(/,\s*(?:[ABC]|mint|boxed|unboxed|discounted)\s*$/i, ''))}`;
     const pct = finite(r.matchPercent) ? `${Math.round(Number(r.matchPercent))}% title match` : '';
     let stage = 'Needs matching · waiting for Amazon search';
-    if (matched) stage = 'Scanner-verified identity map';
+    if (!r.inLiveScan) stage = 'Discovery snapshot · not in live scan queue yet';
+    else if (matched) stage = 'Scanner-verified identity map';
     else if (userConfirmed) stage = 'Your confirmed link · scans will reuse it';
     else if (asin && pct) stage = `Suggested match · ${pct}`;
     else if (asin) stage = 'Possible match · verify model and variant';

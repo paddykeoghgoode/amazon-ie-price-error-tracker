@@ -21,7 +21,7 @@ def parse_search_results(html: str, prices, *, limit=2) -> list[dict]:
     """Strict trade-in-compatible hits (legacy alert path)."""
     return [row for row in parse_search_scored(html, prices, limit=limit)
             if row.get("match_percent", 0) >= 72 and cex_ie.titles_match_for_trade_in(
-                row.get("title"), prices.box_name)][:limit]
+                row.get("title"), prices.box_name, cex_category_name=prices.category_name)][:limit]
 
 
 def parse_search_scored(html: str, prices, *, limit=5) -> list[dict]:
@@ -41,7 +41,7 @@ def parse_search_scored(html: str, prices, *, limit=5) -> list[dict]:
         title = title.get_text(" ", strip=True)
         if relevance({"title": title})[1] == "explicitly_excluded_brand":
             continue
-        score = cex_ie.title_match_score(title, prices.box_name)
+        score = cex_ie.title_match_score(title, prices.box_name, cex_category_name=prices.category_name)
         if score < 25:
             continue
         price = None
@@ -71,13 +71,18 @@ def candidate_matches(row, prices):
             or row.get('active') is False or row.get('identity_status') == 'identity_mismatch'
             or relevance(row)[1] == 'explicitly_excluded_brand'):
         return False
-    return cex_ie.titles_match_for_trade_in(row.get('title') or '', prices.box_name)
+    return cex_ie.titles_match_for_trade_in(
+        row.get('title') or '', prices.box_name, cex_category_name=prices.category_name)
 
 
 def search_query(prices, record) -> str:
-    return (prices.barcodes[0].lstrip("0") if prices.barcodes else
-            f"{cex_ie.leading_brand(prices.box_name) or ''} {prices.model_number}".strip()
-            if prices.model_number else product_key(prices.box_name))
+    query = (prices.barcodes[0].lstrip("0") if prices.barcodes else
+             f"{cex_ie.leading_brand(prices.box_name) or ''} {prices.model_number}".strip()
+             if prices.model_number else product_key(prices.box_name))
+    hint = cex_ie.platform_hint_from_category(prices.category_name)
+    if hint and hint.casefold() not in query.casefold():
+        query = f"{query} {hint}".strip()
+    return query
 
 
 async def _hydrate_cex_detail(state, box_id, record, prices, client, config, run_state, group, prior, now, remember):
@@ -152,12 +157,15 @@ async def _propose_one_target(
             candidate = max(scored, key=lambda r: int(r.get("match_percent") or 0))
             score = int(candidate.get("match_percent") or 0)
             if (score >= min_display_percent
-                    and cex_ie.titles_match_for_trade_in(candidate.get("title"), prices.box_name)):
+                    and cex_ie.titles_match_for_trade_in(
+                        candidate.get("title"), prices.box_name, cex_category_name=prices.category_name)):
                 best = candidate
         if not best and rows:
-            scored_row = {**rows[0], "match_percent": cex_ie.title_match_score(rows[0].get("title"), prices.box_name)}
+            scored_row = {**rows[0], "match_percent": cex_ie.title_match_score(
+                rows[0].get("title"), prices.box_name, cex_category_name=prices.category_name)}
             if (scored_row["match_percent"] >= min_display_percent
-                    and cex_ie.titles_match_for_trade_in(scored_row.get("title"), prices.box_name)):
+                    and cex_ie.titles_match_for_trade_in(
+                        scored_row.get("title"), prices.box_name, cex_category_name=prices.category_name)):
                 best = scored_row
         proposals = state.setdefault("proposed_links", {})
         if best:
@@ -173,7 +181,8 @@ async def _propose_one_target(
             proposals.pop(box_id, None)
         candidate_payload = scored[:3] if scored else [
             {k: r[k] for k in ('asin', 'title', 'url', 'price_eur', 'price_history', 'last_seen_at') if k in r}
-            | {"match_percent": cex_ie.title_match_score(r.get("title"), prices.box_name)} for r in rows[:3]
+            | {"match_percent": cex_ie.title_match_score(
+                r.get("title"), prices.box_name, cex_category_name=prices.category_name)} for r in rows[:3]
         ]
         for row in rows:
             reused = row['asin'] in inventory

@@ -208,6 +208,44 @@ _NON_TRADEABLE_RE = re.compile(
 _EDITION_TOKENS = frozenset(
     {"pro", "plus", "max", "ultra", "lite", "mini", "oled", "slim", "digital", "disc", "disk"}
 )
+_COLOUR_TOKENS = frozenset(
+    {"black", "white", "grey", "silver", "gold", "blue", "red", "green", "pink", "purple"}
+)
+_COLOUR_FALSE_POSITIVE = re.compile(
+    r"\bblack\s+(?:pepper|forest|magic|ops|label)\b|\bwhite\s+(?:pepper|chocolate|wine)\b",
+    re.I,
+)
+
+
+def platform_hint_from_category(category_name: str | None) -> str:
+    """CeX software categories carry the console; box titles often omit it."""
+    cat = (category_name or "").casefold()
+    if "playstation5" in cat or "ps5" in cat:
+        return "PlayStation 5"
+    if "playstation4" in cat or "ps4" in cat:
+        return "PlayStation 4"
+    if "xbox series" in cat:
+        return "Xbox Series X"
+    if "xbox one" in cat:
+        return "Xbox One"
+    if "switch" in cat:
+        return "Nintendo Switch"
+    return ""
+
+
+def trade_in_match_title(box_name: str | None, category_name: str | None = None) -> str:
+    title = re.sub(r"\s+", " ", (box_name or "").strip())
+    hint = platform_hint_from_category(category_name)
+    if hint and hint.casefold() not in title.casefold():
+        title = f"{title} {hint}".strip()
+    return title
+
+
+def _colour_tokens(title: str) -> set[str]:
+    lowered = title.lower().replace("gray", "grey")
+    if _COLOUR_FALSE_POSITIVE.search(title):
+        lowered = _COLOUR_FALSE_POSITIVE.sub(" ", lowered)
+    return set(_tokens(lowered)) & _COLOUR_TOKENS
 
 
 def _identifiers(pattern: re.Pattern, title: str) -> set[str]:
@@ -232,6 +270,17 @@ def _editions(title: str) -> set[str]:
     return result
 
 
+def _editions_compatible(amazon_title: str, cex_title: str) -> bool:
+    amazon = _editions(amazon_title)
+    cex = _editions(cex_title)
+    if amazon == cex:
+        return True
+    # Amazon often adds "Physical Disc" while CeX only says "(No DLC)".
+    if not cex and amazon <= {"disc"} and not re.search(r"\bdigital\b", amazon_title, re.I):
+        return True
+    return False
+
+
 def _variants_compatible(amazon_title: str, cex_title: str) -> bool:
     """Reject obvious SKU, platform, pack-size and digital-only mismatches."""
     if _NON_TRADEABLE_RE.search(amazon_title):
@@ -246,9 +295,9 @@ def _variants_compatible(amazon_title: str, cex_title: str) -> bool:
     for pattern in (r"\bg\d{3,4}(?:\s*x)?\b", r"\bwh[ -]?1000xm\d\b"):
         if _identifiers(re.compile(pattern, re.I), amazon_title) != _identifiers(re.compile(pattern, re.I), cex_title):
             return False
-    colours = {"black", "white", "grey", "silver", "gold", "blue", "red", "green", "pink", "purple"}
-    a_colours = set(_tokens(amazon_title.lower().replace("gray", "grey"))) & colours
-    c_colours = set(_tokens(cex_title.lower().replace("gray", "grey"))) & colours
+    colours = _COLOUR_TOKENS
+    a_colours = _colour_tokens(amazon_title)
+    c_colours = _colour_tokens(cex_title)
     if a_colours and c_colours and a_colours != c_colours:
         return False
 
@@ -263,17 +312,20 @@ def _variants_compatible(amazon_title: str, cex_title: str) -> bool:
 
     if _pack_sizes(amazon_title) != _pack_sizes(cex_title):
         return False
-    return _editions(amazon_title) == _editions(cex_title)
+    return _editions_compatible(amazon_title, cex_title)
 
 
-def titles_match_for_trade_in(amazon_title: str | None, cex_box_name: str | None) -> bool:
+def titles_match_for_trade_in(
+    amazon_title: str | None, cex_box_name: str | None, *, cex_category_name: str | None = None,
+) -> bool:
     """Reject Algolia hits that only share generic words (e.g. Ozeino headset → SteelSeries)."""
     if not amazon_title or not cex_box_name:
         return False
-    if not _variants_compatible(amazon_title, cex_box_name):
+    cex_title = trade_in_match_title(cex_box_name, cex_category_name)
+    if not _variants_compatible(amazon_title, cex_title):
         return False
     amazon_l = amazon_title.lower()
-    cex_l = cex_box_name.lower()
+    cex_l = cex_title.lower()
     brand = leading_brand(amazon_title)
     family = {'sony': r'\b(?:sony|playstation|ps[345])',
               'microsoft': r'\b(?:microsoft|xbox)\b',
@@ -298,7 +350,7 @@ def titles_match_for_trade_in(amazon_title: str | None, cex_box_name: str | None
     if _identifiers(_PLATFORM_RE, amazon_title) and re.search(r'\bconsole\b', amazon_l) and re.search(r'\bconsole\b', cex_l):
         return True
 
-    overlap = (_significant_tokens(amazon_l) & _significant_tokens(cex_l)) - _KNOWN_BRANDS
+    overlap = (_significant_tokens(amazon_l) & _significant_tokens(cex_l)) - _KNOWN_BRANDS - _COLOUR_TOKENS
     if brand and _tokens(amazon_l)[0] == brand:
         overlap.discard(brand)
     if not overlap:
@@ -309,21 +361,24 @@ def titles_match_for_trade_in(amazon_title: str | None, cex_box_name: str | None
     return len(overlap) >= 2
 
 
-def title_match_score(amazon_title: str | None, cex_box_name: str | None) -> int:
+def title_match_score(
+    amazon_title: str | None, cex_box_name: str | None, *, cex_category_name: str | None = None,
+) -> int:
     """0–100 similarity for ranking Amazon search hits (UI and proposals)."""
     if not amazon_title or not cex_box_name:
         return 0
-    if not _variants_compatible(amazon_title, cex_box_name):
+    cex_title = trade_in_match_title(cex_box_name, cex_category_name)
+    if not _variants_compatible(amazon_title, cex_title):
         return 10
     amazon_l = amazon_title.lower()
-    cex_l = cex_box_name.lower()
+    cex_l = cex_title.lower()
     overlap = (_significant_tokens(amazon_l) & _significant_tokens(cex_l)) - _KNOWN_BRANDS
     brand = leading_brand(amazon_title)
     if brand and brand in overlap:
         overlap.discard(brand)
     union = _significant_tokens(amazon_l) | _significant_tokens(cex_l)
     token_score = int(round(100 * len(overlap) / len(union))) if union else 0
-    if titles_match_for_trade_in(amazon_title, cex_box_name):
+    if titles_match_for_trade_in(amazon_title, cex_box_name, cex_category_name=cex_category_name):
         return min(100, max(72, token_score))
     if token_score >= 35 and brand and brand in cex_l:
         return min(69, token_score + 15)

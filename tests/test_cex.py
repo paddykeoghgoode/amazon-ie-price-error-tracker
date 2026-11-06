@@ -91,6 +91,25 @@ class TestCexTitleMatch(unittest.TestCase):
         self.assertGreaterEqual(good, 72)
         self.assertLess(bad, 40)
 
+    def test_matches_fc27_with_platform_from_category(self):
+        amazon = "EA SPORTS FC 27 - Standard Edition PlayStation 5 |Physical Disc"
+        cex = "EA Sports FC 27"
+        self.assertTrue(titles_match_for_trade_in(amazon, cex, cex_category_name="Playstation5 Software"))
+        self.assertGreaterEqual(title_match_score(amazon, cex, cex_category_name="Playstation5 Software"), 72)
+
+    def test_matches_cod_with_platform_from_category(self):
+        amazon = "Call of Duty: Modern Warfare III - Xbox Series X"
+        cex = "Call of Duty: Modern Warfare 4 (No DLC)"
+        self.assertTrue(titles_match_for_trade_in(amazon, cex, cex_category_name="Xbox Series Software"))
+
+    def test_rejects_perfume_on_ram_via_black_pepper(self):
+        amazon = (
+            "Ted Baker M Eau De Toilette, Fresh Citrus Spicy Scent, For Men, 75ml | "
+            "Long Lasting EDT Spray with Bergamot, Black Pepper, Amber and Musk"
+        )
+        cex = "Corsair Vengeance RGB Black (2x32GB) 6400MT/s CMH64GX5M2B6400C32"
+        self.assertFalse(titles_match_for_trade_in(amazon, cex))
+
     def test_picks_second_hit_when_first_is_wrong(self):
         hits = [
             {"boxId": "1", "boxName": "SteelSeries Arctis 7 Headset"},

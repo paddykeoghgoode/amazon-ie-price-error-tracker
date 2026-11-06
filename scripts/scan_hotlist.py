@@ -86,7 +86,8 @@ def select_fast_checks(drops, mapped, proposals, prior, limit=12):
 def evaluate_proposal_compare(row, snap, config):
     """Margin estimate for a suggested pair; alerts still require a confirmed map."""
     prices = cache_price(row.get('cex_quote_cache'))
-    if snap.asin != row['asin'] or not prices or not cex_ie.titles_match_for_trade_in(snap.title, prices.box_name):
+    if snap.asin != row['asin'] or not prices or not cex_ie.titles_match_for_trade_in(
+            snap.title, prices.box_name, cex_category_name=prices.category_name):
         return {'status': 'identity_mismatch', 'cex_cash_flip': False}
     policy = load_alert_policy()
     result = build_cex_row(
