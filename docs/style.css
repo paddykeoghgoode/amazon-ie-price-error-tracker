@@ -111,6 +111,16 @@ td a { font-weight: 600; }
 .drop-control { display: flex; flex-direction: column; gap: var(--space-xs); color: var(--muted); font-size: var(--text-sm); }
 .drop-control.search-control { grid-column: 1 / -1; }
 #general-drops-table { min-width: 800px; }
+#general-drops-table .th-sort {
+  display: inline-flex; align-items: center; gap: .35rem; width: 100%; min-height: 44px;
+  padding: 0; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 600;
+  text-align: inherit; cursor: pointer; border-radius: var(--radius);
+}
+#general-drops-table .th-sort:hover { color: var(--accent); }
+#general-drops-table .th-sort:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#general-drops-table .th-sort::after { content: ""; opacity: .45; font-size: .75em; }
+#general-drops-table .th-sort[aria-sort="ascending"]::after { content: "▲"; opacity: 1; color: var(--accent); }
+#general-drops-table .th-sort[aria-sort="descending"]::after { content: "▼"; opacity: 1; color: var(--accent); }
 .pagination-controls { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: var(--space-md); margin-top: var(--space-md); font-size: var(--text-sm); }
 .pagination-button { background: var(--card); color: var(--text); border-color: var(--rule); }
 #add-form { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin-top: var(--space-md); }
