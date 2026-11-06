@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 RETAILERS = {
     "currys.ie": "Currys",
+    "smythstoys.com": "Smyths",
     "harveynorman.ie": "Harvey Norman",
     "did.ie": "DID Electrical",
     "electrocity.ie": "ElectroCity",
@@ -161,9 +162,21 @@ def _ids(obj: dict, keys: tuple[str, ...]) -> list[str]:
     return [str(obj[key]).strip() for key in keys if obj.get(key)]
 
 
-def _matches_expected(product: dict, expected_model: str | None, expected_barcode: str | None) -> str:
-    """Confirm EAN or exact model without title-only approximate matching."""
+def _matches_expected(
+    product: dict,
+    expected_model: str | None,
+    expected_barcode: str | None,
+    *,
+    title_fallback: str | None = None,
+    cex_category_name: str | None = None,
+) -> str:
+    """Confirm EAN, exact model, or CeX title match for linked product pages."""
     if not expected_model and not expected_barcode:
+        if title_fallback:
+            from app.scraper import cex_ie
+            name = str(product.get("name") or "")
+            if cex_ie.titles_match_for_trade_in(name, title_fallback, cex_category_name=cex_category_name):
+                return "title_confirmed"
         return "identity_required"
     barcodes = _ids(product, ("gtin", "gtin8", "gtin12", "gtin13", "gtin14", "ean"))
     if expected_barcode and barcodes and expected_barcode not in {clean_barcode(v) for v in barcodes}:
@@ -190,7 +203,11 @@ def _matches_expected(product: dict, expected_model: str | None, expected_barcod
 
 
 def parse_retail_html(
-    html: str, *, expected_model: str | None, expected_barcode: str | None
+    html: str, *,
+    expected_model: str | None,
+    expected_barcode: str | None,
+    title_fallback: str | None = None,
+    cex_category_name: str | None = None,
 ) -> dict:
     """Return one clear retailer offer or a non-actionable reason."""
     soup = BeautifulSoup(html, "lxml")
@@ -204,8 +221,11 @@ def parse_retail_html(
         return {"status": "no_product_metadata"}
     best_issue = "identity_not_confirmed"
     for product in products:
-        identity = _matches_expected(product, expected_model, expected_barcode)
-        if identity not in ("model_confirmed", "barcode_confirmed"):
+        identity = _matches_expected(
+            product, expected_model, expected_barcode,
+            title_fallback=title_fallback, cex_category_name=cex_category_name,
+        )
+        if identity not in ("model_confirmed", "barcode_confirmed", "title_confirmed"):
             best_issue = identity
             continue
         offers = product.get("offers")
@@ -261,6 +281,8 @@ async def fetch_retail_offer(
     *,
     expected_model: str | None,
     expected_barcode: str | None,
+    title_fallback: str | None = None,
+    cex_category_name: str | None = None,
 ) -> dict:
     """Request only approved retailer HTTPS URLs, including redirect targets."""
     name = retailer_from_url(url)
@@ -268,7 +290,7 @@ async def fetch_retail_offer(
     result = {"url": url, "retailer": name or "Unknown", "checked_at": stamp}
     if not name:
         return {**result, "status": "unsupported_retailer"}
-    if not expected_model and not expected_barcode:
+    if not expected_model and not expected_barcode and not title_fallback:
         return {**result, "status": "identity_required"}
     current = url
     try:
@@ -297,6 +319,7 @@ async def fetch_retail_offer(
                 data = parse_retail_html(
                     chunks.decode("utf-8", "replace"),
                     expected_model=expected_model, expected_barcode=expected_barcode,
+                    title_fallback=title_fallback, cex_category_name=cex_category_name,
                 )
                 return {**result, **data}
         return {**result, "status": "too_many_redirects"}

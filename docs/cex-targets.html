@@ -10,7 +10,7 @@
 <body>
   <header>
     <div class="brand-row"><div class="brand-icon" aria-hidden="true">€</div><div><p class="brand-context">Resale Radar / CeX Ireland</p><h1>CeX resale targets</h1></div><a class="header-action" href="index.html">Back to tracker</a></div>
-    <p class="tagline">Start with what CeX buys. Find the same product on Amazon. Compare the cash margin.</p>
+    <p class="tagline">Start with what CeX buys. Compare Amazon and Irish shops (Currys, Smyths, …) against CeX cash.</p>
     <p id="target-status" class="status" role="status">Loading the CeX shortlist…</p>
   </header>
   <main>
@@ -18,6 +18,7 @@
       <div><span>CeX targets over €10 cash</span><strong id="target-count">—</strong></div>
       <div><span>Exact Amazon matches</span><strong id="mapped-count">—</strong></div>
       <div><span>Fresh profitable checks</span><strong id="profitable-count">—</strong></div>
+      <div><span>Shop → CeX (linked, net ≥ €0)</span><strong id="retail-flip-count">—</strong></div>
     </section>
     <section class="card">
       <div class="target-heading"><div><h2>CeX → Amazon shortlist</h2><p class="hint">Consoles, physical games and recognisable electronics. Every colour, capacity and CeX grade is a separate listing. These are discovery targets; sales volumes are not available.</p></div><a href="#coffee">Branded coffee machines ↓</a></div>
@@ -28,11 +29,11 @@
       </div>
       <p id="target-result-count" class="hint" aria-live="polite"></p>
       <p class="target-toolbar"><button type="button" id="target-export-links">Export confirmed links (JSON)</button></p>
-      <div class="table-wrap"><table id="target-table" hidden><caption class="hint">Cash estimates use CeX Ireland. Index quotes require a fresh CeX detail check before alerts.</caption><thead><tr><th>CeX product / grade</th><th>Cash offer</th><th>Amazon</th><th>Buffered profit</th><th>Last checked</th></tr></thead><tbody id="target-rows"></tbody></table></div>
+      <div class="table-wrap"><table id="target-table" hidden><caption class="hint">Cash estimates use CeX Ireland. Irish shop links must be exact product pages you add; scans read Currys, Smyths and other approved IE retailers.</caption><thead><tr><th>CeX product / grade</th><th>Cash offer</th><th>Amazon</th><th>Irish shop → CeX</th><th>Amazon → CeX profit</th><th>Last checked</th></tr></thead><tbody id="target-rows"></tbody></table></div>
       <nav class="target-pagination" aria-label="Target pages"><button id="target-prev" type="button">Previous</button><span id="target-page" aria-live="polite"></span><button id="target-next" type="button">Next</button></nav>
       <p class="hint">Price graphs use recorded Amazon observations. Gaps are not continuous monitoring; graphs need at least two observations.</p>
       <p id="target-empty" class="empty" hidden>No targets match these filters.</p>
-      <p class="hint">Each priority scan runs up to five Amazon searches from CeX titles and stores a title-match percentage. Press <strong>Link this match</strong> when the suggestion looks right, then export JSON into <code>docs/cex-user-links.json</code> in the repo so GitHub Actions reuse your links. Profit remains an estimate; verify variant, delivery and CeX grade.</p>
+      <p class="hint">Each priority scan runs Amazon searches from CeX titles. Use <strong>Link this match</strong> for Amazon, <strong>Add shop link</strong> for Currys/Smyths product URLs, then export JSON into <code>docs/cex-user-links.json</code>. Shop → CeX shows gross Δ (cash − shop) and buffered net after delivery settings.</p>
     </section>
     <section class="card" id="coffee">
       <div class="target-heading"><div><h2>Branded coffee machines</h2><p class="hint">Sage, De’Longhi, Nespresso and other recognised brands from the coffee scan. Amazon price-drop research; CeX acceptance is not established.</p></div><a href="index.html#amazon-drops">All Amazon reductions →</a></div>

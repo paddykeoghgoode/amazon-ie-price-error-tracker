@@ -1,4 +1,4 @@
-.target-intro { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); border-block:1px solid var(--rule); margin-bottom:var(--space-xl); }
+.target-intro { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border-block:1px solid var(--rule); margin-bottom:var(--space-xl); }
 .target-intro > div { padding:var(--space-lg) var(--space-md); display:flex; flex-direction:column; gap:var(--space-sm); }
 .target-intro > div + div { border-left:1px solid var(--rule); }
 .target-intro span { color:var(--muted); font-size:var(--text-sm); }
@@ -10,7 +10,9 @@
 .target-controls label { display:flex; flex-direction:column; gap:var(--space-xs); color:var(--muted); font-size:var(--text-sm); }
 .target-controls label:first-child { flex:1; min-width:220px; }
 .target-controls input, .target-controls select { padding-inline:var(--space-sm); }
-#target-table { min-width:880px; }
+#target-table { min-width:1020px; }
+.delta-good { color:var(--ok); font-weight:600; }
+.delta-bad { color:var(--danger, #c44); font-weight:600; }
 #target-table th:first-child { width:35%; }
 #target-table td { vertical-align:top; }
 .target-meta { display:block; color:var(--muted); font-size:var(--text-sm); margin-top:var(--space-xs); }
@@ -44,8 +46,9 @@ caption { text-align:left; caption-side:bottom; padding-block:var(--space-sm); }
   #target-table td::before, #coffee-table td::before { display:block; color:var(--muted); font-size:.8rem; margin-bottom:6px; }
   #target-table td:nth-child(2)::before { content:'CeX cash offer'; }
   #target-table td:nth-child(3)::before { content:'Amazon'; }
-  #target-table td:nth-child(4)::before { content:'Buffered profit'; }
-  #target-table td:nth-child(5)::before { content:'Last checked'; }
+  #target-table td:nth-child(4)::before { content:'Irish shop → CeX'; }
+  #target-table td:nth-child(5)::before { content:'Amazon → CeX profit'; }
+  #target-table td:nth-child(6)::before { content:'Last checked'; }
   #coffee-table td:nth-child(2)::before { content:'Observed Amazon price'; }
   #coffee-table td:nth-child(3)::before { content:'Last observed'; }
   .amazon-action { display:flex; width:100%; box-sizing:border-box; }
