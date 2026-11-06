@@ -8,6 +8,7 @@
   <meta name="description" content="High-value Amazon.ie price drops and potential CeX cash resale margins. Research leads, not confirmed checkout offers." />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="style.css" />
+  <script src="theme.js"></script>
 </head>
 <body>
   <header>
@@ -17,7 +18,10 @@
         <h1>Resale <span class="brand-accent">Radar</span></h1>
         <p class="brand-context">Amazon.ie and CeX cash research in Ireland</p>
       </div>
-      <a class="header-action" href="https://github.com/paddykeoghgoode/amazon-ie-price-error-tracker/actions" target="_blank" rel="noopener">Scan history</a>
+      <div class="header-actions">
+        <button type="button" id="theme-toggle" class="theme-toggle" aria-pressed="false">Light</button>
+        <a class="header-action" href="https://github.com/paddykeoghgoode/amazon-ie-price-error-tracker/actions" target="_blank" rel="noopener">Scan history</a>
+      </div>
     </div>
     <p class="tagline">Big price reductions, realistic cash resale margins and fewer interruptions.</p>
     <div id="status" class="status warn">Loading latest scan…</div>
