@@ -11,6 +11,7 @@ DUBLIN_TZ = ZoneInfo("Europe/Dublin")
 from app.config import settings
 from app import database as db
 from app.detector.price_error import evaluate_price
+from app.services.amazon_access import watchlist_amazon_blocked_until, watchlist_amazon_cooling_down
 
 
 def _utc_now() -> str:
@@ -70,6 +71,8 @@ def export_snapshot(*, github_repo: str | None = None) -> dict[str, Any]:
         history = db.price_history(pid, limit=30)
         price = latest.get("price_eur") if latest else None
         list_price = latest.get("list_price_eur") if latest else None
+        checked_at = latest.get("checked_at") if latest else None
+        price_observed_at = checked_at if price is not None else None
         verdict = evaluate_price(
             product_id=pid,
             price_eur=price,
@@ -77,9 +80,30 @@ def export_snapshot(*, github_repo: str | None = None) -> dict[str, Any]:
         )
         status = "ok"
         note = None
+        price_stale = False
         if latest and latest.get("raw_note") and price is None:
-            status = "fetch_error"
-            note = latest.get("raw_note")
+            success = db.latest_successful_price_check(pid)
+            if success:
+                price = success.get("price_eur")
+                list_price = success.get("list_price_eur") or list_price
+                price_observed_at = success.get("checked_at")
+                price_stale = True
+                verdict = evaluate_price(
+                    product_id=pid,
+                    price_eur=price,
+                    list_price_eur=list_price,
+                )
+            if watchlist_amazon_cooling_down():
+                status = "provider_cooldown"
+                note = (
+                    "Amazon blocked automated access; pausing requests until "
+                    f"{_fmt_dublin(watchlist_amazon_blocked_until().isoformat() if watchlist_amazon_blocked_until() else None)}."
+                )
+            else:
+                status = "fetch_error"
+                note = latest.get("raw_note")
+                if price_stale and price_observed_at:
+                    note = f"{note} · showing last observed price from {_fmt_dublin(price_observed_at)}"
         elif verdict.is_error:
             status = "price_error"
             note = verdict.reason
@@ -94,11 +118,14 @@ def export_snapshot(*, github_repo: str | None = None) -> dict[str, Any]:
                 "discount_percent": verdict.discount_percent if verdict.is_error else None,
                 "status": status,
                 "note": note,
-                "checked_at": latest.get("checked_at") if latest else None,
+                "price_stale": price_stale,
+                "price_observed_at": price_observed_at,
+                "checked_at": checked_at,
                 "history": history,
             }
         )
 
+    blocked_until = watchlist_amazon_blocked_until()
     repo = github_repo or ""
     pages_base = f"https://{repo.split('/')[0]}.github.io/{repo.split('/')[-1]}/" if repo else ""
     return {
@@ -116,6 +143,8 @@ def export_snapshot(*, github_repo: str | None = None) -> dict[str, Any]:
         ),
         "products": products_out,
         "alerts": db.recent_alerts(limit=50),
+        "amazon_blocked_until": blocked_until.isoformat() if blocked_until else None,
+        "scan_status": "provider_cooldown" if watchlist_amazon_cooling_down() else "completed",
     }
 
 
@@ -145,6 +174,8 @@ def _md_status(status: str | None) -> str:
         return "🚨 price error"
     if status == "fetch_error":
         return "⚠️ fetch failed"
+    if status == "provider_cooldown":
+        return "⏸ Amazon cooldown"
     return "watching"
 
 

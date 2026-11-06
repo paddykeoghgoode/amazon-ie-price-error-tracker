@@ -333,6 +333,9 @@ function statusBadge(product) {
   if (product.status === "fetch_error") {
     return `<span class="badge fetch">Fetch failed</span>`;
   }
+  if (product.status === "provider_cooldown") {
+    return `<span class="badge cooldown">Amazon cooldown</span>`;
+  }
   return `<span class="badge ok">Watching</span>`;
 }
 

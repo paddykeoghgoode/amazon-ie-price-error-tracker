@@ -13,6 +13,7 @@ import httpx
 
 from app.config import settings
 from app import database as db
+from app.services.amazon_access import WATCHLIST_AMAZON_BLOCKED_META
 from app.scraper.amazon_ie import extract_asin
 from app.services.watch_links import (
     public_issue_url, resolve_amazon_shortlink, safe_amazon_url,
@@ -304,7 +305,7 @@ def annotate_watch_submissions(submissions: list[dict], snapshot: dict) -> list[
         product = products.get(asin)
         if not product:
             item["status"] = "pending_scan"
-        elif product.get("status") == "fetch_error":
+        elif product.get("status") in ("fetch_error", "provider_cooldown"):
             item["status"] = "fetch_error"
         elif product.get("price_eur") is not None:
             item["status"] = "tracking"
@@ -347,6 +348,8 @@ def main() -> None:
     db.init_db()
 
     previous = read_snapshot(args.previous) if args.previous and args.previous.exists() else {}
+    if previous.get("amazon_blocked_until"):
+        db.set_meta(WATCHLIST_AMAZON_BLOCKED_META, str(previous["amazon_blocked_until"]))
     if previous and not db.list_products():
         logger.info("Importing previous snapshot from %s", args.previous)
         import_snapshot(previous)
