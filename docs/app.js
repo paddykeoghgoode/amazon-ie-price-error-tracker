@@ -90,6 +90,31 @@ const GENERAL_DROP_SORT_PRESETS = {
   recent: { key: "found_at", dir: "desc" },
 };
 
+let watchProductsCache = [];
+let watchRequestsCache = [];
+let dealsLogCache = [];
+let premiumDropCache = [];
+let sectionProgressCache = [];
+let cexTargetCache = [];
+let cexFlipCache = [];
+let cexNearCache = [];
+let cexArbCache = [];
+let cexArbNearCache = [];
+const deepDropCache = new Map();
+let retailOfferCache = new Map();
+
+const TEXT = "text";
+const NUM = "number";
+const DATE = "date";
+const CEX_FLIP_SCHEMA = {
+  title: { kind: TEXT, get: (r) => r.title || r.asin },
+  price_eur: { kind: NUM, get: (r) => r.price_eur },
+  cex_cash_eur: { kind: NUM, get: (r) => r.cex_cash_eur },
+  cex_cash_profit_eur: { kind: NUM, get: (r) => r.cex_cash_profit_eur },
+  drop_percent: { kind: NUM, get: (r) => r.drop_percent },
+  cex_retail_eur: { kind: NUM, get: (r) => r.cex_retail_eur },
+};
+
 function compareGeneralDropRows(a, b, key) {
   if (key === "title") return String(a.title || a.asin || "").localeCompare(String(b.title || b.asin || ""), "en", { sensitivity: "base" });
   if (key === "section") return String(a.section_name || a.section_id || "").localeCompare(String(b.section_name || b.section_id || ""), "en", { sensitivity: "base" });
@@ -108,13 +133,6 @@ function sortGeneralDropSelection(selected, sortMode) {
   selected.sort((a, b) => {
     const cmp = compareGeneralDropRows(a, b, generalDropSort.key);
     return dir * cmp || String(a.asin || "").localeCompare(String(b.asin || ""));
-  });
-}
-
-function updateGeneralDropSortHeaders() {
-  document.querySelectorAll("#general-drops-table .th-sort").forEach((btn) => {
-    const active = btn.dataset.sortKey === generalDropSort.key;
-    btn.setAttribute("aria-sort", active ? (generalDropSort.dir === "asc" ? "ascending" : "descending") : "none");
   });
 }
 
@@ -203,7 +221,7 @@ function renderGeneralDropsPage() {
     return false;
   });
   sortGeneralDropSelection(selected, sort);
-  updateGeneralDropSortHeaders();
+  TableSort.updateHeaders("general-drops-table", generalDropSort);
   const pages = Math.max(1, Math.ceil(selected.length / GENERAL_DROPS_PER_PAGE));
   generalDropPage = Math.max(0, Math.min(generalDropPage, pages - 1));
   const start = generalDropPage * GENERAL_DROPS_PER_PAGE;
@@ -272,20 +290,21 @@ function renderGeneralDrops(deals) {
 }
 
 function setupGeneralDropControls() {
-  document.getElementById("general-drops-table")?.querySelector("thead")?.addEventListener("click", (event) => {
-    const btn = event.target.closest(".th-sort");
-    if (!btn?.dataset.sortKey) return;
-    const key = btn.dataset.sortKey;
-    const numeric = key !== "title" && key !== "section";
-    if (generalDropSort.key === key) {
-      generalDropSort.dir = generalDropSort.dir === "asc" ? "desc" : "asc";
-    } else {
-      generalDropSort = { key, dir: numeric ? "desc" : "asc" };
-    }
+  TableSort.bind("general-drops-table", {
+    title: { kind: TEXT, get: (r) => r.title || r.asin },
+    section: { kind: TEXT, get: (r) => r.section_name || r.section_id },
+    reference_eur: { kind: NUM, get: (r) => r.reference_eur },
+    price_eur: { kind: NUM, get: (r) => r.price_eur },
+    savings_eur: { kind: NUM, get: (r) => r.savings_eur },
+    drop_percent: { kind: NUM, get: (r) => r.drop_percent },
+    found_at: { kind: DATE, get: (r) => r.found_at || r.last_scanned_at },
+  }, () => {
+    const sort = TableSort.getSort("general-drops-table", generalDropSort);
+    generalDropSort = { ...sort };
     const select = document.getElementById("drop-sort");
     if (select) {
       const preset = Object.entries(GENERAL_DROP_SORT_PRESETS).find(
-        ([, v]) => v.key === key && v.dir === generalDropSort.dir,
+        ([, v]) => v.key === sort.key && v.dir === sort.dir,
       );
       const columnOption = select.querySelector('option[value="column"]');
       if (preset) {
@@ -298,7 +317,7 @@ function setupGeneralDropControls() {
     }
     generalDropPage = 0;
     renderGeneralDropsPage();
-  });
+  }, generalDropSort);
   for (const id of ["drop-min", "drop-min-price", "drop-min-saving", "drop-section", "drop-sort", "drop-search", "drop-brands-only"]) {
     document.getElementById(id)?.addEventListener("input", () => {
       if (id === "drop-sort") {
@@ -306,6 +325,7 @@ function setupGeneralDropControls() {
         const preset = GENERAL_DROP_SORT_PRESETS[select?.value];
         if (preset) {
           generalDropSort = { ...preset };
+          TableSort.setSort("general-drops-table", generalDropSort);
           select?.querySelector('option[value="column"]')?.setAttribute("hidden", "");
         }
       }
@@ -323,8 +343,416 @@ function setupGeneralDropControls() {
   });
 }
 
-setupDashboardTabs();
-setupGeneralDropControls();
+const PRODUCTS_SCHEMA = {
+  title: { kind: TEXT, get: (r) => r.title || r.asin },
+  price_eur: { kind: NUM, get: (r) => r.price_eur },
+  list_price_eur: { kind: NUM, get: (r) => r.list_price_eur },
+  status: { kind: TEXT, get: (r) => r.status },
+  checked_at: { kind: DATE, get: (r) => r.checked_at },
+};
+const WATCH_REQUESTS_SCHEMA = {
+  issue_number: { kind: NUM, get: (r) => r.issue_number },
+  asin: { kind: TEXT, get: (r) => r.asin },
+  status: { kind: TEXT, get: (r) => r.status },
+  checked_at: { kind: DATE, get: (r) => r.checked_at },
+};
+const DEALS_LOG_SCHEMA = {
+  title: { kind: TEXT, get: (r) => r.title || r.asin },
+  price_eur: { kind: NUM, get: (r) => r.price_eur },
+  median_eur: { kind: NUM, get: (r) => r.median_eur },
+  drop_percent: { kind: NUM, get: (r) => r.drop_percent },
+  found_at: { kind: DATE, get: (r) => r.found_at },
+};
+const PREMIUM_SCHEMA = {
+  title: { kind: TEXT, get: (r) => r.title || r.asin },
+  price_eur: { kind: NUM, get: (r) => r.price_eur },
+  reference_eur: { kind: NUM, get: (r) => r.reference_eur || r.median_eur },
+  drop_percent: { kind: NUM, get: (r) => r.drop_percent },
+  drop_kind: { kind: TEXT, get: (r) => r.drop_kind },
+};
+const SECTION_SCHEMA = {
+  section_name: { kind: TEXT, get: (r) => r.section_name || r.section_id },
+  generated_at: { kind: DATE, get: (r) => r.generated_at },
+  scan_status: { kind: TEXT, get: (r) => r.scan_status },
+  items_seen: { kind: NUM, get: (r) => r.items_seen },
+  cex_checked: { kind: NUM, get: (r) => r.cex_checked },
+  cex_live: { kind: NUM, get: (r) => r.cex_live },
+  drops_count: { kind: NUM, get: (r) => r.drops_count },
+  finds: { kind: NUM, get: (r) => r.finds },
+};
+const CEX_TARGET_SCHEMA = {
+  title: { kind: TEXT, get: (r) => r.title || r.asin },
+  price_eur: { kind: NUM, get: (r) => r.price_eur },
+  cex_max_buy_eur: { kind: NUM, get: (r) => r.cex_max_buy_eur },
+  cex_cash_profit_eur: { kind: NUM, get: (r) => r.cex_cash_profit_eur },
+  checked_at: { kind: DATE, get: (r) => r.checked_at },
+  result_label: { kind: TEXT, get: (r) => r.result_label },
+};
+const CATALOGUE_SCHEMA = {
+  title: { kind: TEXT, get: (r) => r.title || r.asin },
+  section_name: { kind: TEXT, get: (r) => r.section_name || r.section_id },
+  price_eur: { kind: NUM, get: (r) => r.price_eur },
+  seller: { kind: TEXT, get: (r) => r.seller_label },
+  cex_status: { kind: TEXT, get: (r) => r.cex_status },
+  last_checked_at: { kind: DATE, get: (r) => r.last_checked_at },
+};
+const DEEP_DROP_SCHEMA = {
+  title: { kind: TEXT, get: (r) => r.title || r.asin },
+  price_eur: { kind: NUM, get: (r) => r.price_eur },
+  median_eur: { kind: NUM, get: (r) => r.median_eur },
+  drop_percent: { kind: NUM, get: (r) => r.drop_percent },
+};
+const RETAIL_OFFER_SCHEMA = {
+  retailer: { kind: TEXT, get: (r) => r.retailer },
+  price_eur: { kind: NUM, get: (r) => r.price_eur },
+  status: { kind: TEXT, get: (r) => r.status_label || r.status },
+  checked_at: { kind: DATE, get: (r) => r.checked_at },
+};
+
+function paintProductsTable() {
+  const body = document.getElementById("products-body");
+  const table = document.getElementById("products-table");
+  const empty = document.getElementById("products-empty");
+  if (!body || !table || !empty) return;
+  const sort = TableSort.getSort("products-table", { key: "checked_at", dir: "desc" });
+  const rows = TableSort.sortRows(watchProductsCache, sort, PRODUCTS_SCHEMA);
+  TableSort.updateHeaders("products-table", sort);
+  body.innerHTML = "";
+  if (!rows.length) {
+    table.hidden = true;
+    empty.hidden = false;
+    return;
+  }
+  empty.hidden = true;
+  table.hidden = false;
+  for (const p of rows) {
+    const tr = document.createElement("tr");
+    const title = p.title || p.asin;
+    tr.innerHTML = `
+      <td><a href="${escapeHtml(p.url)}" target="_blank" rel="noopener">${escapeHtml(title)}</a><div class="hint">${escapeHtml(p.asin)}</div></td>
+      <td class="price">${fmtEuro(p.price_eur)}</td>
+      <td class="was">${fmtEuro(p.list_price_eur)}</td>
+      <td>${statusBadge(p)}${p.note ? `<div class="hint">${escapeHtml(p.note)}</div>` : ""}</td>
+      <td>${fmtTime(p.checked_at)}</td>`;
+    body.appendChild(tr);
+  }
+}
+
+function paintWatchRequestsTable(repo) {
+  const requestsTable = document.getElementById("watch-requests-table");
+  const requestsBody = document.getElementById("watch-requests-body");
+  const requestsEmpty = document.getElementById("watch-requests-empty");
+  if (!requestsTable || !requestsBody || !requestsEmpty) return;
+  const sort = TableSort.getSort("watch-requests-table", { key: "issue_number", dir: "desc" });
+  const requests = TableSort.sortRows(watchRequestsCache, sort, WATCH_REQUESTS_SCHEMA);
+  TableSort.updateHeaders("watch-requests-table", sort);
+  requestsBody.innerHTML = "";
+  requestsTable.hidden = !requests.length;
+  requestsEmpty.hidden = Boolean(requests.length);
+  const labels = {
+    tracking: ["Tracking", "ok"],
+    fetch_error: ["Amazon fetch failed — tracking continues", "fetch"],
+    price_unavailable: ["Added — price unavailable", "fetch"],
+    pending_scan: ["Accepted — awaiting scan", "fetch"],
+    link_unresolved: ["Link not resolved — edit issue", "error"],
+  };
+  for (const request of requests) {
+    const tr = document.createElement("tr");
+    const number = Number(request.issue_number || 0);
+    const safeNumber = Number.isSafeInteger(number) && number > 0 ? number : null;
+    const issueLink = safeNumber
+      ? `<a href="https://github.com/${encodeURI(repo)}/issues/${safeNumber}" target="_blank" rel="noopener">Issue #${safeNumber}</a>`
+      : "GitHub request";
+    const asin = String(request.asin || "");
+    const productLink = /^[A-Z0-9]{10}$/i.test(asin)
+      ? `<a href="https://www.amazon.ie/dp/${escapeHtml(asin)}" target="_blank" rel="noopener">${escapeHtml(asin)}</a>`
+      : "Awaiting valid Amazon URL/ASIN";
+    const [label, variant] = labels[request.status] || ["Awaiting scan", "fetch"];
+    tr.innerHTML = `
+      <td>${issueLink}</td>
+      <td>${productLink}</td>
+      <td><span class="badge ${variant}">${escapeHtml(label)}</span>
+        ${request.status === "link_unresolved" ? '<div class="hint">Add a full Amazon.ie product link to the existing issue.</div>' : ""}</td>
+      <td>${fmtTime(request.checked_at)}</td>`;
+    requestsBody.appendChild(tr);
+  }
+}
+
+function paintDealsLogTable() {
+  const table = document.getElementById("deals-table");
+  const body = document.getElementById("deals-body");
+  if (!table || !body) return;
+  const sort = TableSort.getSort("deals-table", { key: "drop_percent", dir: "desc" });
+  const rows = TableSort.sortRows(dealsLogCache, sort, DEALS_LOG_SCHEMA);
+  TableSort.updateHeaders("deals-table", sort);
+  body.innerHTML = "";
+  table.hidden = !rows.length;
+  for (const d of rows) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><a href="${escapeHtml(d.url)}" target="_blank" rel="noopener">${escapeHtml(d.title || d.asin)}</a><div class="hint">${escapeHtml(d.category || "")}</div></td>
+      <td class="price">${fmtEuro(d.price_eur)}</td>
+      <td class="was">${fmtEuro(d.median_eur)}</td>
+      <td>${escapeHtml(String(d.drop_percent))}%</td>
+      <td class="time">${d.found_at ? fmtTime(d.found_at) : "Unknown"}</td>`;
+    body.appendChild(tr);
+  }
+}
+
+function paintPremiumTable() {
+  const table = document.getElementById("premium-table");
+  const body = document.getElementById("premium-body");
+  const empty = document.getElementById("premium-empty");
+  if (!body) return;
+  const sort = TableSort.getSort("premium-table", { key: "drop_percent", dir: "desc" });
+  const rows = TableSort.sortRows(premiumDropCache, sort, PREMIUM_SCHEMA).slice(0, 25);
+  TableSort.updateHeaders("premium-table", sort);
+  body.innerHTML = "";
+  if (!premiumDropCache.length) {
+    if (table) table.hidden = true;
+    if (empty) empty.hidden = false;
+    return;
+  }
+  if (empty) empty.hidden = true;
+  if (table) table.hidden = false;
+  for (const d of rows) {
+    const kind =
+      d.drop_kind === "rapid_scan"
+        ? "Rapid (since last scan)"
+        : d.drop_kind === "premium_history"
+          ? "Premium vs reference"
+          : d.drop_kind || "Drop";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><a href="${escapeHtml(d.url)}" target="_blank" rel="noopener">${escapeHtml(d.title || d.asin)}</a><div class="hint">${escapeHtml(d.category || "")}</div></td>
+      <td class="price">${fmtEuro(d.price_eur)}</td>
+      <td class="was">${fmtEuro(d.reference_eur || d.median_eur)}</td>
+      <td>${escapeHtml(String(d.drop_percent))}%</td>
+      <td>${escapeHtml(kind)}</td>`;
+    body.appendChild(tr);
+  }
+}
+
+function paintSectionTable() {
+  const table = document.getElementById("section-table");
+  const body = document.getElementById("section-body");
+  const empty = document.getElementById("section-empty");
+  if (!table || !body) return;
+  const sort = TableSort.getSort("section-table", { key: "generated_at", dir: "desc" });
+  const rows = TableSort.sortRows(sectionProgressCache, sort, SECTION_SCHEMA);
+  TableSort.updateHeaders("section-table", sort);
+  body.innerHTML = "";
+  table.hidden = !rows.length;
+  if (empty) empty.hidden = !!rows.length;
+  for (const section of rows) {
+    const cex = section.cex_stats || {};
+    const catalogue = section.catalogue_stats || {};
+    const progress = catalogue.priced != null
+      ? `${Number(catalogue.checked || 0)} / ${Number(catalogue.priced || 0)}`
+      : "Not started";
+    const pending = catalogue.priced != null
+      ? `<div class="hint">${Number(catalogue.remaining || 0)} awaiting CeX research</div>` : "";
+    const tr = document.createElement("tr");
+    const status = section.scan_status || (section.blocked ? "blocked" : "completed");
+    const finds = Number(section.new_alerts || 0) + Number(cex.cash_flips || 0) + Number(cex.arbitrage || 0);
+    tr.innerHTML = `
+      <td>${escapeHtml(section.section_name || section.section_id || "Section")}</td>
+      <td>${fmtTime(section.generated_at)}</td>
+      <td>${escapeHtml(status)}</td>
+      <td>${Number(section.items_seen || 0).toLocaleString("en-IE")}</td>
+      <td>${progress}${pending}</td>
+      <td>${Number(cex.live_lookups || 0)} live / ${Number(cex.cache_hits || 0)} cached</td>
+      <td>${Number(section.drops_count || 0)} <span class="hint">${section.general_drops ? "≥10%" : "legacy ≥30%"}</span></td>
+      <td>${finds} (${Number(section.new_alerts || 0)} error leads, ${Number(cex.cash_flips || 0) + Number(cex.arbitrage || 0)} CeX)</td>`;
+    body.appendChild(tr);
+  }
+}
+
+function paintCexTargetTable() {
+  const body = document.getElementById("cex-target-body");
+  const table = document.getElementById("cex-target-table");
+  if (!body || !table) return;
+  const sort = TableSort.getSort("cex-target-table", { key: "checked_at", dir: "desc" });
+  const rows = TableSort.sortRows(cexTargetCache, sort, CEX_TARGET_SCHEMA);
+  TableSort.updateHeaders("cex-target-table", sort);
+  body.innerHTML = "";
+  table.hidden = !rows.length;
+  for (const row of rows) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td><a href="https://www.amazon.ie/dp/${encodeURIComponent(row.asin)}" target="_blank" rel="noopener">${escapeHtml(row.title || row.asin)}</a><div class="hint">${escapeHtml(row.cex_title || "")}</div></td>
+      <td class="price">${fmtEuro(row.price_eur)}</td><td class="price">${fmtEuro(row.cex_max_buy_eur)}</td>
+      <td class="price">${fmtEuro(row.cex_cash_profit_eur)}</td><td class="time">${fmtTime(row.checked_at)}<div class="hint">Quote ${fmtTime(row.cex_quote_checked_at)}</div></td>
+      <td>${escapeHtml(row.result_label)}${row.found_at ? `<div class="hint">Found ${fmtTime(row.found_at)}</div>` : ""}</td>`;
+    body.appendChild(tr);
+  }
+}
+
+function paintCexFlipTable(tableId, bodyId, rows, showDrop) {
+  const body = document.getElementById(bodyId);
+  const table = document.getElementById(tableId);
+  if (!body || !table) return;
+  const sort = TableSort.getSort(tableId, { key: "cex_cash_profit_eur", dir: "desc" });
+  const sorted = TableSort.sortRows(rows, sort, CEX_FLIP_SCHEMA);
+  TableSort.updateHeaders(tableId, sort);
+  body.innerHTML = "";
+  if (!rows.length) {
+    table.hidden = true;
+    return;
+  }
+  table.hidden = false;
+  for (const row of sorted) {
+    appendCexRow(body, row, showDrop);
+  }
+}
+
+function paintCatalogueTable() {
+  const body = document.getElementById("catalogue-body");
+  const table = document.getElementById("catalogue-table");
+  const info = document.getElementById("catalogue-info");
+  if (!body || !table) return;
+  const query = (document.getElementById("catalogue-search")?.value || "").toLowerCase().trim();
+  const section = document.getElementById("catalogue-section-filter")?.value || "";
+  const status = document.getElementById("catalogue-status-filter")?.value || "";
+  const activity = document.getElementById("catalogue-activity-filter")?.value || "active";
+  const filtered = catalogueRows.filter((row) => {
+    if (section && row.section_id !== section) return false;
+    if (activity === "active" && row.active === false) return false;
+    if (activity === "archived" && row.active !== false) return false;
+    if (status === "matched" && !["matched", "matched_unverified", "matched_stale_quote"].includes(row.cex_status)) return false;
+    if (status === "pending" && row.last_checked_at) return false;
+    if (status === "no_match" && row.cex_status !== "no_confirmed_match") return false;
+    const target = [row.title, row.asin, row.category, row.seller_name].join(" ").toLowerCase();
+    return !query || target.includes(query);
+  }).map((row) => ({
+    ...row,
+    seller_label: row.active === false
+      ? `Archived listing — last seen ${fmtTime(row.last_seen_at)}`
+      : "Not checked (seller verification disabled)",
+  }));
+  const sort = TableSort.getSort("catalogue-table", { key: "price_eur", dir: "desc" });
+  const sorted = TableSort.sortRows(filtered, sort, CATALOGUE_SCHEMA);
+  TableSort.updateHeaders("catalogue-table", sort);
+  const maxPage = Math.max(0, Math.ceil(sorted.length / CATALOGUE_PAGE_SIZE) - 1);
+  cataloguePage = Math.min(cataloguePage, maxPage);
+  const subset = sorted.slice(cataloguePage * CATALOGUE_PAGE_SIZE, (cataloguePage + 1) * CATALOGUE_PAGE_SIZE);
+  body.innerHTML = "";
+  for (const row of subset) {
+    const tr = document.createElement("tr");
+    let cex = String(row.cex_status || "not checked").replaceAll("_", " ");
+    if (row.cex_status === "matched") {
+      cex = `RESEARCH ONLY — estimated ${fmtEuro(row.cex_net_profit_eur)} net, CeX cash ${fmtEuro(row.cex_cash_eur)}; Amazon offer not checked`;
+    } else if (row.cex_status === "matched_stale_quote") {
+      cex = `RESEARCH ONLY — CeX quote too old for an alert. Last quote: ${fmtTime(row.cex_quote_checked_at)}`;
+    } else if (row.cex_status === "matched_unverified") {
+      cex = `RESEARCH ONLY — CeX cash quote: ${fmtEuro(row.cex_cash_eur)}; verify Amazon seller, condition and checkout.`;
+    }
+    if (row.cex_quote_checked_at) {
+      cex += ` · CeX quoted ${fmtTime(row.cex_quote_checked_at)}`;
+    }
+    const cexLink = row.cex_url ? `<div class="hint"><a href="${escapeHtml(row.cex_url)}" target="_blank" rel="noopener">CeX item</a></div>` : "";
+    tr.innerHTML = `
+      <td><a href="${escapeHtml(row.url)}" rel="noopener" target="_blank">${escapeHtml(row.title || row.asin)}</a>
+        <div class="hint">${escapeHtml(row.asin)}</div></td>
+      <td>${escapeHtml(row.section_name || row.section_id || "")}</td>
+      <td class="price">${fmtEuro(row.price_eur)}</td>
+      <td>${escapeHtml(row.seller_label)}</td>
+      <td>${escapeHtml(cex)}${cexLink}</td>
+      <td>${fmtTime(row.last_checked_at)}</td>`;
+    body.appendChild(tr);
+  }
+  table.hidden = !catalogueRows.length;
+  const start = sorted.length ? cataloguePage * CATALOGUE_PAGE_SIZE + 1 : 0;
+  const end = Math.min(sorted.length, (cataloguePage + 1) * CATALOGUE_PAGE_SIZE);
+  if (info) info.textContent = `Showing ${start}–${end} of ${sorted.length.toLocaleString("en-IE")} listings. Product prices are observed, not guaranteed checkout offers.`;
+  document.getElementById("catalogue-prev").disabled = cataloguePage === 0;
+  document.getElementById("catalogue-next").disabled = cataloguePage >= maxPage;
+}
+
+function paintDeepDropTable(tableId, tier) {
+  const table = document.getElementById(tableId);
+  if (!table) return;
+  const rows = deepDropCache.get(tier) || [];
+  const sort = TableSort.getSort(tableId, { key: "drop_percent", dir: "desc" });
+  const sorted = TableSort.sortRows(rows, sort, DEEP_DROP_SCHEMA).slice(0, 20);
+  TableSort.updateHeaders(tableId, sort);
+  const body = table.querySelector("tbody");
+  if (!body) return;
+  body.innerHTML = "";
+  for (const d of sorted) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><a href="${escapeHtml(d.url)}" target="_blank" rel="noopener">${escapeHtml(d.title || d.asin)}</a></td>
+      <td class="price">${fmtEuro(d.price_eur)}<div class="hint">Found ${fmtTime(d.found_at)}</div></td>
+      <td class="was">${fmtEuro(d.median_eur)}</td>
+      <td>${escapeHtml(String(d.drop_percent))}%</td>`;
+    body.appendChild(tr);
+  }
+}
+
+function paintRetailOfferTable(tableId, asin) {
+  const table = document.getElementById(tableId);
+  if (!table) return;
+  const offers = retailOfferCache.get(asin) || [];
+  const sort = TableSort.getSort(tableId, { key: "price_eur", dir: "asc" });
+  const sorted = TableSort.sortRows(offers, sort, RETAIL_OFFER_SCHEMA);
+  TableSort.updateHeaders(tableId, sort);
+  const tbody = table.querySelector("tbody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  for (const offer of sorted) {
+    const row = document.createElement("tr");
+    const href = typeof offer.url === "string" && /^https:\/\//i.test(offer.url) ? offer.url : null;
+    const label = escapeHtml(offer.retailer || "Retailer");
+    row.innerHTML = `<td>${href ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener">${label}</a>` : label}</td>
+      <td class="price">${fmtEuro(offer.price_eur)}</td>
+      <td>${escapeHtml(offer.status_label || offer.status || "Unknown")}</td>
+      <td class="time">${fmtTime(offer.checked_at)}</td>`;
+    tbody.appendChild(row);
+  }
+}
+
+function paintNearMarginTable(tableId, bodyId, rows) {
+  const body = document.getElementById(bodyId);
+  const table = document.getElementById(tableId);
+  if (!body || !table) return;
+  const sort = TableSort.getSort(tableId, { key: "cex_cash_profit_eur", dir: "desc" });
+  const sorted = TableSort.sortRows(rows, sort, CEX_FLIP_SCHEMA);
+  TableSort.updateHeaders(tableId, sort);
+  body.innerHTML = "";
+  if (!rows.length) {
+    table.hidden = true;
+    return;
+  }
+  table.hidden = false;
+  for (const row of sorted) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>
+        <a href="${escapeHtml(row.url)}" target="_blank" rel="noopener">${escapeHtml(row.title || row.asin)}</a>
+        <div class="hint"><a href="${escapeHtml(row.cex_url)}" target="_blank" rel="noopener">CeX listing</a> · need €${Number(row.cex_min_profit_eur).toFixed(0)}</div>
+      </td>
+      <td class="price">${fmtEuro(row.price_eur)}<div class="hint">Found ${fmtTime(row.found_at || row.verified_at)}</div></td>
+      <td class="price">${fmtEuro(row.cex_cash_eur)}</td>
+      <td class="price">€${Number(row.cex_cash_profit_eur).toFixed(2)}<div class="hint">Max buy ${fmtEuro(row.cex_max_buy_eur)} · ${escapeHtml(row.match_confidence || "title_only")}</div></td>`;
+    body.appendChild(tr);
+  }
+}
+
+function setupAllTableSorting() {
+  TableSort.bind("products-table", PRODUCTS_SCHEMA, paintProductsTable, { key: "checked_at", dir: "desc" });
+  TableSort.bind("watch-requests-table", WATCH_REQUESTS_SCHEMA, () => paintWatchRequestsTable(lastWatchRepo), { key: "issue_number", dir: "desc" });
+  TableSort.bind("deals-table", DEALS_LOG_SCHEMA, paintDealsLogTable, { key: "drop_percent", dir: "desc" });
+  TableSort.bind("premium-table", PREMIUM_SCHEMA, paintPremiumTable, { key: "drop_percent", dir: "desc" });
+  TableSort.bind("section-table", SECTION_SCHEMA, paintSectionTable, { key: "generated_at", dir: "desc" });
+  TableSort.bind("cex-target-table", CEX_TARGET_SCHEMA, paintCexTargetTable, { key: "checked_at", dir: "desc" });
+  TableSort.bind("cex-table", CEX_FLIP_SCHEMA, () => paintCexFlipTable("cex-table", "cex-body", cexFlipCache, true), { key: "cex_cash_profit_eur", dir: "desc" });
+  TableSort.bind("cex-near-table", CEX_FLIP_SCHEMA, () => paintNearMarginTable("cex-near-table", "cex-near-body", cexNearCache), { key: "cex_cash_profit_eur", dir: "desc" });
+  TableSort.bind("cex-arb-table", CEX_FLIP_SCHEMA, () => paintCexFlipTable("cex-arb-table", "cex-arb-body", cexArbCache, false), { key: "cex_cash_profit_eur", dir: "desc" });
+  TableSort.bind("cex-arb-near-table", CEX_FLIP_SCHEMA, () => paintNearMarginTable("cex-arb-near-table", "cex-arb-near-body", cexArbNearCache), { key: "cex_cash_profit_eur", dir: "desc" });
+  TableSort.bind("catalogue-table", CATALOGUE_SCHEMA, paintCatalogueTable, { key: "price_eur", dir: "desc" });
+}
+
+let lastWatchRepo = "paddykeoghgoode/amazon-ie-price-error-tracker";
 
 function statusBadge(product) {
   if (product.status === "price_error") {
@@ -428,25 +856,22 @@ function renderRetailComparisons(products) {
     if (offers.length) {
       const wrap = document.createElement("div");
       wrap.className = "table-wrap";
+      const tableId = `retail-offers-${product.asin}`;
       const table = document.createElement("table");
-      table.className = "retail-offer-table";
-      table.innerHTML = "<thead><tr><th>Retailer</th><th>Observed item price</th>" +
-                        "<th>Match / availability</th><th>Checked</th></tr></thead>";
-      const tbody = document.createElement("tbody");
-      for (const offer of offers) {
-        const row = document.createElement("tr");
-        const href = typeof offer.url === "string" && /^https:\/\//i.test(offer.url)
-          ? offer.url : null;
-        const label = escapeHtml(offer.retailer || "Retailer");
-        row.innerHTML = '<td>' +
-          (href ? '<a href="' + escapeHtml(href) + '" target="_blank" rel="noopener">' +
-                  label + '</a>' : label) +
-          '</td><td class="price">' + fmtEuro(offer.price_eur) +
-          '</td><td>' + escapeHtml(statusLabels[offer.status] || offer.status || "Unknown") +
-          '</td><td class="time">' + fmtTime(offer.checked_at) + '</td>';
-        tbody.appendChild(row);
-      }
-      table.appendChild(tbody);
+      table.id = tableId;
+      table.className = "retail-offer-table sortable-table";
+      table.innerHTML = `<thead><tr>
+        <th scope="col"><button type="button" class="th-sort" data-sort-key="retailer">Retailer</button></th>
+        <th scope="col"><button type="button" class="th-sort" data-sort-key="price_eur">Observed item price</button></th>
+        <th scope="col"><button type="button" class="th-sort" data-sort-key="status">Match / availability</button></th>
+        <th scope="col"><button type="button" class="th-sort" data-sort-key="checked_at">Checked</button></th>
+      </tr></thead><tbody></tbody>`;
+      retailOfferCache.set(product.asin, offers.map((offer) => ({
+        ...offer,
+        status_label: statusLabels[offer.status] || offer.status || "Unknown",
+      })));
+      TableSort.bind(tableId, RETAIL_OFFER_SCHEMA, () => paintRetailOfferTable(tableId, product.asin), { key: "price_eur", dir: "asc" });
+      paintRetailOfferTable(tableId, product.asin);
       wrap.appendChild(table);
       section.appendChild(wrap);
     }
@@ -476,71 +901,14 @@ function render(data) {
   status.className = "status " + (errorCount ? "alert" : data.generated_at ? "ok" : "warn");
 
   const products = data.products || [];
-  const table = document.getElementById("products-table");
-  const body = document.getElementById("products-body");
-  const empty = document.getElementById("products-empty");
-  body.innerHTML = "";
-  if (!products.length) {
-    table.hidden = true;
-    empty.hidden = false;
-  } else {
-    empty.hidden = true;
-    table.hidden = false;
-    for (const p of products) {
-      const tr = document.createElement("tr");
-      const title = p.title || p.asin;
-      tr.innerHTML = `
-        <td><a href="${escapeHtml(p.url)}" target="_blank" rel="noopener">${escapeHtml(title)}</a><div class="hint">${escapeHtml(p.asin)}</div></td>
-        <td class="price">${fmtEuro(p.price_eur)}</td>
-        <td class="was">${fmtEuro(p.list_price_eur)}</td>
-        <td>${statusBadge(p)}${p.note ? `<div class="hint">${escapeHtml(p.note)}</div>` : ""}</td>
-        <td>${fmtTime(p.checked_at)}</td>`;
-      body.appendChild(tr);
-    }
-  }
+  watchProductsCache = products;
+  lastWatchRepo = repo;
+  paintProductsTable();
 
   renderRetailComparisons(products);
 
-  // The site itself is static. This table makes the GitHub issue -> ASIN ->
-  // watchlist workflow visible without requiring anyone to inspect Actions logs.
-  const requests = (data.watch_submissions || []).slice().sort(
-    (a, b) => Number(b.issue_number || 0) - Number(a.issue_number || 0)
-  );
-  const requestsTable = document.getElementById("watch-requests-table");
-  const requestsBody = document.getElementById("watch-requests-body");
-  const requestsEmpty = document.getElementById("watch-requests-empty");
-  if (requestsTable && requestsBody && requestsEmpty) {
-    requestsBody.innerHTML = "";
-    requestsTable.hidden = !requests.length;
-    requestsEmpty.hidden = Boolean(requests.length);
-    const labels = {
-      tracking: ["Tracking", "ok"],
-      fetch_error: ["Amazon fetch failed — tracking continues", "fetch"],
-      price_unavailable: ["Added — price unavailable", "fetch"],
-      pending_scan: ["Accepted — awaiting scan", "fetch"],
-      link_unresolved: ["Link not resolved — edit issue", "error"],
-    };
-    for (const request of requests) {
-      const tr = document.createElement("tr");
-      const number = Number(request.issue_number || 0);
-      const safeNumber = Number.isSafeInteger(number) && number > 0 ? number : null;
-      const issueLink = safeNumber
-        ? `<a href="https://github.com/${encodeURI(repo)}/issues/${safeNumber}" target="_blank" rel="noopener">Issue #${safeNumber}</a>`
-        : "GitHub request";
-      const asin = String(request.asin || "");
-      const productLink = /^[A-Z0-9]{10}$/i.test(asin)
-        ? `<a href="https://www.amazon.ie/dp/${escapeHtml(asin)}" target="_blank" rel="noopener">${escapeHtml(asin)}</a>`
-        : "Awaiting valid Amazon URL/ASIN";
-      const [label, variant] = labels[request.status] || ["Awaiting scan", "fetch"];
-      tr.innerHTML = `
-        <td>${issueLink}</td>
-        <td>${productLink}</td>
-        <td><span class="badge ${variant}">${escapeHtml(label)}</span>
-          ${request.status === "link_unresolved" ? '<div class="hint">Add a full Amazon.ie product link to the existing issue.</div>' : ""}</td>
-        <td>${fmtTime(request.checked_at)}</td>`;
-      requestsBody.appendChild(tr);
-    }
-  }
+  watchRequestsCache = (data.watch_submissions || []).slice();
+  paintWatchRequestsTable(repo);
 
   const alerts = data.alerts || [];
   const list = document.getElementById("alerts-list");
@@ -644,6 +1012,7 @@ function renderDeepDrops(deals) {
   const container = document.getElementById("deep-sections");
   if (!container) return;
   container.innerHTML = "";
+  deepDropCache.clear();
   const tiers = deals.deep_drop_tiers || [40, 50, 66];
   const grouped = deals.deep_drops || {};
   let any = false;
@@ -651,22 +1020,22 @@ function renderDeepDrops(deals) {
     const rows = grouped[String(tier)] || [];
     if (!rows.length) continue;
     any = true;
+    deepDropCache.set(tier, rows);
+    const tableId = `deep-drop-table-${tier}`;
     const block = document.createElement("div");
     block.className = "deep-tier";
     block.innerHTML = `<h3>≥${tier}% off usual Amazon price</h3>`;
     const table = document.createElement("table");
-    table.innerHTML = `<thead><tr><th>Product</th><th>Now</th><th>Usual</th><th>Drop</th></tr></thead>`;
-    const body = document.createElement("tbody");
-    for (const d of rows.slice(0, 20)) {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td><a href="${escapeHtml(d.url)}" target="_blank" rel="noopener">${escapeHtml(d.title || d.asin)}</a></td>
-        <td class="price">${fmtEuro(d.price_eur)}<div class="hint">Found ${fmtTime(d.found_at)}</div></td>
-        <td class="was">${fmtEuro(d.median_eur)}</td>
-        <td>${escapeHtml(String(d.drop_percent))}%</td>`;
-      body.appendChild(tr);
-    }
-    table.appendChild(body);
+    table.id = tableId;
+    table.className = "sortable-table";
+    table.innerHTML = `<thead><tr>
+      <th scope="col"><button type="button" class="th-sort" data-sort-key="title">Product</button></th>
+      <th scope="col"><button type="button" class="th-sort" data-sort-key="price_eur">Now</button></th>
+      <th scope="col"><button type="button" class="th-sort" data-sort-key="median_eur">Usual</button></th>
+      <th scope="col"><button type="button" class="th-sort" data-sort-key="drop_percent">Drop</button></th>
+    </tr></thead><tbody></tbody>`;
+    TableSort.bind(tableId, DEEP_DROP_SCHEMA, () => paintDeepDropTable(tableId, tier), { key: "drop_percent", dir: "desc" });
+    paintDeepDropTable(tableId, tier);
     block.appendChild(table);
     container.appendChild(block);
   }
@@ -719,24 +1088,14 @@ function cexTargetView(data, now = Date.now()) {
 function renderCexTargets(data) {
   const summary = document.getElementById("cex-target-summary");
   const diagnostics = document.getElementById("cex-target-diagnostics");
-  const body = document.getElementById("cex-target-body");
-  const table = document.getElementById("cex-target-table");
-  if (!summary || !body || !data.funnel) return;
+  if (!summary || !data.funnel) return;
   lastTargetSnapshot = data;
   renderOpportunityRadar(lastDealsSnapshot);
   const view = cexTargetView(data);
   summary.textContent = view.summary;
   diagnostics.textContent = view.diagnostics + (data.blocked_until ? ` Provider cooldown until ${fmtTime(data.blocked_until)}.` : "");
-  body.innerHTML = "";
-  table.hidden = !view.rows.length;
-  for (const row of view.rows) {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td><a href="https://www.amazon.ie/dp/${encodeURIComponent(row.asin)}" target="_blank" rel="noopener">${escapeHtml(row.title || row.asin)}</a><div class="hint">${escapeHtml(row.cex_title || "")}</div></td>
-      <td class="price">${fmtEuro(row.price_eur)}</td><td class="price">${fmtEuro(row.cex_max_buy_eur)}</td>
-      <td class="price">${fmtEuro(row.cex_cash_profit_eur)}</td><td class="time">${fmtTime(row.checked_at)}<div class="hint">Quote ${fmtTime(row.cex_quote_checked_at)}</div></td>
-      <td>${escapeHtml(row.result_label)}${row.found_at ? `<div class="hint">Found ${fmtTime(row.found_at)}</div>` : ""}</td>`;
-    body.appendChild(tr);
-  }
+  cexTargetCache = view.rows;
+  paintCexTargetTable();
 }
 
 function loadCexTargets() {
@@ -747,27 +1106,9 @@ function loadCexTargets() {
 }
 
 function renderNearMargin(bodyId, tableId, rows) {
-  const body = document.getElementById(bodyId);
-  const table = document.getElementById(tableId);
-  if (!body || !table) return;
-  body.innerHTML = "";
-  if (!rows.length) {
-    table.hidden = true;
-    return;
-  }
-  table.hidden = false;
-  for (const row of rows) {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>
-        <a href="${escapeHtml(row.url)}" target="_blank" rel="noopener">${escapeHtml(row.title || row.asin)}</a>
-        <div class="hint"><a href="${escapeHtml(row.cex_url)}" target="_blank" rel="noopener">CeX listing</a> · need €${Number(row.cex_min_profit_eur).toFixed(0)}</div>
-      </td>
-      <td class="price">${fmtEuro(row.price_eur)}<div class="hint">Found ${fmtTime(row.found_at || row.verified_at)}</div></td>
-      <td class="price">${fmtEuro(row.cex_cash_eur)}</td>
-      <td class="price">€${Number(row.cex_cash_profit_eur).toFixed(2)}<div class="hint">Max buy ${fmtEuro(row.cex_max_buy_eur)} · ${escapeHtml(row.match_confidence || "title_only")}</div></td>`;
-    body.appendChild(tr);
-  }
+  if (tableId === "cex-near-table") cexNearCache = rows;
+  else if (tableId === "cex-arb-near-table") cexArbNearCache = rows;
+  paintNearMarginTable(tableId, bodyId, rows);
 }
 
 function renderCex(deals) {
@@ -779,13 +1120,12 @@ function renderCex(deals) {
     summary.textContent = cexStatusLine(deals);
   }
   const flips = deals.cex_flips || [];
-  const table = document.getElementById("cex-table");
-  const body = document.getElementById("cex-body");
   const empty = document.getElementById("cex-empty");
+  const body = document.getElementById("cex-body");
   if (!body) return;
-  body.innerHTML = "";
+  cexFlipCache = flips;
   if (!flips.length) {
-    if (table) table.hidden = true;
+    document.getElementById("cex-table").hidden = true;
     if (empty) {
       empty.hidden = false;
       empty.textContent =
@@ -795,10 +1135,7 @@ function renderCex(deals) {
     }
   } else {
     if (empty) empty.hidden = true;
-    if (table) table.hidden = false;
-    for (const row of flips) {
-      appendCexRow(body, row, true);
-    }
+    paintCexFlipTable("cex-table", "cex-body", cexFlipCache, true);
   }
   const near = (deals.cex_near_margin || []).filter((r) => r.drop_tier != null);
   renderNearMargin("cex-near-body", "cex-near-table", near);
@@ -839,16 +1176,13 @@ function renderCexArbitrage(deals) {
   const body = document.getElementById("cex-arb-body");
   const empty = document.getElementById("cex-arb-empty");
   if (!body) return;
-  body.innerHTML = "";
+  cexArbCache = rows;
   if (!rows.length) {
     if (table) table.hidden = true;
     if (empty) empty.hidden = false;
   } else {
     if (empty) empty.hidden = true;
-    if (table) table.hidden = false;
-    for (const row of rows) {
-      appendCexRow(body, row, false);
-    }
+    paintCexFlipTable("cex-arb-table", "cex-arb-body", cexArbCache, false);
   }
   const near = (deals.cex_near_margin || []).filter((r) => r.drop_tier == null);
   renderNearMargin("cex-arb-near-body", "cex-arb-near-table", near);
@@ -880,36 +1214,23 @@ function sectionFreshness(deals) {
 
 function renderSectionProgress(deals) {
   const sections = deals.sections || {};
-  const table = document.getElementById("section-table");
-  const body = document.getElementById("section-body");
-  const empty = document.getElementById("section-empty");
-  if (!table || !body) return;
-  body.innerHTML = "";
-  const rows = Object.values(sections);
-  table.hidden = !rows.length;
-  if (empty) empty.hidden = !!rows.length;
-  for (const section of rows) {
+  sectionProgressCache = Object.values(sections).map((section) => {
     const cex = section.cex_stats || {};
     const catalogue = section.catalogue_stats || {};
-    const progress = catalogue.priced != null
-      ? `${Number(catalogue.checked || 0)} / ${Number(catalogue.priced || 0)}`
-      : "Not started";
-    const pending = catalogue.priced != null
-      ? `<div class="hint">${Number(catalogue.remaining || 0)} awaiting CeX research</div>` : "";
-    const tr = document.createElement("tr");
-    const status = section.scan_status || (section.blocked ? "blocked" : "completed");
     const finds = Number(section.new_alerts || 0) + Number(cex.cash_flips || 0) + Number(cex.arbitrage || 0);
-    tr.innerHTML = `
-      <td>${escapeHtml(section.section_name || section.section_id || "Section")}</td>
-      <td>${fmtTime(section.generated_at)}</td>
-      <td>${escapeHtml(status)}</td>
-      <td>${Number(section.items_seen || 0).toLocaleString("en-IE")}</td>
-      <td>${progress}${pending}</td>
-      <td>${Number(cex.live_lookups || 0)} live / ${Number(cex.cache_hits || 0)} cached</td>
-      <td>${Number((section.general_drops || section.drops || []).length)} <span class="hint">${section.general_drops ? "≥10%" : "legacy ≥30%"}</span></td>
-      <td>${finds} (${Number(section.new_alerts || 0)} error leads, ${Number(cex.cash_flips || 0) + Number(cex.arbitrage || 0)} CeX)</td>`;
-    body.appendChild(tr);
-  }
+    return {
+      ...section,
+      scan_status: section.scan_status || (section.blocked ? "blocked" : "completed"),
+      cex_checked: Number(catalogue.checked || 0),
+      cex_live: Number(cex.live_lookups || 0),
+      drops_count: (section.general_drops || section.drops || []).length,
+      finds,
+      general_drops: !!section.general_drops,
+      cex_stats: cex,
+      catalogue_stats: catalogue,
+    };
+  });
+  paintSectionTable();
 }
 
 let catalogueRows = [];
@@ -917,61 +1238,7 @@ let cataloguePage = 0;
 const CATALOGUE_PAGE_SIZE = 50;
 
 function renderCataloguePage() {
-  const body = document.getElementById("catalogue-body");
-  const table = document.getElementById("catalogue-table");
-  const info = document.getElementById("catalogue-info");
-  if (!body || !table) return;
-  const query = (document.getElementById("catalogue-search")?.value || "").toLowerCase().trim();
-  const section = document.getElementById("catalogue-section-filter")?.value || "";
-  const status = document.getElementById("catalogue-status-filter")?.value || "";
-  const activity = document.getElementById("catalogue-activity-filter")?.value || "active";
-  const filtered = catalogueRows.filter((row) => {
-    if (section && row.section_id !== section) return false;
-    if (activity === "active" && row.active === false) return false;
-    if (activity === "archived" && row.active !== false) return false;
-    if (status === "matched" && !["matched", "matched_unverified", "matched_stale_quote"].includes(row.cex_status)) return false;
-    if (status === "pending" && row.last_checked_at) return false;
-    if (status === "no_match" && row.cex_status !== "no_confirmed_match") return false;
-    const target = [row.title, row.asin, row.category, row.seller_name].join(" ").toLowerCase();
-    return !query || target.includes(query);
-  });
-  const maxPage = Math.max(0, Math.ceil(filtered.length / CATALOGUE_PAGE_SIZE) - 1);
-  cataloguePage = Math.min(cataloguePage, maxPage);
-  const subset = filtered.slice(cataloguePage * CATALOGUE_PAGE_SIZE, (cataloguePage + 1) * CATALOGUE_PAGE_SIZE);
-  body.innerHTML = "";
-  for (const row of subset) {
-    const tr = document.createElement("tr");
-    const seller = row.active === false
-      ? `Archived listing — last seen ${fmtTime(row.last_seen_at)}`
-      : "Not checked (seller verification disabled)";
-    let cex = String(row.cex_status || "not checked").replaceAll("_", " ");
-    if (row.cex_status === "matched") {
-      cex = `RESEARCH ONLY — estimated ${fmtEuro(row.cex_net_profit_eur)} net, CeX cash ${fmtEuro(row.cex_cash_eur)}; Amazon offer not checked`;
-    } else if (row.cex_status === "matched_stale_quote") {
-      cex = `RESEARCH ONLY — CeX quote too old for an alert. Last quote: ${fmtTime(row.cex_quote_checked_at)}`;
-    } else if (row.cex_status === "matched_unverified") {
-      cex = `RESEARCH ONLY — CeX cash quote: ${fmtEuro(row.cex_cash_eur)}; verify Amazon seller, condition and checkout.`;
-    }
-    if (row.cex_quote_checked_at) {
-      cex += ` · CeX quoted ${fmtTime(row.cex_quote_checked_at)}`;
-    }
-    const cexLink = row.cex_url ? `<div class="hint"><a href="${escapeHtml(row.cex_url)}" target="_blank" rel="noopener">CeX item</a></div>` : "";
-    tr.innerHTML = `
-      <td><a href="${escapeHtml(row.url)}" rel="noopener" target="_blank">${escapeHtml(row.title || row.asin)}</a>
-        <div class="hint">${escapeHtml(row.asin)}</div></td>
-      <td>${escapeHtml(row.section_name || row.section_id || "")}</td>
-      <td class="price">${fmtEuro(row.price_eur)}</td>
-      <td>${escapeHtml(seller)}</td>
-      <td>${escapeHtml(cex)}${cexLink}</td>
-      <td>${fmtTime(row.last_checked_at)}</td>`;
-    body.appendChild(tr);
-  }
-  table.hidden = !catalogueRows.length;
-  const start = filtered.length ? cataloguePage * CATALOGUE_PAGE_SIZE + 1 : 0;
-  const end = Math.min(filtered.length, (cataloguePage + 1) * CATALOGUE_PAGE_SIZE);
-  if (info) info.textContent = `Showing ${start}–${end} of ${filtered.length.toLocaleString("en-IE")} listings. Product prices are observed, not guaranteed checkout offers.`;
-  document.getElementById("catalogue-prev").disabled = cataloguePage === 0;
-  document.getElementById("catalogue-next").disabled = cataloguePage >= maxPage;
+  paintCatalogueTable();
 }
 
 async function loadCatalogue() {
@@ -1018,37 +1285,8 @@ document.getElementById("catalogue-next")?.addEventListener("click", () => {
 });
 
 function renderPremiumDrops(deals) {
-  const rows = [...(deals.premium_drops || []), ...(deals.rapid_drops || [])].sort(
-    (a, b) => (b.drop_percent || 0) - (a.drop_percent || 0)
-  );
-  const table = document.getElementById("premium-table");
-  const body = document.getElementById("premium-body");
-  const empty = document.getElementById("premium-empty");
-  if (!body) return;
-  body.innerHTML = "";
-  if (!rows.length) {
-    if (table) table.hidden = true;
-    if (empty) empty.hidden = false;
-    return;
-  }
-  if (empty) empty.hidden = true;
-  if (table) table.hidden = false;
-  for (const d of rows.slice(0, 25)) {
-    const kind =
-      d.drop_kind === "rapid_scan"
-        ? "Rapid (since last scan)"
-        : d.drop_kind === "premium_history"
-          ? "Premium vs reference"
-          : d.drop_kind || "Drop";
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td><a href="${escapeHtml(d.url)}" target="_blank" rel="noopener">${escapeHtml(d.title || d.asin)}</a><div class="hint">${escapeHtml(d.category || "")}</div></td>
-      <td class="price">${fmtEuro(d.price_eur)}</td>
-      <td class="was">${fmtEuro(d.reference_eur || d.median_eur)}</td>
-      <td>${escapeHtml(String(d.drop_percent))}%</td>
-      <td>${escapeHtml(kind)}</td>`;
-    body.appendChild(tr);
-  }
+  premiumDropCache = [...(deals.premium_drops || []), ...(deals.rapid_drops || [])];
+  paintPremiumTable();
 }
 
 function selectRadarLeads(deals, now = Date.now()) {
@@ -1199,20 +1437,8 @@ function renderDeals(deals) {
 
   const drops = researchLogRows(deals, includeUnrecognised);
   document.getElementById("research-log-empty").hidden = Boolean(drops.length || alerts.length);
-  const table = document.getElementById("deals-table");
-  const body = document.getElementById("deals-body");
-  body.innerHTML = "";
-  table.hidden = !drops.length;
-  for (const d of drops) {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td><a href="${escapeHtml(d.url)}" target="_blank" rel="noopener">${escapeHtml(d.title || d.asin)}</a><div class="hint">${escapeHtml(d.category || "")}</div></td>
-      <td class="price">${fmtEuro(d.price_eur)}</td>
-      <td class="was">${fmtEuro(d.median_eur)}</td>
-      <td>${escapeHtml(String(d.drop_percent))}%</td>
-      <td class="time">${d.found_at ? fmtTime(d.found_at) : "Unknown"}</td>`;
-    body.appendChild(tr);
-  }
+  dealsLogCache = drops;
+  paintDealsLogTable();
   renderSectionProgress(deals);
   renderPremiumDrops(deals);
   const overview = document.getElementById("catalogue-overview");
@@ -1274,6 +1500,10 @@ loadData()
     status.textContent = `Could not load tracker data (${err.message}).`;
     status.className = "status warn";
   });
+
+setupAllTableSorting();
+setupDashboardTabs();
+setupGeneralDropControls();
 
 setInterval(refreshIfChanged, LIVE_REFRESH_MS);
 loadCexTargets();

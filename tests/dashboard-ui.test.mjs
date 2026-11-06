@@ -133,7 +133,7 @@ test("research log shows actual found times and can include unrecognised brands"
   assert.equal(filtered[2].found_at,null);
   assert.equal(select(data,true).length,4);
   const table = html.slice(html.indexOf('id="deals-table"'), html.indexOf('id="deals-body"'));
-  assert.ok(table.includes('<th>Found</th>'));
+  assert.ok(table.includes('data-sort-key="found_at"'));
   assert.ok(html.includes('id="research-include-unrecognised"'));
 });
 

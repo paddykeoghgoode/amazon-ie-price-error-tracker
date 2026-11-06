@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="style.css"><link rel="stylesheet" href="cex-targets.css">
   <meta name="theme-color" content="#111416" />
   <script src="theme.js"></script>
+  <script src="table-sort.js"></script>
 </head>
 <body>
   <header>
@@ -31,7 +32,14 @@
       </div>
       <p id="target-result-count" class="hint" aria-live="polite"></p>
       <p class="target-toolbar"><button type="button" id="target-export-links">Export confirmed links (JSON)</button></p>
-      <div class="table-wrap"><table id="target-table" hidden><caption class="hint">Cash estimates use CeX Ireland. Irish shop links must be exact product pages you add; scans read Currys, Smyths and other approved IE retailers.</caption><thead><tr><th>CeX product / grade</th><th>Cash offer</th><th>Amazon</th><th>Irish shop → CeX</th><th>Amazon → CeX profit</th><th>Last checked</th></tr></thead><tbody id="target-rows"></tbody></table></div>
+      <div class="table-wrap"><table id="target-table" class="sortable-table" hidden><caption class="hint">Cash estimates use CeX Ireland. Irish shop links must be exact product pages you add; scans read Currys, Smyths and other approved IE retailers.</caption><thead><tr>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="product">CeX product / grade</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="cash_eur">Cash offer</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="amazon_price">Amazon</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="retail_net">Irish shop → CeX</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="profit">Amazon → CeX profit</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="checked_at">Last checked</button></th>
+          </tr></thead><tbody id="target-rows"></tbody></table></div>
       <nav class="target-pagination" aria-label="Target pages"><button id="target-prev" type="button">Previous</button><span id="target-page" aria-live="polite"></span><button id="target-next" type="button">Next</button></nav>
       <p class="hint">Price graphs use recorded Amazon observations. Gaps are not continuous monitoring; graphs need at least two observations.</p>
       <p id="target-empty" class="empty" hidden>No targets match these filters.</p>
@@ -39,7 +47,11 @@
     </section>
     <section class="card" id="coffee">
       <div class="target-heading"><div><h2>Branded coffee machines</h2><p class="hint">Sage, De’Longhi, Nespresso and other recognised brands from the coffee scan. Amazon price-drop research; CeX acceptance is not established.</p></div><a href="index.html#amazon-drops">All Amazon reductions →</a></div>
-      <div class="table-wrap"><table id="coffee-table" hidden><thead><tr><th>Amazon product</th><th>Observed price</th><th>Last observed</th></tr></thead><tbody id="coffee-rows"></tbody></table></div>
+      <div class="table-wrap"><table id="coffee-table" class="sortable-table" hidden><thead><tr>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="title">Amazon product</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="price_eur">Observed price</button></th>
+            <th scope="col"><button type="button" class="th-sort" data-sort-key="last_seen_at">Last observed</button></th>
+          </tr></thead><tbody id="coffee-rows"></tbody></table></div>
       <p id="coffee-empty" class="empty">Waiting for branded coffee-machine listings to be published.</p>
     </section>
   </main>
