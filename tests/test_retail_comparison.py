@@ -101,6 +101,7 @@ class TestRetailerParser(unittest.TestCase):
 
     def test_rejects_unknown_domains_and_unsafe_urls(self):
         self.assertEqual(retailer_from_url(MERCHANT), "Peter Murphy Electrical")
+        self.assertEqual(retailer_from_url("https://www.very.ie/product/123"), "Very")
         for link in (
             "http://www.currys.ie/p/1",
             "https://currys.ie.evil.example/item",
