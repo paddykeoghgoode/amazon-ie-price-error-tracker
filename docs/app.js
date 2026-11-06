@@ -543,7 +543,7 @@ function render(data) {
       return;
     }
     const approved = new Set([
-      "currys.ie", "harveynorman.ie", "did.ie", "electrocity.ie",
+      "currys.ie", "smythstoys.com", "harveynorman.ie", "did.ie", "electrocity.ie",
       "petermurphyelectrical.ie", "euronics.ie", "expert.ie", "joyces.ie",
       "arnotts.ie", "keanscm.ie", "irwinelectrical.ie",
     ]);

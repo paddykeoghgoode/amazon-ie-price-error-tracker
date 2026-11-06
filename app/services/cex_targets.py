@@ -22,6 +22,7 @@ from app.scraper.product_identity import catalog_barcodes, normalise_model
 from app.services.alert_policy import load_alert_policy
 from app.services.cex_arbitrage import _compatible_quote, _match_level, build_cex_row, enrich_with_cex
 from app.services.cex_cache import age_hours, cache_price, quote_entry, retry_allowed
+from app.services.retail_compare import clean_barcode, clean_model, trusted_retailer_url
 from app.services.resale_relevance import relevance
 
 
@@ -41,6 +42,7 @@ class TargetConfig:
     amazon_proposal_min_catalogue_percent: int = 72
     amazon_proposal_min_display_percent: int = 40
     amazon_proposal_price_checks_per_run: int = 12
+    retail_checks_per_run: int = 12
 
 
 def load_target_config(path: str | Path = "bestsellers.json") -> TargetConfig:
@@ -60,12 +62,13 @@ def load_target_config(path: str | Path = "bestsellers.json") -> TargetConfig:
         amazon_proposal_min_catalogue_percent=max(50, min(95, int(raw.get("amazon_proposal_min_catalogue_percent", 72)))),
         amazon_proposal_min_display_percent=max(25, min(95, int(raw.get("amazon_proposal_min_display_percent", 40)))),
         amazon_proposal_price_checks_per_run=max(0, min(12, int(raw.get("amazon_proposal_price_checks_per_run", 12)))),
+        retail_checks_per_run=max(0, min(12, int(raw.get("retail_checks_per_run", 12)))),
     )
 
 
 def target_state(published: dict) -> dict:
     state = copy.deepcopy(published.get("cex_targets") or {})
-    for name in ("items", "queries", "mappings", "proposed_links", "user_links"):
+    for name in ("items", "queries", "mappings", "proposed_links", "user_links", "retail_compare"):
         state.setdefault(name, {})
     return state
 
@@ -81,14 +84,27 @@ def load_user_links(path: str | Path = "docs/cex-user-links.json") -> dict[str, 
         if not isinstance(entry, dict):
             continue
         asin = str(entry.get("asin") or "").upper()
-        if not re.fullmatch(r"[A-Z0-9]{10}", asin):
+        urls = []
+        for url in entry.get("retailer_urls") or []:
+            if isinstance(url, str) and trusted_retailer_url(url.strip()):
+                u = url.strip()
+                if u not in urls:
+                    urls.append(u)
+            if len(urls) >= 8:
+                break
+        if not urls and not re.fullmatch(r"[A-Z0-9]{10}", asin):
             continue
-        cleaned[str(box_id)] = {
-            "asin": asin,
+        payload = {
             "amazon_title": entry.get("amazon_title") or entry.get("title"),
             "confirmed_at": entry.get("confirmed_at"),
             "source": entry.get("source") or "user_file",
+            "retailer_urls": urls,
+            "model": clean_model(entry.get("model")),
+            "barcode": clean_barcode(entry.get("barcode")),
         }
+        if re.fullmatch(r"[A-Z0-9]{10}", asin):
+            payload["asin"] = asin
+        cleaned[str(box_id)] = payload
     return cleaned
 
 
@@ -569,6 +585,14 @@ def target_funnel(state, config, *, now=None):
         "proposal_prices_read": sum(
             1 for p in (state.get("proposed_links") or {}).values()
             if isinstance(p, dict) and p.get("amazon_price_eur")
+        ),
+        "retail_linked_boxes": sum(
+            1 for link in (state.get("user_links") or {}).values()
+            if isinstance(link, dict) and link.get("retailer_urls")
+        ),
+        "retail_matched_boxes": sum(
+            1 for row in (state.get("retail_compare") or {}).values()
+            if isinstance(row, dict) and (row.get("matched_count") or 0) > 0
         ),
         "fresh_quotes": sum(r["cex_quote_fresh_for_alert"] for r in rows),
         "stale_quotes": sum(not r["cex_quote_fresh_for_alert"] for r in rows),

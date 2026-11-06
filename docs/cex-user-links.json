@@ -1,4 +1,4 @@
 {
-  "_comment": "Optional CeX box ID to Amazon ASIN links you have confirmed. Commit this file so GitHub Actions scans reuse them on every publish. You can also export the same JSON from the CeX targets page after using Link match.",
+  "_comment": "CeX box ID → Amazon ASIN and/or Irish retailer product URLs. Commit this file so GitHub Actions refresh shop → CeX margins on cex-targets.html. Export from the CeX targets page after Link this match / Add shop link.",
   "links": {}
 }
